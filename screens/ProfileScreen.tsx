@@ -17,6 +17,7 @@ import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { useAuth } from '../hooks/use-auth';
 import { startOAuthLogin } from '../constants/oauth';
 import { trpc } from '../lib/trpc';
+import { ProfileSkeleton, ReviewsSkeleton } from '../components/Skeleton';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 
@@ -28,6 +29,7 @@ export default function ProfileScreen() {
   const syncMutation = trpc.account.sync.useMutation();
   const privacyMutation = trpc.account.updatePrivacy.useMutation();
   const deleteMutation = trpc.account.delete.useMutation();
+  const accountQuery = trpc.account.me.useQuery(undefined, { enabled: !!user, retry: false });
   const lib = useLibrary();
   const social = useSocial();
   const { profile, stats, diary, lists, likes } = lib;
@@ -64,6 +66,14 @@ export default function ProfileScreen() {
           </Pressable>
           <Text style={styles.authNote}>You'll continue securely in the browser.</Text>
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!lib.loaded || !social.loaded || accountQuery.isLoading) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <ScrollView showsVerticalScrollIndicator={false}><ProfileSkeleton /><View style={styles.skeletonReviews}><Text style={styles.skeletonTitle}>Your latest reviews</Text><ReviewsSkeleton /></View></ScrollView>
       </SafeAreaView>
     );
   }
@@ -277,6 +287,8 @@ function StatCard({ label, value }: { label: string; value: number | string }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+  skeletonReviews: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
+  skeletonTitle: { color: colors.textDim, fontSize: fontSizes.md, fontWeight: '800', marginBottom: spacing.md },
   accountSettings: { marginHorizontal: spacing.lg, marginTop: spacing.sm, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   settingsTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800', marginBottom: spacing.md },
   settingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
