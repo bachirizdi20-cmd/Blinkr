@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "../../scripts/load-env.js";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
