@@ -10,6 +10,7 @@ import ListDetailScreen from '../screens/ListDetailScreen';
 import DiaryScreen from '../screens/DiaryScreen';
 import LikesScreen from '../screens/LikesScreen';
 import ReviewsScreen from '../screens/ReviewsScreen';
+import AllReviewsScreen from '../screens/AllReviewsScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import ReviewModalScreen from '../screens/ReviewModalScreen';
 import AddToListScreen from '../screens/AddToListScreen';
@@ -50,6 +51,7 @@ export default function ContentStackNavigator({ initialRouteName, HomeComponent 
       <Stack.Screen name="Diary" component={DiaryScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Likes" component={LikesScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Reviews" component={ReviewsScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="AllReviews" component={AllReviewsScreen} options={{ headerShown: false }} />
       <Stack.Screen
         name="EditProfile"
         component={EditProfileScreen}

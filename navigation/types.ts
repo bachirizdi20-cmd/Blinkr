@@ -17,6 +17,7 @@ export type ContentStackParamList = {
   Diary: undefined;
   Likes: undefined;
   Reviews: undefined;
+  AllReviews: { mediaType: MediaType; id: number; title: string };
   EditProfile: undefined;
   Conversation: { userId: string };
   People: { initialFilter?: PeopleFilter } | undefined;

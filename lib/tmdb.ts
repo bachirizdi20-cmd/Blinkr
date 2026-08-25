@@ -155,6 +155,37 @@ export async function searchMulti(query: string, page = 1): Promise<FeedPage> {
   };
 }
 
+export interface ReviewPage {
+  results: import('../types/tmdb').TMDBReview[];
+  page: number;
+  totalPages: number;
+  totalResults: number;
+}
+
+function mapReview(review: any) {
+  return {
+    id: String(review.id),
+    author: review.author ?? 'TMDB user',
+    authorUsername: review.author_details?.username ?? '',
+    authorAvatarPath: review.author_details?.avatar_path ?? null,
+    rating: typeof review.author_details?.rating === 'number' ? review.author_details.rating : null,
+    content: review.content ?? '',
+    createdAt: review.created_at ?? '',
+    updatedAt: review.updated_at ?? review.created_at ?? '',
+    url: review.url ?? '',
+  };
+}
+
+export async function fetchReviews(mediaType: MediaType, id: number, page = 1): Promise<ReviewPage> {
+  const data = await tmdbGet(`/${mediaType}/${id}/reviews`, { page });
+  return {
+    results: (data.results ?? []).map(mapReview),
+    page: data.page ?? page,
+    totalPages: Math.min(data.total_pages ?? 1, 20),
+    totalResults: data.total_results ?? 0,
+  };
+}
+
 export async function fetchDetail(mediaType: MediaType, id: number): Promise<DetailResult> {
   const data = await tmdbGet(`/${mediaType}/${id}`, {
     append_to_response: 'credits,videos,similar,reviews',
@@ -168,17 +199,7 @@ export async function fetchDetail(mediaType: MediaType, id: number): Promise<Det
   const similar = (data.similar?.results ?? [])
     .map((s: any) => (mediaType === 'movie' ? normalizeMovie(s) : normalizeTV(s)))
     .slice(0, 20);
-  const reviews = (data.reviews?.results ?? []).slice(0, 8).map((review: any) => ({
-    id: String(review.id),
-    author: review.author ?? 'TMDB user',
-    authorUsername: review.author_details?.username ?? '',
-    authorAvatarPath: review.author_details?.avatar_path ?? null,
-    rating: typeof review.author_details?.rating === 'number' ? review.author_details.rating : null,
-    content: review.content ?? '',
-    createdAt: review.created_at ?? '',
-    updatedAt: review.updated_at ?? review.created_at ?? '',
-    url: review.url ?? '',
-  }));
+  const reviews = (data.reviews?.results ?? []).slice(0, 8).map(mapReview);
 
   return {
     ...base,

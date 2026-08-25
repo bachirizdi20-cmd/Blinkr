@@ -297,7 +297,17 @@ export default function DetailScreen() {
               <Text style={styles.sectionTitle}>TMDB Reviews</Text>
               <Text style={styles.sectionSubtitle}>What viewers are saying</Text>
             </View>
-            {detail.reviews.length > 0 && <Text style={styles.reviewCount}>{detail.reviews.length} shown</Text>}
+            {detail.reviews.length > 0 && (
+              <Pressable
+                style={styles.allReviewsButton}
+                onPress={() => navigation.navigate('AllReviews', { mediaType, id, title: detail.title })}
+                accessibilityRole="button"
+                accessibilityLabel="View all reviews"
+              >
+                <Text style={styles.allReviewsText}>View all</Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.accent} />
+              </Pressable>
+            )}
           </View>
           {detail.reviews.length === 0 ? (
             <EmptyState icon="chatbox-ellipses-outline" title="No TMDB reviews yet" message="Be the first to share your thoughts from the review action above." />
@@ -478,6 +488,8 @@ const styles = StyleSheet.create({
   sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: spacing.lg },
   sectionSubtitle: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: -spacing.xs, marginBottom: spacing.sm },
   reviewCount: { color: colors.accent2, fontSize: fontSizes.xs, fontWeight: '700', marginBottom: spacing.sm },
+  allReviewsButton: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: spacing.xs, marginBottom: spacing.sm },
+  allReviewsText: { color: colors.accent, fontSize: fontSizes.xs, fontWeight: '800' },
   reviewsRow: { paddingHorizontal: spacing.lg, gap: spacing.md },
   reviewCard: { width: Math.min(width * 0.78, 330), backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.md },
   reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
