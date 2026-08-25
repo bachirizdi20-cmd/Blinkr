@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import PosterCard from '../components/PosterCard';
 import EmptyState from '../components/EmptyState';
+import ApiErrorState from '../components/ApiErrorState';
 import { ContentStackParamList } from '../navigation/types';
 import { searchMulti } from '../lib/tmdb';
 import { NormalizedItem } from '../types/tmdb';
@@ -26,6 +27,7 @@ export default function SearchScreen() {
   const [results, setResults] = useState<NormalizedItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const runSearch = useCallback(async (q: string) => {
@@ -36,11 +38,13 @@ export default function SearchScreen() {
       return;
     }
     setLoading(true);
+    setError(null);
     try {
       const data = await searchMulti(q, 1);
       setResults(data.results);
     } catch (err) {
       console.warn(err);
+      setError(err instanceof Error ? err.message : 'Unable to reach TMDB right now.');
     } finally {
       setLoading(false);
       setSearched(true);
@@ -96,6 +100,8 @@ export default function SearchScreen() {
         <View style={styles.center}>
           <ActivityIndicator color={colors.accent} size="large" />
         </View>
+      ) : error ? (
+        <ApiErrorState message={error} onRetry={() => runSearch(query)} />
       ) : !searched ? (
         <EmptyState icon="search-outline" title="Find something to watch" message="Search across movies, TV shows, and anime powered by TMDB." />
       ) : filtered.length === 0 ? (

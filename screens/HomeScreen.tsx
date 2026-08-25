@@ -15,6 +15,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import SectionRow from '../components/SectionRow';
+import ApiErrorState from '../components/ApiErrorState';
 import { ContentStackParamList } from '../navigation/types';
 import {
   fetchTrendingAll,
@@ -58,8 +59,11 @@ export default function HomeScreen() {
   const [animeTv, setAnimeTv] = useState<NormalizedItem[]>([]);
   const [animeMovie, setAnimeMovie] = useState<NormalizedItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    setError(null);
+    setLoading(true);
     try {
       const [t, mp, mt, mu, mn, tp, tt, ta, at, am] = await Promise.all([
         fetchTrendingAll(1),
@@ -85,6 +89,7 @@ export default function HomeScreen() {
       setAnimeMovie(am.results);
     } catch (err) {
       console.warn(err);
+      setError(err instanceof Error ? err.message : 'Unable to reach TMDB right now.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -254,7 +259,10 @@ export default function HomeScreen() {
           </ScrollView>
         )}
 
-        {visibleSections.map((s) => (
+        {error ? (
+          <ApiErrorState message={error} onRetry={load} />
+        ) : (
+          visibleSections.map((s) => (
           <SectionRow
             key={s.key}
             title={s.title}
@@ -263,7 +271,8 @@ export default function HomeScreen() {
             onSeeAll={s.seeAll}
             onItemPress={openDetail}
           />
-        ))}
+          ))
+        )}
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
