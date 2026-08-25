@@ -239,18 +239,26 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <SectionHeader title="Likes" subtitle={`${Object.keys(likes).length} liked`} onSeeAll={() => navigation.navigate('Likes')} />
+          <SectionHeader title="Favorites" subtitle={`${Object.keys(likes).length} saved`} onSeeAll={() => navigation.navigate('Likes')} />
           {likeItems.length === 0 ? (
-            <EmptyState icon="heart-outline" title="No likes yet" message="Tap the heart on a title to like it." />
+            <EmptyState icon="heart-outline" title="No favorites yet" message="Tap the heart on a title to save it here." />
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}>
               {likeItems.map((item) => (
-                <PosterCard
-                  key={`${item.mediaType}-${item.mediaId}`}
-                  item={{ id: item.mediaId, mediaType: item.mediaType, title: item.title, posterPath: item.posterPath, date: item.date, voteAverage: item.voteAverage }}
-                  width={100}
-                  onPress={() => navigation.navigate('Detail', { mediaType: item.mediaType, id: item.mediaId })}
-                />
+                <View key={`${item.mediaType}-${item.mediaId}`} style={styles.favoriteItem}>
+                  <PosterCard
+                    item={{ id: item.mediaId, mediaType: item.mediaType, title: item.title, posterPath: item.posterPath, date: item.date, voteAverage: item.voteAverage }}
+                    width={100}
+                    onPress={() => navigation.navigate('Detail', { mediaType: item.mediaType, id: item.mediaId })}
+                  />
+                  <Pressable
+                    accessibilityLabel={`Remove ${item.title} from favorites`}
+                    style={styles.removeFavorite}
+                    onPress={() => lib.toggleLike(item)}
+                  >
+                    <Ionicons name="heart" size={14} color={colors.bg} />
+                  </Pressable>
+                </View>
               ))}
             </ScrollView>
           )}
@@ -288,6 +296,8 @@ function StatCard({ label, value }: { label: string; value: number | string }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   skeletonReviews: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
+  favoriteItem: { position: 'relative', width: 100 },
+  removeFavorite: { position: 'absolute', top: 7, right: 7, width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.bg },
   skeletonTitle: { color: colors.textDim, fontSize: fontSizes.md, fontWeight: '800', marginBottom: spacing.md },
   accountSettings: { marginHorizontal: spacing.lg, marginTop: spacing.sm, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   settingsTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800', marginBottom: spacing.md },
