@@ -5,6 +5,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import PosterCard from '../components/PosterCard';
 import EmptyState from '../components/EmptyState';
+import GeneralErrorState from '../components/GeneralErrorState';
 import { ContentStackParamList } from '../navigation/types';
 import { fetchFeedPage } from '../lib/tmdb';
 import { NormalizedItem } from '../types/tmdb';
@@ -28,16 +29,19 @@ export default function CategoryListScreen() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const loadPage = useCallback(
     async (pageToLoad: number, replace: boolean) => {
       try {
         const data = await fetchFeedPage(feed, pageToLoad);
+        setError(null);
         setTotalPages(data.totalPages);
         setItems((prev) => (replace ? data.results : [...prev, ...data.results]));
         setPage(data.page);
       } catch (err) {
         console.warn(err);
+        setError(err instanceof Error ? err.message : 'Unable to load this category.');
       } finally {
         setLoading(false);
         setLoadingMore(false);
@@ -48,9 +52,11 @@ export default function CategoryListScreen() {
 
   useEffect(() => {
     setLoading(true);
+    setError(null);
+    setItems([]);
+    setPage(1);
     loadPage(1, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [feed, loadPage]);
 
   const handleEnd = () => {
     if (loadingMore || loading || page >= totalPages) return;
@@ -64,6 +70,8 @@ export default function CategoryListScreen() {
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.accent} />
         </View>
+      ) : error && items.length === 0 ? (
+        <GeneralErrorState message={error} onRetry={() => { setLoading(true); loadPage(1, true); }} />
       ) : items.length === 0 ? (
         <EmptyState icon="film-outline" title="No results" message="Nothing to show here yet." />
       ) : (
@@ -83,7 +91,7 @@ export default function CategoryListScreen() {
           )}
           onEndReachedThreshold={0.5}
           onEndReached={handleEnd}
-          ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: spacing.lg }} color={colors.accent} /> : null}
+          ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: spacing.lg }} color={colors.accent} /> : error ? <GeneralErrorState title="More results unavailable" message={error} retryLabel="Retry" onRetry={() => { setLoadingMore(true); loadPage(page + 1, false); }} /> : null}
         />
       )}
     </SafeAreaView>

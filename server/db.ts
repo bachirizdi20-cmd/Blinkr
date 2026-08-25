@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, InsertUserData, UserData, userData, users } from "../drizzle/schema";
@@ -87,6 +88,38 @@ export async function getUserByOpenId(openId: string) {
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
 
   return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  return result[0];
+}
+
+export async function createEmailUser(input: {
+  email: string;
+  passwordHash: string;
+  name: string;
+}) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const openId = `email_${randomUUID()}`;
+  await db.insert(users).values({
+    openId,
+    email: input.email,
+    passwordHash: input.passwordHash,
+    name: input.name,
+    loginMethod: "email",
+    lastSignedIn: new Date(),
+  });
+  return getUserByOpenId(openId);
 }
 
 export async function getUserData(userId: number): Promise<UserData | undefined> {

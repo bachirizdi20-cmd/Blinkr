@@ -6,6 +6,9 @@ import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import * as db from "./db";
 import { ENV } from "./_core/env";
+import { sdk } from "./_core/sdk";
+import { hashPassword, normalizeEmail, verifyPassword } from "./password";
+import { storagePut } from "./storage";
 
 const tmdbPathSchema = z.string().regex(
   /^\/(?:trending|movie|tv|discover|genre|search|person|authentication)(?:\/[A-Za-z0-9_,-]+)*$/,
@@ -13,6 +16,10 @@ const tmdbPathSchema = z.string().regex(
 );
 
 const tmdbParamsSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]));
+
+function toPublicUser(user: { id: number; openId: string; name: string | null; email: string | null; loginMethod: string | null; lastSignedIn: Date }) {
+  return { id: user.id, openId: user.openId, name: user.name, email: user.email, loginMethod: user.loginMethod, lastSignedIn: user.lastSignedIn };
+}
 
 async function fetchTmdbResource(path: string, params: Record<string, string | number | boolean>) {
   if (!ENV.tmdbApiReadToken) {
@@ -58,6 +65,47 @@ async function fetchTmdbResource(path: string, params: Record<string, string | n
 export const appRouter = router({
   system: systemRouter,
   auth: router({
+    register: publicProcedure
+      .input(z.object({
+        email: z.string().trim().email().max(320),
+        password: z.string().min(8).max(128),
+        name: z.string().trim().min(2).max(80),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const email = normalizeEmail(input.email);
+        const existing = await db.getUserByEmail(email);
+        if (existing) {
+          throw new TRPCError({ code: "CONFLICT", message: "An account with this email already exists" });
+        }
+
+        const user = await db.createEmailUser({
+          email,
+          name: input.name.trim(),
+          passwordHash: await hashPassword(input.password),
+        });
+        if (!user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not create account" });
+
+        const sessionToken = await sdk.createSessionToken(user.openId, { name: user.name ?? email });
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: 365 * 24 * 60 * 60 * 1000 });
+        return { sessionToken, user: toPublicUser(user) };
+      }),
+    login: publicProcedure
+      .input(z.object({ email: z.string().trim().email().max(320), password: z.string().min(1).max(128) }))
+      .mutation(async ({ ctx, input }) => {
+        const email = normalizeEmail(input.email);
+        const user = await db.getUserByEmail(email);
+        const valid = Boolean(user?.passwordHash && await verifyPassword(input.password, user.passwordHash));
+        if (!user || !valid) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Email or password is incorrect" });
+        }
+
+        await db.upsertUser({ openId: user.openId, lastSignedIn: new Date() });
+        const sessionToken = await sdk.createSessionToken(user.openId, { name: user.name ?? email });
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: 365 * 24 * 60 * 60 * 1000 });
+        return { sessionToken, user: toPublicUser({ ...user, lastSignedIn: new Date() }) };
+      }),
     me: publicProcedure.query((opts) => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
@@ -67,6 +115,17 @@ export const appRouter = router({
   }),
   account: router({
     me: protectedProcedure.query(async ({ ctx }) => ({ user: ctx.user, data: await db.getUserData(ctx.user.id) })),
+    uploadAvatar: protectedProcedure
+      .input(z.object({ dataUri: z.string().max(7_000_000) }))
+      .mutation(async ({ ctx, input }) => {
+        const match = input.dataUri.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=_-]+)$/);
+        if (!match) throw new TRPCError({ code: "BAD_REQUEST", message: "Only JPEG, PNG, and WebP images are supported" });
+        const [, contentType, encoded] = match;
+        const data = Buffer.from(encoded, "base64");
+        if (data.length > 5 * 1024 * 1024) throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "Image must be smaller than 5 MB" });
+        const stored = await storagePut(`avatars/user-${ctx.user.id}`, data, contentType);
+        return stored;
+      }),
     updateProfile: protectedProcedure
       .input(z.object({ username: z.string().trim().min(2).max(64).optional(), bio: z.string().trim().max(160).optional(), avatarUrl: z.string().max(2_000_000).nullable().optional() }))
       .mutation(async ({ ctx, input }) => db.upsertUserData(ctx.user.id, input)),

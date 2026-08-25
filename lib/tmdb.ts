@@ -128,11 +128,29 @@ export async function fetchAnime(kind: 'movie' | 'tv', page = 1): Promise<FeedPa
 }
 
 export async function fetchGenreList(kind: 'movie' | 'tv', genreId: number, page = 1): Promise<FeedPage> {
-  const data = await tmdbGet(`/discover/${kind}`, {
+  return fetchDiscover(kind, { genreId }, page);
+}
+
+export type DiscoverFilters = {
+  genreId?: number;
+  year?: number;
+  minRating?: number;
+  maxRating?: number;
+};
+
+export async function fetchDiscover(kind: 'movie' | 'tv', filters: DiscoverFilters = {}, page = 1): Promise<FeedPage> {
+  const params: Record<string, string | number | boolean> = {
     page,
-    with_genres: genreId,
     sort_by: 'popularity.desc',
-  });
+    include_adult: false,
+  };
+  if (filters.genreId) params.with_genres = filters.genreId;
+  if (filters.minRating !== undefined) params['vote_average.gte'] = filters.minRating;
+  if (filters.maxRating !== undefined) params['vote_average.lte'] = filters.maxRating;
+  if (filters.year && kind === 'movie') params.primary_release_year = filters.year;
+  if (filters.year && kind === 'tv') params.first_air_date_year = filters.year;
+
+  const data = await tmdbGet(`/discover/${kind}`, params);
   return {
     results: data.results.map(kind === 'movie' ? normalizeMovie : normalizeTV),
     page: data.page,

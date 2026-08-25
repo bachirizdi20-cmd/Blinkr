@@ -15,7 +15,7 @@ import { useSocial } from '../context/SocialContext';
 import { posterUrl } from '../lib/tmdb';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { useAuth } from '../hooks/use-auth';
-import { startOAuthLogin } from '../constants/oauth';
+import { AuthPanel } from '../components/AuthPanel';
 import { trpc } from '../lib/trpc';
 import { ProfileSkeleton, ReviewsSkeleton } from '../components/Skeleton';
 
@@ -23,8 +23,7 @@ type Nav = NativeStackNavigationProp<ContentStackParamList>;
 
 export default function ProfileScreen() {
   const navigation = useNavigation<Nav>();
-  const { user, loading: authLoading, error: authError, logout } = useAuth();
-  const [loginLoading, setLoginLoading] = useState(false);
+  const { user, loading: authLoading, error: authError, logout, refresh } = useAuth();
   const syncedRef = useRef(false);
   const syncMutation = trpc.account.sync.useMutation();
   const privacyMutation = trpc.account.updatePrivacy.useMutation();
@@ -33,17 +32,6 @@ export default function ProfileScreen() {
   const lib = useLibrary();
   const social = useSocial();
   const { profile, stats, diary, lists, likes } = lib;
-
-  const handleLogin = async () => {
-    setLoginLoading(true);
-    try {
-      await startOAuthLogin();
-    } catch (error) {
-      console.warn('[Profile] Login failed', error);
-    } finally {
-      setLoginLoading(false);
-    }
-  };
 
   useEffect(() => {
     if (!user || !lib.loaded || !social.loaded || syncedRef.current) return;
@@ -70,10 +58,8 @@ export default function ProfileScreen() {
           <Text style={styles.authTitle}>Your movie space</Text>
           <Text style={styles.authBody}>Sign in to save your diary, build watchlists, follow friends, and keep your activity synced.</Text>
           {!!authError && <Text style={styles.authError}>We couldn't verify your session. Please try again.</Text>}
-          <Pressable style={({ pressed }) => [styles.authButton, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]} onPress={handleLogin} disabled={loginLoading}>
-            {loginLoading ? <ActivityIndicator color={colors.bg} /> : <><Ionicons name="log-in-outline" size={19} color={colors.bg} /><Text style={styles.authButtonText}>Sign in / Create account</Text></>}
-          </Pressable>
-          <Text style={styles.authNote}>You'll continue securely in the browser.</Text>
+          <AuthPanel onAuthenticated={refresh} />
+          <Text style={styles.authNote}>Your session is protected and synced across devices.</Text>
         </View>
       </SafeAreaView>
     );

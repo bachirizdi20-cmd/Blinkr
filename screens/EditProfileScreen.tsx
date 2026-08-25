@@ -2,12 +2,29 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import { File } from 'expo-file-system';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { useLibrary, AVATAR_COLORS } from '../context/LibraryContext';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { trpc } from '../lib/trpc';
+import { getApiBaseUrl } from '../constants/oauth';
+
+async function imageToDataUri(uri: string, mime: string) {
+  if (Platform.OS !== 'web') {
+    const base64 = await new File(uri).base64();
+    return `data:${mime};base64,${base64}`;
+  }
+  const response = await fetch(uri);
+  const blob = await response.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('Unable to read selected image'));
+    reader.readAsDataURL(blob);
+  });
+}
 
 export default function EditProfileScreen() {
   const navigation = useNavigation();
@@ -16,8 +33,10 @@ export default function EditProfileScreen() {
   const [bio, setBio] = useState(lib.profile.bio);
   const [avatarColor, setAvatarColor] = useState(lib.profile.avatarColor);
   const [avatarUri, setAvatarUri] = useState(lib.profile.avatarUri ?? null);
+  const [avatarMime, setAvatarMime] = useState('image/jpeg');
   const [saving, setSaving] = useState(false);
   const updateProfileMutation = trpc.account.updateProfile.useMutation();
+  const uploadAvatarMutation = trpc.account.uploadAvatar.useMutation();
 
   const pickAvatar = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -26,7 +45,10 @@ export default function EditProfileScreen() {
       aspect: [1, 1],
       quality: 0.8,
     });
-    if (!result.canceled && result.assets[0]?.uri) setAvatarUri(result.assets[0].uri);
+    if (!result.canceled && result.assets[0]?.uri) {
+      setAvatarUri(result.assets[0].uri);
+      setAvatarMime(result.assets[0].mimeType?.startsWith('image/') ? result.assets[0].mimeType : 'image/jpeg');
+    }
   };
 
   const handleSave = async () => {
@@ -36,15 +58,22 @@ export default function EditProfileScreen() {
       return;
     }
     setSaving(true);
-    const nextProfile = { username: username.trim() || 'cinephile', bio: cleanBio, avatarColor, avatarUri };
-    lib.updateProfile(nextProfile);
     try {
-      await updateProfileMutation.mutateAsync({ username: nextProfile.username, bio: nextProfile.bio, avatarUrl: nextProfile.avatarUri });
+      let cloudAvatarUri = avatarUri;
+      if (avatarUri && !/^https?:\/\//i.test(avatarUri) && !avatarUri.startsWith('/manus-storage/')) {
+        const dataUri = await imageToDataUri(avatarUri, avatarMime);
+        const uploaded = await uploadAvatarMutation.mutateAsync({ dataUri });
+        cloudAvatarUri = uploaded.url.startsWith('/') ? `${getApiBaseUrl()}${uploaded.url}` : uploaded.url;
+      }
+      const nextProfile = { username: username.trim() || 'cinephile', bio: cleanBio, avatarColor, avatarUri: cloudAvatarUri };
+      lib.updateProfile(nextProfile);
+      await updateProfileMutation.mutateAsync({ username: nextProfile.username, bio: nextProfile.bio, avatarUrl: cloudAvatarUri });
+      navigation.goBack();
     } catch (error) {
-      console.warn('[Profile] Remote update failed; local profile retained', error);
+      console.warn('[Profile] Remote profile update failed', error);
+      Alert.alert('Could not save profile', error instanceof Error ? error.message : 'Please try again.');
     } finally {
       setSaving(false);
-      navigation.goBack();
     }
   };
 
