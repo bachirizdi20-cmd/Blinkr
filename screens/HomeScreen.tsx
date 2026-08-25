@@ -290,10 +290,11 @@ function SocialReviewFeed({ onOpenDetail }: { onOpenDetail: (review: SocialRevie
   const { reviews, users, isFollowing, toggleReviewLike, addReviewComment } = useSocial();
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
-  const followedReviews = reviews
+  const [showAllReviews, setShowAllReviews] = useState(false);
+  const allFollowedReviews = reviews
     .filter((review) => isFollowing(review.userId))
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, 6);
+    .sort((a, b) => b.createdAt - a.createdAt);
+  const followedReviews = showAllReviews ? allFollowedReviews : allFollowedReviews.slice(0, 3);
 
   const submitComment = (reviewId: string) => {
     if (!commentText.trim()) return;
@@ -309,7 +310,12 @@ function SocialReviewFeed({ onOpenDetail }: { onOpenDetail: (review: SocialRevie
           <Text style={styles.socialTitle}>From people you follow</Text>
           <Text style={styles.socialSubtitle}>Fresh thoughts from your circle</Text>
         </View>
-        <Ionicons name="people-outline" size={19} color={colors.accent} />
+        {allFollowedReviews.length > 3 ? (
+          <Pressable style={styles.socialMoreButton} onPress={() => setShowAllReviews((current) => !current)} accessibilityRole="button">
+            <Text style={styles.socialMoreText}>{showAllReviews ? 'Show less' : 'View more'}</Text>
+            <Ionicons name={showAllReviews ? 'chevron-up' : 'chevron-down'} size={15} color={colors.accent} />
+          </Pressable>
+        ) : <Ionicons name="people-outline" size={19} color={colors.accent} />}
       </View>
       {followedReviews.length === 0 ? (
         <View style={styles.socialEmpty}>
@@ -462,6 +468,8 @@ const styles = StyleSheet.create({
   socialSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
   socialTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800' },
   socialSubtitle: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: 2 },
+  socialMoreButton: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
+  socialMoreText: { color: colors.accent, fontSize: fontSizes.xs, fontWeight: '800' },
   socialEmpty: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
   socialEmptyTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '800', marginTop: spacing.sm },
   socialEmptyText: { color: colors.textDim, fontSize: fontSizes.xs, textAlign: 'center', marginTop: 4 },
