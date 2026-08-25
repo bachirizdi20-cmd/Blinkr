@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ActivityIndicator, View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Switch, View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
@@ -16,6 +16,7 @@ import { posterUrl } from '../lib/tmdb';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { useAuth } from '../hooks/use-auth';
 import { startOAuthLogin } from '../constants/oauth';
+import { trpc } from '../lib/trpc';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 
@@ -23,6 +24,10 @@ export default function ProfileScreen() {
   const navigation = useNavigation<Nav>();
   const { user, loading: authLoading, error: authError, logout } = useAuth();
   const [loginLoading, setLoginLoading] = useState(false);
+  const syncedRef = useRef(false);
+  const syncMutation = trpc.account.sync.useMutation();
+  const privacyMutation = trpc.account.updatePrivacy.useMutation();
+  const deleteMutation = trpc.account.delete.useMutation();
   const lib = useLibrary();
   const social = useSocial();
   const { profile, stats, diary, lists, likes } = lib;
@@ -67,6 +72,34 @@ export default function ProfileScreen() {
   const recentDiary = [...diary].sort((a, b) => b.createdAt - a.createdAt).slice(0, 5);
   const recentReviews = diary.filter((e) => !!e.review).sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
   const likeItems = Object.values(likes).sort((a, b) => b.likedAt - a.likedAt).slice(0, 8);
+
+  useEffect(() => {
+    if (!user || !lib.loaded || !social.loaded || syncedRef.current) return;
+    syncedRef.current = true;
+    syncMutation.mutate({
+      libraryJson: JSON.stringify({ watchlist: lib.watchlist, diary: lib.diary, lists: lib.lists, likes: lib.likes }),
+      socialJson: JSON.stringify({ followingIds: social.followingIds, reviews: social.reviews, conversations: social.conversations }),
+    });
+  }, [user, lib.loaded, social.loaded]);
+
+  const handlePrivacyChange = (isPrivate: boolean) => {
+    lib.updateProfile({ isPrivate });
+    privacyMutation.mutate({ isPrivate });
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert('Delete account?', 'This permanently removes your account data and cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        try {
+          await deleteMutation.mutateAsync({ confirmation: 'DELETE MY ACCOUNT' });
+          await logout();
+        } catch (error) {
+          Alert.alert('Could not delete account', 'Please try again.');
+        }
+      } },
+    ]);
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -213,6 +246,20 @@ export default function ProfileScreen() {
           )}
         </View>
 
+        <View style={styles.accountSettings}>
+          <Text style={styles.settingsTitle}>Account & Privacy</Text>
+          <View style={styles.settingRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingLabel}>Private activity</Text>
+              <Text style={styles.settingHint}>Hide your reviews and lists from people who do not follow you.</Text>
+            </View>
+            <Switch value={!!profile.isPrivate} onValueChange={handlePrivacyChange} trackColor={{ false: colors.surfaceHigh, true: colors.accent }} thumbColor={colors.text} />
+          </View>
+          <Pressable style={styles.deleteButton} onPress={handleDeleteAccount} disabled={deleteMutation.isPending}>
+            <Ionicons name="trash-outline" size={17} color={colors.danger} />
+            <Text style={styles.deleteText}>{deleteMutation.isPending ? 'Deleting…' : 'Delete account'}</Text>
+          </Pressable>
+        </View>
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
     </SafeAreaView>
@@ -230,6 +277,13 @@ function StatCard({ label, value }: { label: string; value: number | string }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+  accountSettings: { marginHorizontal: spacing.lg, marginTop: spacing.sm, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  settingsTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800', marginBottom: spacing.md },
+  settingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  settingLabel: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '700' },
+  settingHint: { color: colors.textFaint, fontSize: 11, lineHeight: 16, marginTop: 3 },
+  deleteButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.lg, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
+  deleteText: { color: colors.danger, fontSize: fontSizes.sm, fontWeight: '700' },
   authLoading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl },
   authLoadingText: { color: colors.textDim, fontSize: fontSizes.sm },
   authScreen: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl, paddingBottom: spacing.xxl },

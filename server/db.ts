@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, InsertUserData, UserData, userData, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +89,37 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+export async function getUserData(userId: number): Promise<UserData | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(userData).where(eq(userData.userId, userId)).limit(1);
+  return result[0];
+}
+
+export async function upsertUserData(userId: number, patch: Partial<Omit<InsertUserData, 'userId' | 'id'>>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const existing = await getUserData(userId);
+  if (existing) {
+    await db.update(userData).set(patch).where(eq(userData.userId, userId));
+    return { ...existing, ...patch };
+  }
+  const values: InsertUserData = {
+    userId,
+    username: patch.username ?? 'cinephile',
+    bio: patch.bio ?? '',
+    avatarUrl: patch.avatarUrl ?? null,
+    isPrivate: patch.isPrivate ?? false,
+    libraryJson: patch.libraryJson ?? '{}',
+    socialJson: patch.socialJson ?? '{}',
+  };
+  await db.insert(userData).values(values);
+  return await getUserData(userId);
+}
+
+export async function deleteUserAccount(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(userData).where(eq(userData.userId, userId));
+  await db.delete(users).where(eq(users.id, userId));
+}

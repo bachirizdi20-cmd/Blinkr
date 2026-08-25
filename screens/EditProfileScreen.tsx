@@ -7,6 +7,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { useLibrary, AVATAR_COLORS } from '../context/LibraryContext';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
+import { trpc } from '../lib/trpc';
 
 export default function EditProfileScreen() {
   const navigation = useNavigation();
@@ -16,6 +17,7 @@ export default function EditProfileScreen() {
   const [avatarColor, setAvatarColor] = useState(lib.profile.avatarColor);
   const [avatarUri, setAvatarUri] = useState(lib.profile.avatarUri ?? null);
   const [saving, setSaving] = useState(false);
+  const updateProfileMutation = trpc.account.updateProfile.useMutation();
 
   const pickAvatar = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -27,15 +29,23 @@ export default function EditProfileScreen() {
     if (!result.canceled && result.assets[0]?.uri) setAvatarUri(result.assets[0].uri);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const cleanBio = bio.trim();
     if (cleanBio.length > 160) {
       Alert.alert('Bio is too long', 'Keep your bio under 160 characters.');
       return;
     }
     setSaving(true);
-    lib.updateProfile({ username: username.trim() || 'cinephile', bio: cleanBio, avatarColor, avatarUri });
-    navigation.goBack();
+    const nextProfile = { username: username.trim() || 'cinephile', bio: cleanBio, avatarColor, avatarUri };
+    lib.updateProfile(nextProfile);
+    try {
+      await updateProfileMutation.mutateAsync({ username: nextProfile.username, bio: nextProfile.bio, avatarUrl: nextProfile.avatarUri });
+    } catch (error) {
+      console.warn('[Profile] Remote update failed; local profile retained', error);
+    } finally {
+      setSaving(false);
+      navigation.goBack();
+    }
   };
 
   return (
@@ -46,8 +56,8 @@ export default function EditProfileScreen() {
             <Text style={styles.cancelText}>Cancel</Text>
           </Pressable>
           <Text style={styles.headerTitle}>Edit Profile</Text>
-          <Pressable onPress={handleSave} hitSlop={8}>
-            <Text style={styles.saveText}>Save</Text>
+          <Pressable onPress={handleSave} hitSlop={8} disabled={saving}>
+            <Text style={[styles.saveText, saving && { opacity: 0.5 }]}>{saving ? 'Saving…' : 'Save'}</Text>
           </Pressable>
         </View>
 

@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { boolean, int, longtext, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -25,4 +25,20 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+export const userData = mysqlTable("user_data", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  username: varchar("username", { length: 64 }).notNull().default("cinephile"),
+  bio: varchar("bio", { length: 160 }).notNull().default(""),
+  avatarUrl: text("avatarUrl"),
+  isPrivate: boolean("isPrivate").notNull().default(false),
+  libraryJson: longtext("libraryJson").notNull(),
+  socialJson: longtext("socialJson").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userIdIdx: uniqueIndex("user_data_user_id_idx").on(table.userId),
+}));
+
+export type UserData = typeof userData.$inferSelect;
+export type InsertUserData = typeof userData.$inferInsert;

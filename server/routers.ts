@@ -3,7 +3,8 @@ import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "../shared/const.js";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import * as db from "./db";
 import { ENV } from "./_core/env";
 
 const tmdbPathSchema = z.string().regex(
@@ -63,6 +64,26 @@ export const appRouter = router({
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
+  }),
+  account: router({
+    me: protectedProcedure.query(async ({ ctx }) => ({ user: ctx.user, data: await db.getUserData(ctx.user.id) })),
+    updateProfile: protectedProcedure
+      .input(z.object({ username: z.string().trim().min(2).max(64).optional(), bio: z.string().trim().max(160).optional(), avatarUrl: z.string().max(2_000_000).nullable().optional() }))
+      .mutation(async ({ ctx, input }) => db.upsertUserData(ctx.user.id, input)),
+    updatePrivacy: protectedProcedure
+      .input(z.object({ isPrivate: z.boolean() }))
+      .mutation(async ({ ctx, input }) => db.upsertUserData(ctx.user.id, input)),
+    sync: protectedProcedure
+      .input(z.object({ libraryJson: z.string().max(2_000_000), socialJson: z.string().max(2_000_000) }))
+      .mutation(async ({ ctx, input }) => db.upsertUserData(ctx.user.id, input)),
+    delete: protectedProcedure
+      .input(z.object({ confirmation: z.literal("DELETE MY ACCOUNT") }))
+      .mutation(async ({ ctx }) => {
+        await db.deleteUserAccount(ctx.user.id);
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+        return { success: true } as const;
+      }),
   }),
   tmdb: router({
     get: publicProcedure

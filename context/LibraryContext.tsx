@@ -37,6 +37,7 @@ export interface UserProfile {
   bio: string;
   avatarColor: string;
   avatarUri?: string | null;
+  isPrivate?: boolean;
   joinedAt: number;
 }
 
@@ -119,6 +120,7 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     bio: 'Tracking everything I watch.',
     avatarColor: AVATAR_COLORS[0],
     avatarUri: null,
+    isPrivate: false,
     joinedAt: Date.now(),
   });
 
