@@ -29,6 +29,18 @@ export interface Video {
   name: string;
 }
 
+export interface TMDBReview {
+  id: string;
+  author: string;
+  authorUsername: string;
+  authorAvatarPath: string | null;
+  rating: number | null;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  url: string;
+}
+
 export interface SeasonSummary {
   id: number;
   name: string;
@@ -129,4 +141,5 @@ export interface DetailResult extends NormalizedItem {
   seasons: SeasonSummary[];
   numberOfSeasons: number;
   numberOfEpisodes: number;
+  reviews: TMDBReview[];
 }

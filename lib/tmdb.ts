@@ -157,7 +157,7 @@ export async function searchMulti(query: string, page = 1): Promise<FeedPage> {
 
 export async function fetchDetail(mediaType: MediaType, id: number): Promise<DetailResult> {
   const data = await tmdbGet(`/${mediaType}/${id}`, {
-    append_to_response: 'credits,videos,similar',
+    append_to_response: 'credits,videos,similar,reviews',
   });
   const base = mediaType === 'movie' ? normalizeMovie(data) : normalizeTV(data);
   const cast = (data.credits?.cast ?? []).slice(0, 20);
@@ -168,6 +168,17 @@ export async function fetchDetail(mediaType: MediaType, id: number): Promise<Det
   const similar = (data.similar?.results ?? [])
     .map((s: any) => (mediaType === 'movie' ? normalizeMovie(s) : normalizeTV(s)))
     .slice(0, 20);
+  const reviews = (data.reviews?.results ?? []).slice(0, 8).map((review: any) => ({
+    id: String(review.id),
+    author: review.author ?? 'TMDB user',
+    authorUsername: review.author_details?.username ?? '',
+    authorAvatarPath: review.author_details?.avatar_path ?? null,
+    rating: typeof review.author_details?.rating === 'number' ? review.author_details.rating : null,
+    content: review.content ?? '',
+    createdAt: review.created_at ?? '',
+    updatedAt: review.updated_at ?? review.created_at ?? '',
+    url: review.url ?? '',
+  }));
 
   return {
     ...base,
@@ -182,6 +193,7 @@ export async function fetchDetail(mediaType: MediaType, id: number): Promise<Det
     seasons: mediaType === 'tv' ? data.seasons ?? [] : [],
     numberOfSeasons: data.number_of_seasons ?? 0,
     numberOfEpisodes: data.number_of_episodes ?? 0,
+    reviews,
   };
 }
 

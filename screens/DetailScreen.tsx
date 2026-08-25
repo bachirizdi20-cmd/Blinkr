@@ -20,8 +20,10 @@ import SectionRow from '../components/SectionRow';
 import GenreChips from '../components/GenreChips';
 import RatingStars from '../components/RatingStars';
 import LoadingView from '../components/LoadingView';
+import EmptyState from '../components/EmptyState';
+import ApiErrorState from '../components/ApiErrorState';
 import { ContentStackParamList } from '../navigation/types';
-import { fetchDetail, posterUrl, backdropUrl } from '../lib/tmdb';
+import { fetchDetail, posterUrl, backdropUrl, profileUrl } from '../lib/tmdb';
 import { DetailResult } from '../types/tmdb';
 import { useLibrary, mediaKey } from '../context/LibraryContext';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
@@ -31,6 +33,12 @@ type RouteT = RouteProp<ContentStackParamList, 'Detail'>;
 
 const { width, height } = Dimensions.get('window');
 const BACKDROP_HEIGHT = height * 0.36;
+
+function formatReviewDate(value: string) {
+  if (!value) return 'TMDB review';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'TMDB review' : date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+}
 
 function formatRuntime(mins: number | null) {
   if (!mins) return null;
@@ -47,13 +55,17 @@ export default function DetailScreen() {
 
   const [detail, setDetail] = useState<DetailResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
       const data = await fetchDetail(mediaType, id);
       setDetail(data);
     } catch (err) {
       console.warn(err);
+      setError(err instanceof Error ? err.message : 'Unable to load this title right now.');
     } finally {
       setLoading(false);
     }
@@ -86,7 +98,19 @@ export default function DetailScreen() {
     [detail, mediaType, id]
   );
 
-  if (loading || !detail) return <LoadingView />;
+  if (loading) return <LoadingView />;
+  if (error || !detail) {
+    return (
+      <View style={styles.stateScreen}>
+        <SafeAreaView edges={['top']} style={styles.stateTopBar}>
+          <Pressable style={styles.iconBtn} onPress={() => navigation.goBack()} accessibilityLabel="Go back">
+            <Ionicons name="chevron-back" size={22} color={colors.text} />
+          </Pressable>
+        </SafeAreaView>
+        <ApiErrorState message={error ?? 'This title is unavailable.'} onRetry={load} />
+      </View>
+    );
+  }
 
   const trailer = detail.videos.find((v) => v.type === 'Trailer') ?? detail.videos[0];
   const director = detail.crew.find((c) => c.job === 'Director' || c.job === 'Creator');
@@ -234,15 +258,83 @@ export default function DetailScreen() {
           )}
         </View>
 
-        {detail.cast.length > 0 && (
-          <View style={{ marginBottom: spacing.lg }}>
-            <Text style={[styles.sectionTitle, { paddingHorizontal: spacing.lg }]}>Cast</Text>
-            <CastRow
-              cast={detail.cast}
-              onPress={(m) => navigation.navigate('Person', { personId: m.id, name: m.name })}
-            />
+        {(detail.cast.length > 0 || detail.crew.length > 0) && (
+          <View style={styles.peopleSection}>
+            <Text style={[styles.sectionTitle, { paddingHorizontal: spacing.lg }]}>Cast & Crew</Text>
+            {detail.cast.length > 0 && (
+              <CastRow
+                cast={detail.cast}
+                onPress={(m) => navigation.navigate('Person', { personId: m.id, name: m.name })}
+              />
+            )}
+            {detail.crew.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.crewRow}>
+                {detail.crew.slice(0, 8).map((member) => (
+                  <Pressable
+                    key={`${member.id}-${member.job}`}
+                    style={({ pressed }) => [styles.crewCard, pressed && styles.cardPressed]}
+                    onPress={() => navigation.navigate('Person', { personId: member.id, name: member.name })}
+                  >
+                    {member.profile_path ? (
+                      <Image source={{ uri: profileUrl(member.profile_path) ?? undefined }} style={styles.crewAvatar} contentFit="cover" />
+                    ) : (
+                      <View style={[styles.crewAvatar, styles.avatarFallback]}><Ionicons name="person" size={20} color={colors.textFaint} /></View>
+                    )}
+                    <View style={styles.crewInfo}>
+                      <Text style={styles.crewName} numberOfLines={1}>{member.name}</Text>
+                      <Text style={styles.crewJob} numberOfLines={1}>{member.job}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
           </View>
         )}
+
+        <View style={styles.reviewsSection}>
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.sectionTitle}>TMDB Reviews</Text>
+              <Text style={styles.sectionSubtitle}>What viewers are saying</Text>
+            </View>
+            {detail.reviews.length > 0 && <Text style={styles.reviewCount}>{detail.reviews.length} shown</Text>}
+          </View>
+          {detail.reviews.length === 0 ? (
+            <EmptyState icon="chatbox-ellipses-outline" title="No TMDB reviews yet" message="Be the first to share your thoughts from the review action above." />
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.reviewsRow}>
+              {detail.reviews.map((review) => (
+                <Pressable
+                  key={review.id}
+                  style={({ pressed }) => [styles.reviewCard, pressed && styles.cardPressed]}
+                  onPress={() => review.url && Linking.openURL(review.url)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Review by ${review.author}`}
+                >
+                  <View style={styles.reviewHeader}>
+                    {review.authorAvatarPath ? (
+                      <Image source={{ uri: profileUrl(review.authorAvatarPath) ?? undefined }} style={styles.reviewAvatar} contentFit="cover" />
+                    ) : (
+                      <View style={[styles.reviewAvatar, styles.avatarFallback]}><Ionicons name="person" size={18} color={colors.textFaint} /></View>
+                    )}
+                    <View style={styles.reviewAuthorBlock}>
+                      <Text style={styles.reviewAuthor} numberOfLines={1}>{review.author}</Text>
+                      {!!review.authorUsername && <Text style={styles.reviewUsername} numberOfLines={1}>@{review.authorUsername}</Text>}
+                    </View>
+                    {review.rating !== null && (
+                      <View style={styles.reviewRating}><Ionicons name="star" size={13} color={colors.gold} /><Text style={styles.reviewRatingText}>{review.rating}/10</Text></View>
+                    )}
+                  </View>
+                  <Text style={styles.reviewBody} numberOfLines={7}>{review.content.trim()}</Text>
+                  <View style={styles.reviewFooter}>
+                    <Text style={styles.reviewDate}>{formatReviewDate(review.createdAt)}</Text>
+                    <Text style={styles.readReview}>Read full review</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
+        </View>
 
         {mediaType === 'tv' && detail.seasons.length > 0 && (
           <View style={{ marginBottom: spacing.lg }}>
@@ -322,6 +414,8 @@ export default function DetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
+  stateScreen: { flex: 1, backgroundColor: colors.bg },
+  stateTopBar: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   iconBtn: {
     width: 38,
@@ -372,6 +466,32 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800', marginTop: spacing.xl, marginBottom: spacing.sm },
   overview: { color: colors.textDim, fontSize: fontSizes.md, lineHeight: 22 },
   directorText: { fontSize: fontSizes.sm, marginTop: spacing.md },
+  peopleSection: { marginBottom: spacing.lg },
+  crewRow: { paddingHorizontal: spacing.lg, gap: spacing.sm, paddingTop: spacing.sm },
+  crewCard: { width: 190, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  crewAvatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surfaceHigh },
+  avatarFallback: { alignItems: 'center', justifyContent: 'center' },
+  crewInfo: { flex: 1 },
+  crewName: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '700' },
+  crewJob: { color: colors.textDim, fontSize: fontSizes.xs, marginTop: 2 },
+  reviewsSection: { marginBottom: spacing.lg },
+  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: spacing.lg },
+  sectionSubtitle: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: -spacing.xs, marginBottom: spacing.sm },
+  reviewCount: { color: colors.accent2, fontSize: fontSizes.xs, fontWeight: '700', marginBottom: spacing.sm },
+  reviewsRow: { paddingHorizontal: spacing.lg, gap: spacing.md },
+  reviewCard: { width: Math.min(width * 0.78, 330), backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.md },
+  reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  reviewAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surfaceHigh },
+  reviewAuthorBlock: { flex: 1 },
+  reviewAuthor: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '800' },
+  reviewUsername: { color: colors.textFaint, fontSize: 11, marginTop: 1 },
+  reviewRating: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  reviewRatingText: { color: colors.gold, fontSize: fontSizes.xs, fontWeight: '800' },
+  reviewBody: { color: colors.textDim, fontSize: fontSizes.sm, lineHeight: 20, marginTop: spacing.md },
+  reviewFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.md },
+  reviewDate: { color: colors.textFaint, fontSize: 11 },
+  readReview: { color: colors.accent, fontSize: 11, fontWeight: '800' },
+  cardPressed: { opacity: 0.78, transform: [{ scale: 0.985 }] },
   seasonCard: { width: 120 },
   seasonPoster: { width: 120, height: 170, borderRadius: radius.md, backgroundColor: colors.surface },
   seasonName: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '700', marginTop: spacing.xs },
