@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { MockUser, ChatMessage, Conversation } from '../types/social';
+import { MockUser, ChatMessage, Conversation, SocialReview, SocialReviewComment } from '../types/social';
 
 export const MOCK_USERS: MockUser[] = [
   { id: 'u1', username: 'nova_reels', displayName: 'Nova', bio: 'Sci-fi obsessed. Currently marathoning anything Denis Villeneuve.', avatarColor: '#33D6A6', favoriteGenre: 'Sci-Fi', followsYou: true },
@@ -51,6 +51,14 @@ function uid() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+const SEED_REVIEWS: SocialReview[] = [
+  { id: 'review-u1-969681', userId: 'u1', mediaType: 'movie', mediaId: 969681, title: 'Spider-Man: Brand New Day', posterPath: '/bjiS5ipwxb9JFy3XRRN4OAilSeX.jpg', rating: 9, text: 'The emotional core surprised me. Big superhero energy, but the quiet Peter moments are what stayed with me.', createdAt: Date.now() - 1000 * 60 * 38, likes: 14, likedByMe: false, comments: [{ id: 'comment-1', authorName: 'You', text: 'Adding this to my weekend watchlist.', createdAt: Date.now() - 1000 * 60 * 20 }] },
+  { id: 'review-u2-550', userId: 'u2', mediaType: 'movie', mediaId: 550, title: 'Fight Club', posterPath: '/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg', rating: 8, text: 'Still unsettling, stylish, and wildly rewatchable. The production design does so much work.', createdAt: Date.now() - 1000 * 60 * 60 * 3, likes: 27, likedByMe: false, comments: [] },
+  { id: 'review-u3-19995', userId: 'u3', mediaType: 'movie', mediaId: 19995, title: 'Avatar', posterPath: '/kyeqWdyUXW608qlYkRqosgbbJyK.jpg', rating: 8, text: 'The world-building remains incredible on a big screen. I came for the visuals and stayed for the creatures.', createdAt: Date.now() - 1000 * 60 * 60 * 7, likes: 19, likedByMe: false, comments: [{ id: 'comment-2', authorName: 'Ren', text: 'The soundtrack is still perfect.', createdAt: Date.now() - 1000 * 60 * 60 * 6 }] },
+  { id: 'review-u5-872585', userId: 'u5', mediaType: 'movie', mediaId: 872585, title: 'Oppenheimer', posterPath: '/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg', rating: 10, text: 'A monumental character study with tension in every conversation. The sound design is unforgettable.', createdAt: Date.now() - 1000 * 60 * 60 * 12, likes: 41, likedByMe: false, comments: [] },
+  { id: 'review-u8-693134', userId: 'u8', mediaType: 'movie', mediaId: 693134, title: 'Dune: Part Two', posterPath: '/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg', rating: 9, text: 'Operatic, patient, and enormous. This is exactly the kind of film that rewards a second viewing.', createdAt: Date.now() - 1000 * 60 * 60 * 20, likes: 33, likedByMe: false, comments: [] },
+];
+
 const SEED_CONVERSATIONS: Record<string, Conversation> = {
   u1: {
     userId: 'u1',
@@ -92,6 +100,9 @@ interface SocialContextValue {
   getConversation: (userId: string) => Conversation;
   sendMessage: (userId: string, text: string) => void;
   markRead: (userId: string) => void;
+  reviews: SocialReview[];
+  toggleReviewLike: (reviewId: string) => void;
+  addReviewComment: (reviewId: string, text: string) => void;
   deleteConversation: (userId: string) => void;
   followerCountFor: (userId: string) => number;
   followingCountFor: (userId: string) => number;
@@ -105,6 +116,7 @@ const SocialContext = createContext<SocialContextValue | undefined>(undefined);
 const KEYS = {
   following: '@reelog/social/following',
   conversations: '@reelog/social/conversations',
+  reviews: '@reelog/social/reviews',
 };
 
 export function SocialProvider({ children }: { children: React.ReactNode }) {
@@ -113,18 +125,21 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
     Object.fromEntries(DEFAULT_FOLLOWING.map((id) => [id, true]))
   );
   const [conversations, setConversations] = useState<Record<string, Conversation>>(SEED_CONVERSATIONS);
+  const [reviews, setReviews] = useState<SocialReview[]>(SEED_REVIEWS);
   const [typingUserIds, setTypingUserIds] = useState<Record<string, boolean>>({});
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>[]>>({});
 
   useEffect(() => {
     (async () => {
       try {
-        const [f, c] = await Promise.all([
+        const [f, c, r] = await Promise.all([
           AsyncStorage.getItem(KEYS.following),
           AsyncStorage.getItem(KEYS.conversations),
+          AsyncStorage.getItem(KEYS.reviews),
         ]);
         if (f) setFollowingIds(JSON.parse(f));
         if (c) setConversations(JSON.parse(c));
+        if (r) setReviews(JSON.parse(r));
       } catch (err) {
         console.warn('Failed to load social data', err);
       } finally {
@@ -143,6 +158,10 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loaded) AsyncStorage.setItem(KEYS.conversations, JSON.stringify(conversations));
   }, [conversations, loaded]);
+
+  useEffect(() => {
+    if (loaded) AsyncStorage.setItem(KEYS.reviews, JSON.stringify(reviews));
+  }, [reviews, loaded]);
 
   const getUser = useCallback((userId: string) => MOCK_USERS.find((u) => u.id === userId), []);
 
@@ -210,6 +229,17 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
     timers.current[userId] = [...(timers.current[userId] ?? []), t1, t2];
   }, []);
 
+  const toggleReviewLike = useCallback((reviewId: string) => {
+    setReviews((prev) => prev.map((review) => review.id === reviewId ? { ...review, likedByMe: !review.likedByMe, likes: review.likes + (review.likedByMe ? -1 : 1) } : review));
+  }, []);
+
+  const addReviewComment = useCallback((reviewId: string, text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const comment: SocialReviewComment = { id: uid(), authorName: 'You', text: trimmed, createdAt: Date.now() };
+    setReviews((prev) => prev.map((review) => review.id === reviewId ? { ...review, comments: [...review.comments, comment] } : review));
+  }, []);
+
   const followerCountFor = useCallback((userId: string) => hashCount(userId, 120, 4200), []);
   const followingCountFor = useCallback((userId: string) => hashCount(userId + 'f', 40, 900), []);
 
@@ -234,6 +264,9 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
     sendMessage,
     markRead,
     deleteConversation,
+    reviews,
+    toggleReviewLike,
+    addReviewComment,
     followerCountFor,
     followingCountFor,
     totalUnread,

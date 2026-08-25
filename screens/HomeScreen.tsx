@@ -7,6 +7,7 @@ import {
   RefreshControl,
   Pressable,
   Dimensions,
+  TextInput,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,9 +24,12 @@ import {
   fetchTVList,
   fetchAnime,
   backdropUrl,
+  posterUrl,
 } from '../lib/tmdb';
 import { NormalizedItem } from '../types/tmdb';
 import { useMetadata } from '../context/MetadataContext';
+import { useSocial } from '../context/SocialContext';
+import { SocialReview } from '../types/social';
 import { colors, fontSizes, spacing, radius } from '../lib/theme';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
@@ -259,6 +263,8 @@ export default function HomeScreen() {
           </ScrollView>
         )}
 
+        <SocialReviewFeed onOpenDetail={(review) => navigation.navigate('Detail', { mediaType: review.mediaType, id: review.mediaId })} />
+
         {error ? (
           <ApiErrorState message={error} onRetry={load} />
         ) : (
@@ -278,6 +284,103 @@ export default function HomeScreen() {
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function SocialReviewFeed({ onOpenDetail }: { onOpenDetail: (review: SocialReview) => void }) {
+  const { reviews, users, isFollowing, toggleReviewLike, addReviewComment } = useSocial();
+  const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState('');
+  const followedReviews = reviews
+    .filter((review) => isFollowing(review.userId))
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, 6);
+
+  const submitComment = (reviewId: string) => {
+    if (!commentText.trim()) return;
+    addReviewComment(reviewId, commentText);
+    setCommentText('');
+    setActiveCommentId(null);
+  };
+
+  return (
+    <View style={styles.socialSection}>
+      <View style={styles.socialSectionHeader}>
+        <View>
+          <Text style={styles.socialTitle}>From people you follow</Text>
+          <Text style={styles.socialSubtitle}>Fresh thoughts from your circle</Text>
+        </View>
+        <Ionicons name="people-outline" size={19} color={colors.accent} />
+      </View>
+      {followedReviews.length === 0 ? (
+        <View style={styles.socialEmpty}>
+          <Ionicons name="chatbubble-ellipses-outline" size={24} color={colors.textFaint} />
+          <Text style={styles.socialEmptyTitle}>No reviews from your circle yet</Text>
+          <Text style={styles.socialEmptyText}>Follow more people to see their latest thoughts here.</Text>
+        </View>
+      ) : (
+        followedReviews.map((review) => {
+          const user = users.find((item) => item.id === review.userId);
+          const poster = posterUrl(review.posterPath, 'w342');
+          return (
+            <View key={review.id} style={styles.socialCard}>
+              <View style={styles.socialCardHeader}>
+                <View style={[styles.socialAvatar, { backgroundColor: user?.avatarColor ?? colors.accent }]}>
+                  <Text style={styles.socialAvatarText}>{user?.displayName?.slice(0, 1) ?? '?'}</Text>
+                </View>
+                <View style={styles.socialAuthorBlock}>
+                  <Text style={styles.socialAuthor}>{user?.displayName ?? 'A friend'}</Text>
+                  <Text style={styles.socialHandle}>@{user?.username ?? 'friend'} · {formatSocialTime(review.createdAt)}</Text>
+                </View>
+                <View style={styles.socialRating}><Ionicons name="star" size={13} color={colors.gold} /><Text style={styles.socialRatingText}>{review.rating}/10</Text></View>
+              </View>
+              <Pressable style={styles.socialMediaRow} onPress={() => onOpenDetail(review)}>
+                {poster ? <Image source={{ uri: poster }} style={styles.socialPoster} contentFit="cover" /> : <View style={[styles.socialPoster, styles.socialPosterFallback]}><Ionicons name="film-outline" size={20} color={colors.textFaint} /></View>}
+                <View style={styles.socialMediaInfo}><Text style={styles.socialMediaTitle} numberOfLines={2}>{review.title}</Text><Text style={styles.socialMediaHint}>Tap to open details</Text></View>
+              </Pressable>
+              <Text style={styles.socialReviewText}>{review.text}</Text>
+              <View style={styles.socialActions}>
+                <Pressable style={styles.socialAction} onPress={() => toggleReviewLike(review.id)} accessibilityLabel={review.likedByMe ? 'Unlike review' : 'Like review'}>
+                  <Ionicons name={review.likedByMe ? 'heart' : 'heart-outline'} size={20} color={review.likedByMe ? colors.danger : colors.textDim} />
+                  <Text style={[styles.socialActionText, review.likedByMe && { color: colors.danger }]}>{review.likes}</Text>
+                </Pressable>
+                <Pressable style={styles.socialAction} onPress={() => setActiveCommentId(activeCommentId === review.id ? null : review.id)} accessibilityLabel="Comment on review">
+                  <Ionicons name="chatbubble-outline" size={19} color={colors.textDim} />
+                  <Text style={styles.socialActionText}>{review.comments.length}</Text>
+                </Pressable>
+              </View>
+              {review.comments.slice(-2).map((comment) => (
+                <View key={comment.id} style={styles.commentRow}><Text style={styles.commentAuthor}>{comment.authorName}</Text><Text style={styles.commentBody}>{comment.text}</Text></View>
+              ))}
+              {activeCommentId === review.id && (
+                <View style={styles.commentComposer}>
+                  <TextInput
+                    value={commentText}
+                    onChangeText={setCommentText}
+                    placeholder="Write a comment..."
+                    placeholderTextColor={colors.textFaint}
+                    style={styles.commentInput}
+                    returnKeyType="send"
+                    onSubmitEditing={() => submitComment(review.id)}
+                  />
+                  <Pressable style={styles.commentSend} onPress={() => submitComment(review.id)} accessibilityLabel="Post comment">
+                    <Ionicons name="arrow-up" size={16} color={colors.bg} />
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          );
+        })
+      )}
+    </View>
+  );
+}
+
+function formatSocialTime(value: number) {
+  const minutes = Math.max(1, Math.round((Date.now() - value) / 60000));
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.round(hours / 24)}d`;
 }
 
 const styles = StyleSheet.create({
@@ -355,4 +458,36 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   genreChipText: { color: colors.text, fontSize: fontSizes.xs, fontWeight: '600' },
+  socialSection: { paddingHorizontal: spacing.lg, marginBottom: spacing.lg },
+  socialSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
+  socialTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800' },
+  socialSubtitle: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: 2 },
+  socialEmpty: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
+  socialEmptyTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '800', marginTop: spacing.sm },
+  socialEmptyText: { color: colors.textDim, fontSize: fontSizes.xs, textAlign: 'center', marginTop: 4 },
+  socialCard: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginBottom: spacing.md },
+  socialCardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  socialAvatar: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  socialAvatarText: { color: colors.bg, fontSize: fontSizes.md, fontWeight: '800' },
+  socialAuthorBlock: { flex: 1 },
+  socialAuthor: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '800' },
+  socialHandle: { color: colors.textFaint, fontSize: 11, marginTop: 2 },
+  socialRating: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  socialRatingText: { color: colors.gold, fontSize: fontSizes.sm, fontWeight: '800' },
+  socialMediaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
+  socialPoster: { width: 46, height: 68, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh },
+  socialPosterFallback: { alignItems: 'center', justifyContent: 'center' },
+  socialMediaInfo: { flex: 1 },
+  socialMediaTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800' },
+  socialMediaHint: { color: colors.accent, fontSize: 11, marginTop: 4, fontWeight: '700' },
+  socialReviewText: { color: colors.textDim, fontSize: fontSizes.sm, lineHeight: 20, marginTop: spacing.md },
+  socialActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border, marginTop: spacing.md, paddingTop: spacing.sm },
+  socialAction: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  socialActionText: { color: colors.textDim, fontSize: fontSizes.xs, fontWeight: '700' },
+  commentRow: { flexDirection: 'row', gap: 5, marginTop: spacing.xs, backgroundColor: colors.surfaceHigh, borderRadius: radius.sm, padding: spacing.sm },
+  commentAuthor: { color: colors.text, fontSize: 11, fontWeight: '800' },
+  commentBody: { color: colors.textDim, flex: 1, fontSize: 11, lineHeight: 16 },
+  commentComposer: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
+  commentInput: { flex: 1, minHeight: 38, color: colors.text, backgroundColor: colors.bg, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, fontSize: fontSizes.sm },
+  commentSend: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
 });
