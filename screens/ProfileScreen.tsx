@@ -72,12 +72,17 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <View style={[styles.avatar, { backgroundColor: profile.avatarColor }]}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </View>
+                    {profile.avatarUri ? (
+            <Image source={{ uri: profile.avatarUri }} style={styles.avatar} contentFit="cover" />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: profile.avatarColor }]}>
+              <Text style={styles.avatarText}>{initials}</Text>
+            </View>
+          )}
+
           <View style={{ flex: 1 }}>
             <Text style={styles.username}>{user.name || profile.username}</Text>
-            <Text style={styles.bio} numberOfLines={2}>{user.email || profile.bio}</Text>
+            <Text style={styles.bio} numberOfLines={2}>{profile.bio || user.email || 'Tell people what you love to watch.'}</Text>
           </View>
           <Pressable style={styles.editBtn} onPress={() => navigation.navigate('People')}>
             <Ionicons name="person-add-outline" size={16} color={colors.text} />

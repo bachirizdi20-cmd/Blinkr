@@ -36,6 +36,7 @@ export interface UserProfile {
   username: string;
   bio: string;
   avatarColor: string;
+  avatarUri?: string | null;
   joinedAt: number;
 }
 
@@ -117,6 +118,7 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     username: 'cinephile',
     bio: 'Tracking everything I watch.',
     avatarColor: AVATAR_COLORS[0],
+    avatarUri: null,
     joinedAt: Date.now(),
   });
 
