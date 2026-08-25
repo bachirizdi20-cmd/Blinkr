@@ -25,6 +25,7 @@ function FirstLaunchGate() {
   const [checked, setChecked] = React.useState(false);
   const [completed, setCompleted] = React.useState(false);
   const [loginLoading, setLoginLoading] = React.useState(false);
+  const [loginError, setLoginError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     AsyncStorage.getItem(FIRST_RUN_KEY).then((value) => {
@@ -47,14 +48,15 @@ function FirstLaunchGate() {
   if (!completed && !user) {
     const handleLogin = async () => {
       setLoginLoading(true);
-      try { await startOAuthLogin(); } finally { setLoginLoading(false); }
+      setLoginError(null);
+      try { await startOAuthLogin(); } catch (error) { setLoginError(error instanceof Error ? error.message : 'Unable to start authentication'); } finally { setLoginLoading(false); }
     };
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', padding: spacing.xl }}>
         <View style={{ width: 76, height: 76, borderRadius: 24, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.lg }}><Ionicons name="film-outline" size={40} color={colors.bg} /></View>
         <Text style={{ color: colors.text, fontSize: 32, fontWeight: '900', letterSpacing: -1 }}>Welcome to Reelog</Text>
         <Text style={{ color: colors.textDim, fontSize: fontSizes.md, textAlign: 'center', lineHeight: 22, marginTop: spacing.sm, maxWidth: 360 }}>Sign in to save your watchlist, reviews, and social activity across devices.</Text>
-        {error ? <Text style={{ color: colors.danger, fontSize: fontSizes.sm, textAlign: 'center', marginTop: spacing.md }}>We could not restore your session. Please sign in again.</Text> : null}
+        {error || loginError ? <Text style={{ color: colors.danger, fontSize: fontSizes.sm, textAlign: 'center', marginTop: spacing.md }}>{loginError ?? 'We could not restore your session. Please sign in again.'}</Text> : null}
         <Pressable onPress={handleLogin} disabled={loginLoading} style={({ pressed }) => ({ marginTop: spacing.xl, width: '100%', maxWidth: 360, backgroundColor: colors.accent, borderRadius: radius.pill, paddingVertical: spacing.md, alignItems: 'center', opacity: pressed || loginLoading ? 0.7 : 1 })}>
           {loginLoading ? <ActivityIndicator color={colors.bg} /> : <Text style={{ color: colors.bg, fontSize: fontSizes.md, fontWeight: '900' }}>Sign in / Create account</Text>}
         </Pressable>

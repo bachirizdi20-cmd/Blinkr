@@ -102,6 +102,9 @@ export const getLoginUrl = () => {
  * @returns Always null, the callback is handled via deep link.
  */
 export async function startOAuthLogin(): Promise<string | null> {
+  if (!OAUTH_PORTAL_URL || !APP_ID) {
+    throw new Error('Authentication is not configured for this app');
+  }
   const loginUrl = getLoginUrl();
 
   if (ReactNative.Platform.OS === "web") {
@@ -114,16 +117,14 @@ export async function startOAuthLogin(): Promise<string | null> {
 
   const supported = await Linking.canOpenURL(loginUrl);
   if (!supported) {
-    console.warn("[OAuth] Cannot open login URL: URL scheme not supported");
-    // 可考虑抛出错误或返回错误状态，让调用方处理
-    return null;
+    throw new Error('Cannot open the authentication page on this device');
   }
 
   try {
     await Linking.openURL(loginUrl);
   } catch (error) {
     console.error("[OAuth] Failed to open login URL:", error);
-    // 可考虑抛出错误让调用方处理
+    throw error instanceof Error ? error : new Error('Unable to start authentication');
   }
 
   // The OAuth callback will reopen the app via deep link.
