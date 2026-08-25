@@ -13,6 +13,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import SectionRow from '../components/SectionRow';
@@ -324,11 +325,16 @@ function SocialReviewFeed({ onOpenDetail }: { onOpenDetail: (review: SocialRevie
           <Text style={styles.socialEmptyText}>Follow more people to see their latest thoughts here.</Text>
         </View>
       ) : (
-        followedReviews.map((review) => {
+        followedReviews.map((review, index) => {
           const user = users.find((item) => item.id === review.userId);
           const poster = posterUrl(review.posterPath, 'w342');
           return (
-            <View key={review.id} style={styles.socialCard}>
+            <Animated.View
+              key={review.id}
+              style={styles.socialCard}
+              entering={index >= 3 ? FadeInDown.duration(240).withInitialValues({ opacity: 0, transform: [{ translateY: 14 }] }) : undefined}
+              exiting={index >= 3 ? FadeOutUp.duration(180) : undefined}
+            >
               <View style={styles.socialCardHeader}>
                 <View style={[styles.socialAvatar, { backgroundColor: user?.avatarColor ?? colors.accent }]}>
                   <Text style={styles.socialAvatarText}>{user?.displayName?.slice(0, 1) ?? '?'}</Text>
@@ -373,7 +379,7 @@ function SocialReviewFeed({ onOpenDetail }: { onOpenDetail: (review: SocialRevie
                   </Pressable>
                 </View>
               )}
-            </View>
+            </Animated.View>
           );
         })
       )}
