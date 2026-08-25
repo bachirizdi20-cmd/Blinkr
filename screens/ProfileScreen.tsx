@@ -45,6 +45,15 @@ export default function ProfileScreen() {
     }
   };
 
+  useEffect(() => {
+    if (!user || !lib.loaded || !social.loaded || syncedRef.current) return;
+    syncedRef.current = true;
+    syncMutation.mutate({
+      libraryJson: JSON.stringify({ watchlist: lib.watchlist, diary: lib.diary, lists: lib.lists, likes: lib.likes }),
+      socialJson: JSON.stringify({ followingIds: social.followingIds, reviews: social.reviews, conversations: social.conversations }),
+    });
+  }, [user, lib.loaded, social.loaded]);
+
   if (authLoading) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
@@ -82,15 +91,6 @@ export default function ProfileScreen() {
   const recentDiary = [...diary].sort((a, b) => b.createdAt - a.createdAt).slice(0, 5);
   const recentReviews = diary.filter((e) => !!e.review).sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
   const likeItems = Object.values(likes).sort((a, b) => b.likedAt - a.likedAt).slice(0, 8);
-
-  useEffect(() => {
-    if (!user || !lib.loaded || !social.loaded || syncedRef.current) return;
-    syncedRef.current = true;
-    syncMutation.mutate({
-      libraryJson: JSON.stringify({ watchlist: lib.watchlist, diary: lib.diary, lists: lib.lists, likes: lib.likes }),
-      socialJson: JSON.stringify({ followingIds: social.followingIds, reviews: social.reviews, conversations: social.conversations }),
-    });
-  }, [user, lib.loaded, social.loaded]);
 
   const handlePrivacyChange = (isPrivate: boolean) => {
     lib.updateProfile({ isPrivate });
