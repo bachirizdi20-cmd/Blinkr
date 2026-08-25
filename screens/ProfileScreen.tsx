@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
@@ -14,16 +14,56 @@ import { useLibrary } from '../context/LibraryContext';
 import { useSocial } from '../context/SocialContext';
 import { posterUrl } from '../lib/tmdb';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
+import { useAuth } from '../hooks/use-auth';
+import { startOAuthLogin } from '../constants/oauth';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 
 export default function ProfileScreen() {
   const navigation = useNavigation<Nav>();
+  const { user, loading: authLoading, error: authError, logout } = useAuth();
+  const [loginLoading, setLoginLoading] = useState(false);
   const lib = useLibrary();
   const social = useSocial();
   const { profile, stats, diary, lists, likes } = lib;
 
-  const initials = profile.username.slice(0, 2).toUpperCase();
+  const handleLogin = async () => {
+    setLoginLoading(true);
+    try {
+      await startOAuthLogin();
+    } catch (error) {
+      console.warn('[Profile] Login failed', error);
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  if (authLoading) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.authLoading}><ActivityIndicator size="large" color={colors.accent} /><Text style={styles.authLoadingText}>Checking your account...</Text></View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.authScreen}>
+          <View style={styles.authIcon}><Ionicons name="person-circle-outline" size={54} color={colors.accent} /></View>
+          <Text style={styles.authTitle}>Your movie space</Text>
+          <Text style={styles.authBody}>Sign in to save your diary, build watchlists, follow friends, and keep your activity synced.</Text>
+          {!!authError && <Text style={styles.authError}>We couldn't verify your session. Please try again.</Text>}
+          <Pressable style={({ pressed }) => [styles.authButton, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]} onPress={handleLogin} disabled={loginLoading}>
+            {loginLoading ? <ActivityIndicator color={colors.bg} /> : <><Ionicons name="log-in-outline" size={19} color={colors.bg} /><Text style={styles.authButtonText}>Sign in / Create account</Text></>}
+          </Pressable>
+          <Text style={styles.authNote}>You'll continue securely in the browser.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const initials = (user.name || profile.username).slice(0, 2).toUpperCase();
   const recentDiary = [...diary].sort((a, b) => b.createdAt - a.createdAt).slice(0, 5);
   const recentReviews = diary.filter((e) => !!e.review).sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
   const likeItems = Object.values(likes).sort((a, b) => b.likedAt - a.likedAt).slice(0, 8);
@@ -36,14 +76,17 @@ export default function ProfileScreen() {
             <Text style={styles.avatarText}>{initials}</Text>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.username}>{profile.username}</Text>
-            <Text style={styles.bio} numberOfLines={2}>{profile.bio}</Text>
+            <Text style={styles.username}>{user.name || profile.username}</Text>
+            <Text style={styles.bio} numberOfLines={2}>{user.email || profile.bio}</Text>
           </View>
           <Pressable style={styles.editBtn} onPress={() => navigation.navigate('People')}>
             <Ionicons name="person-add-outline" size={16} color={colors.text} />
           </Pressable>
           <Pressable style={styles.editBtn} onPress={() => navigation.navigate('EditProfile')}>
             <Ionicons name="pencil" size={16} color={colors.text} />
+          </Pressable>
+          <Pressable style={styles.editBtn} onPress={() => logout()} accessibilityLabel="Sign out">
+            <Ionicons name="log-out-outline" size={17} color={colors.text} />
           </Pressable>
         </View>
 
@@ -182,6 +225,16 @@ function StatCard({ label, value }: { label: string; value: number | string }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+  authLoading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl },
+  authLoadingText: { color: colors.textDim, fontSize: fontSizes.sm },
+  authScreen: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl, paddingBottom: spacing.xxl },
+  authIcon: { width: 94, height: 94, borderRadius: 47, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.lg },
+  authTitle: { color: colors.text, fontSize: fontSizes.xxl, fontWeight: '800', textAlign: 'center' },
+  authBody: { color: colors.textDim, fontSize: fontSizes.md, lineHeight: 23, textAlign: 'center', marginTop: spacing.sm, maxWidth: 340 },
+  authError: { color: colors.danger, fontSize: fontSizes.sm, textAlign: 'center', marginTop: spacing.md },
+  authButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, minHeight: 50, width: '100%', maxWidth: 340, backgroundColor: colors.accent, borderRadius: radius.pill, marginTop: spacing.xl, paddingHorizontal: spacing.lg },
+  authButtonText: { color: colors.bg, fontSize: fontSizes.md, fontWeight: '800' },
+  authNote: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: spacing.md },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.lg },
   avatar: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: '#04120C', fontSize: fontSizes.xl, fontWeight: '800' },
