@@ -39,7 +39,10 @@ interface Props {
 export default function ContentStackNavigator({ initialRouteName, HomeComponent }: Props) {
   return (
     <Stack.Navigator initialRouteName={initialRouteName} screenOptions={headerOptions}>
-      <Stack.Screen name={initialRouteName as any} component={HomeComponent} options={{ headerShown: false }} />
+      <Stack.Screen name="HomeMain" component={HomeComponent} options={{ headerShown: false }} />
+      <Stack.Screen name="ChatsMain" component={HomeComponent} options={{ headerShown: false }} />
+      <Stack.Screen name="WatchlistMain" component={HomeComponent} options={{ headerShown: false }} />
+      <Stack.Screen name="ProfileMain" component={HomeComponent} options={{ headerShown: false }} />
       <Stack.Screen name="Detail" component={DetailScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Season" component={SeasonScreen} options={{ title: '' }} />
       <Stack.Screen name="Person" component={PersonScreen} options={{ title: '' }} />
