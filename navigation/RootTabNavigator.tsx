@@ -5,7 +5,10 @@ import ContentStackNavigator from './ContentStack';
 import HomeScreen from '../screens/HomeScreen';
 import ChatsScreen from '../screens/ChatsScreen';
 import WatchlistScreen from '../screens/WatchlistScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import { trpc } from '../lib/trpc';
+import { useAuth } from '../hooks/use-auth';
 import { useSocial } from '../context/SocialContext';
 import { colors } from '../lib/theme';
 
@@ -23,12 +26,19 @@ function WatchlistStackScreen() {
   return <ContentStackNavigator initialRouteName="WatchlistMain" HomeComponent={WatchlistScreen} />;
 }
 
+function NotificationsStackScreen() {
+  return <ContentStackNavigator initialRouteName="Notifications" HomeComponent={NotificationsScreen} />;
+}
+
 function ProfileStackScreen() {
   return <ContentStackNavigator initialRouteName="ProfileMain" HomeComponent={ProfileScreen} />;
 }
 
 export default function RootTabNavigator() {
   const { totalUnread } = useSocial();
+  const { user } = useAuth();
+  const notificationsQuery = trpc.social.notifications.useQuery(undefined, { enabled: Boolean(user), retry: false });
+  const unreadNotifications = notificationsQuery.data?.filter((item) => !item.readAt).length ?? 0;
 
   return (
     <Tab.Navigator
@@ -65,6 +75,15 @@ export default function RootTabNavigator() {
         name="Watchlist"
         options={{ tabBarIcon: ({ color, size }) => <Ionicons name="bookmark" size={size} color={color} /> }}
         component={WatchlistStackScreen}
+      />
+      <Tab.Screen
+        name="Notifications"
+        options={{
+          tabBarIcon: ({ color, size }) => <Ionicons name="notifications" size={size} color={color} />,
+          tabBarBadge: unreadNotifications > 0 ? (unreadNotifications > 99 ? '99+' : unreadNotifications) : undefined,
+          tabBarBadgeStyle: { backgroundColor: colors.accent, color: colors.bg, fontSize: 10, minWidth: 16, height: 16, lineHeight: 16 },
+        }}
+        component={NotificationsStackScreen}
       />
       <Tab.Screen
         name="Profile"

@@ -30,7 +30,6 @@ export default function ProfileScreen() {
   const deleteMutation = trpc.account.delete.useMutation();
   const requestVerification = trpc.auth.requestVerification.useMutation();
   const accountQuery = trpc.account.me.useQuery(undefined, { enabled: !!user, retry: false });
-  const notificationsQuery = trpc.social.notifications.useQuery(undefined, { enabled: !!user, retry: false });
   const remoteReviewsQuery = trpc.reviews.mine.useQuery(undefined, { enabled: !!user, retry: false });
   const remoteLibraryQuery = trpc.library.mine.useQuery(undefined, { enabled: !!user, retry: false });
   const lib = useLibrary();
@@ -81,7 +80,6 @@ export default function ProfileScreen() {
   const recentDiary = [...diary].sort((a, b) => b.createdAt - a.createdAt).slice(0, 5);
   const recentReviews = diary.filter((e) => !!e.review).sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
   const likeItems = Object.values(likes).sort((a, b) => b.likedAt - a.likedAt).slice(0, 8);
-  const unreadNotifications = notificationsQuery.data?.filter((item) => !item.readAt).length ?? 0;
 
   const emailVerified = Boolean((accountQuery.data?.user as { emailVerifiedAt?: Date | null } | undefined)?.emailVerifiedAt);
 
@@ -149,7 +147,6 @@ export default function ProfileScreen() {
           <ProfileTab icon="book-outline" label="Diary" onPress={() => navigation.navigate('Diary')} />
           <ProfileTab icon="list-outline" label="Lists" onPress={() => navigation.navigate('Lists')} />
           <ProfileTab icon="star-outline" label="Ratings" onPress={() => navigation.navigate('Reviews')} />
-          <ProfileTab icon="notifications-outline" label="Notifications" badge={unreadNotifications} onPress={() => navigation.navigate('Notifications')} />
         </ScrollView>
 
         <View style={styles.section}><View style={styles.referenceSectionHeader}><Text style={styles.referenceSectionTitle}>Favorite films</Text><Pressable onPress={() => navigation.navigate('Likes')}><Text style={styles.viewAll}>View all</Text></Pressable></View>
@@ -169,8 +166,8 @@ export default function ProfileScreen() {
   );
 }
 
-function ProfileTab({ icon, label, active, badge, onPress }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; active?: boolean; badge?: number; onPress?: () => void }) {
-  return <Pressable onPress={onPress} style={[styles.profileTab, active && styles.profileTabActive]}><View style={styles.profileTabIcon}><Ionicons name={icon} size={21} color={active ? colors.accent : colors.textDim} />{badge ? <View style={styles.profileTabBadge}><Text style={styles.profileTabBadgeText}>{badge > 9 ? '9+' : badge}</Text></View> : null}</View><Text style={[styles.profileTabLabel, active && styles.profileTabLabelActive]}>{label}</Text></Pressable>;
+function ProfileTab({ icon, label, active, onPress }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; active?: boolean; onPress?: () => void }) {
+  return <Pressable onPress={onPress} style={[styles.profileTab, active && styles.profileTabActive]}><Ionicons name={icon} size={21} color={active ? colors.accent : colors.textDim} /><Text style={[styles.profileTabLabel, active && styles.profileTabLabelActive]}>{label}</Text></Pressable>;
 }
 
 function StatCard({ label, value }: { label: string; value: number | string }) {
@@ -203,9 +200,6 @@ const styles = StyleSheet.create({
   profileTabActive: { borderBottomColor: colors.accent },
   profileTabLabel: { color: colors.textDim, fontSize: 11, fontWeight: '700' },
   profileTabLabelActive: { color: colors.accent },
-  profileTabIcon: { position: 'relative' },
-  profileTabBadge: { position: 'absolute', top: -7, right: -10, minWidth: 15, height: 15, paddingHorizontal: 3, borderRadius: 8, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
-  profileTabBadgeText: { color: colors.bg, fontSize: 8, fontWeight: '900' },
   referenceSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, marginBottom: spacing.md },
   referenceSectionTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800' },
   viewAll: { color: colors.accent, fontSize: fontSizes.sm, fontWeight: '800' },
