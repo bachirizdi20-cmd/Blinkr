@@ -24,6 +24,8 @@ export default function NotificationsScreen() {
   const query = trpc.social.notifications.useQuery(undefined, { enabled: Boolean(user) });
   const markRead = trpc.social.markNotificationsRead.useMutation({ onSuccess: () => query.refetch() });
   const markOneRead = trpc.social.markNotificationRead.useMutation({ onSuccess: () => query.refetch() });
+  const followingQuery = trpc.social.following.useQuery(undefined, { enabled: Boolean(user) });
+  const followBackMutation = trpc.social.toggleFollow.useMutation({ onSuccess: () => followingQuery.refetch() });
   const unreadCount = query.data?.filter((item) => !item.readAt).length ?? 0;
   const previousCount = useRef<number | null>(null);
   const [newNotificationId, setNewNotificationId] = useState<number | null>(null);
@@ -50,7 +52,13 @@ export default function NotificationsScreen() {
   const handleNotificationPress = (item: NonNullable<typeof query.data>[number]) => {
     if (!item.readAt) markOneRead.mutate({ notificationId: item.id });
     if (item.kind === 'follow') navigation.navigate('People');
+    else if (item.reviewId && item.actorId) navigation.navigate('Conversation', { userId: String(item.actorId) });
     else if (item.reviewId) navigation.navigate('Reviews');
+  };
+
+  const handleFollowBack = (actorId: number | null) => {
+    if (!actorId || followingQuery.data?.includes(actorId) || followBackMutation.isPending) return;
+    followBackMutation.mutate({ userId: actorId });
   };
 
   if (query.isLoading) return <SafeAreaView style={styles.safe}><ActivityIndicator color={colors.accent} style={styles.loader} /></SafeAreaView>;
@@ -72,11 +80,16 @@ export default function NotificationsScreen() {
         renderItem={({ item }) => {
           const isNew = item.id === newNotificationId;
           const animatedStyle = isNew ? { opacity: arrivalProgress, transform: [{ translateY: arrivalProgress.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) }] } : undefined;
+          const isFollowing = Boolean(item.actorId && followingQuery.data?.includes(item.actorId));
           return <Animated.View style={animatedStyle}>
-            <Pressable onPress={() => handleNotificationPress(item)} style={({ pressed }) => [styles.row, !item.readAt && styles.unread, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={`${COPY[item.kind]} notification`}>
-              <View style={[styles.icon, !item.readAt && styles.iconUnread]}><Ionicons name={item.kind === 'follow' ? 'person-add-outline' : item.kind === 'like' ? 'heart-outline' : 'chatbubble-outline'} size={20} color={colors.accent} /></View>
-              <View style={styles.copy}><Text style={styles.text}>{COPY[item.kind]}.</Text><Text style={styles.date}>{new Date(item.createdAt).toLocaleDateString()}</Text></View>{!item.readAt ? <View style={styles.unreadDot} /> : <Ionicons name="chevron-forward" size={17} color={colors.textFaint} />}
-            </Pressable>
+            <View style={[styles.row, !item.readAt && styles.unread]}>
+              <Pressable onPress={() => handleNotificationPress(item)} style={({ pressed }) => [styles.rowMain, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={`${COPY[item.kind]} notification`}>
+                <View style={[styles.icon, !item.readAt && styles.iconUnread]}><Ionicons name={item.kind === 'follow' ? 'person-add-outline' : item.kind === 'like' ? 'heart-outline' : 'chatbubble-outline'} size={20} color={colors.accent} /></View>
+                <View style={styles.copy}><Text style={styles.text}>{COPY[item.kind]}.</Text><Text style={styles.date}>{new Date(item.createdAt).toLocaleDateString()}</Text></View>{!item.readAt ? <View style={styles.unreadDot} /> : <Ionicons name="chevron-forward" size={17} color={colors.textFaint} />}
+              </Pressable>
+              {item.kind === 'follow' && item.actorId ? <Pressable onPress={() => handleFollowBack(item.actorId)} disabled={isFollowing || followBackMutation.isPending} style={({ pressed }) => [styles.quickAction, isFollowing && styles.quickActionDone, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={isFollowing ? 'Following' : 'Follow back'}>{followBackMutation.isPending && !isFollowing ? <ActivityIndicator size="small" color={colors.bg} /> : <><Ionicons name={isFollowing ? 'checkmark' : 'person-add'} size={14} color={isFollowing ? colors.accent : colors.bg} /><Text style={[styles.quickActionText, isFollowing && styles.quickActionDoneText]}>{isFollowing ? 'Following' : 'Follow back'}</Text></>}</Pressable> : null}
+              {item.kind === 'comment' && item.actorId ? <Pressable onPress={() => handleNotificationPress(item)} style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel="Reply"><Ionicons name="chatbubble-ellipses" size={14} color={colors.bg} /><Text style={styles.quickActionText}>Reply</Text></Pressable> : null}
+            </View>
           </Animated.View>;
         }}
       />
@@ -95,7 +108,12 @@ const styles = StyleSheet.create({
   loader: { flex: 1 },
   list: { padding: spacing.lg, gap: spacing.sm },
   emptyList: { flexGrow: 1, justifyContent: 'center' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md, minWidth: 0 },
+  quickAction: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 8, borderRadius: radius.sm, backgroundColor: colors.accent },
+  quickActionDone: { backgroundColor: 'rgba(53, 211, 153, 0.12)', borderWidth: 1, borderColor: 'rgba(53, 211, 153, 0.35)' },
+  quickActionText: { color: colors.bg, fontSize: 10, fontWeight: '900' },
+  quickActionDoneText: { color: colors.accent },
   unread: { borderColor: colors.accent },
   icon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh },
   iconUnread: { backgroundColor: 'rgba(53, 211, 153, 0.16)' },
