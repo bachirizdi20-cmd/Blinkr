@@ -93,14 +93,13 @@ export default function CreateScreen() {
 
   const renderItem = ({ item }: { item: BrowseItem }) => (
     <Pressable onPress={() => openReview(item)} style={({ pressed }) => [styles.card, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={`Write a review for ${item.title}`}>
-      <Image source={item.posterPath ? { uri: `https://image.tmdb.org/t/p/w342${item.posterPath}` } : undefined} style={styles.poster} />
-      <View style={styles.cardBody}>
-        <View style={styles.cardTopline}><Text style={styles.mediaPill}>{item.mediaType === 'movie' ? 'MOVIE' : 'TV SHOW'}</Text><Text style={styles.rating}><Ionicons name="star" size={12} color={colors.accent} /> {item.voteAverage > 0 ? item.voteAverage.toFixed(1) : '—'}</Text></View>
-        <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
-        <Text style={styles.cardMeta}>{item.date ? item.date.slice(0, 4) : 'Release date unavailable'}{item.overview ? ` · ${item.overview}` : ''}</Text>
-        <View style={styles.reviewCta}><Text style={styles.reviewCtaText}>Write a review</Text><Ionicons name="arrow-forward" size={15} color={colors.accent} /></View>
+      <View style={styles.posterWrap}>
+        <Image source={item.posterPath ? { uri: `https://image.tmdb.org/t/p/w342${item.posterPath}` } : undefined} style={styles.poster} />
+        <View style={styles.ratingBadge}><Ionicons name="star" size={11} color={colors.bg} /><Text style={styles.ratingBadgeText}>{item.voteAverage > 0 ? item.voteAverage.toFixed(1) : '—'}</Text></View>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
+      <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
+      <View style={styles.cardMetaRow}><Text style={styles.mediaPill}>{item.mediaType === 'movie' ? 'MOVIE' : 'TV'}</Text><Text style={styles.year}>{item.date ? item.date.slice(0, 4) : '—'}</Text></View>
+      <View style={styles.reviewCta}><Text style={styles.reviewCtaText}>Review</Text><Ionicons name="arrow-forward" size={13} color={colors.accent} /></View>
     </Pressable>
   );
 
@@ -121,7 +120,7 @@ export default function CreateScreen() {
         <Pressable onPress={() => setActiveTab('tv')} style={[styles.tab, activeTab === 'tv' && styles.tabActive]} accessibilityRole="tab" accessibilityState={{ selected: activeTab === 'tv' }}><Ionicons name="tv-outline" size={17} color={activeTab === 'tv' ? colors.bg : colors.textDim} /><Text style={[styles.tabText, activeTab === 'tv' && styles.tabTextActive]}>TV Shows</Text></Pressable>
       </View>
       <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{isSearching ? `Results for “${trimmedQuery}”` : activeTab === 'movie' ? 'Popular movies' : 'Popular TV shows'}</Text><View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>TMDB LIVE</Text></View></View>
-      {firstLoading ? <ActivityIndicator color={colors.accent} style={styles.loader} /> : showError ? <GeneralErrorState title="Could not load titles" message="Check your connection and try again." onRetry={() => browseQuery.refetch()} /> : showEmpty ? <EmptyState icon="film-outline" title="No titles found" message="Try another search or switch between Movies and TV Shows." /> : <FlatList data={items} keyExtractor={(item) => `${item.mediaType}-${item.id}`} renderItem={renderItem} onEndReached={loadMore} onEndReachedThreshold={0.55} contentContainerStyle={styles.results} showsVerticalScrollIndicator={false} ListFooterComponent={browseQuery.isFetching && page > 1 ? <View style={styles.footer}><ActivityIndicator color={colors.accent} /><Text style={styles.footerText}>Loading more titles…</Text></View> : !hasMore ? <Text style={styles.endText}>You reached the end of this list</Text> : null} />}
+      {firstLoading ? <ActivityIndicator color={colors.accent} style={styles.loader} /> : showError ? <GeneralErrorState title="Could not load titles" message="Check your connection and try again." onRetry={() => browseQuery.refetch()} /> : showEmpty ? <EmptyState icon="film-outline" title="No titles found" message="Try another search or switch between Movies and TV Shows." /> : <FlatList horizontal data={items} keyExtractor={(item) => `${item.mediaType}-${item.id}`} renderItem={renderItem} onEndReached={loadMore} onEndReachedThreshold={0.7} contentContainerStyle={styles.horizontalResults} showsHorizontalScrollIndicator={false} ListFooterComponent={browseQuery.isFetching && page > 1 ? <View style={styles.footer}><ActivityIndicator color={colors.accent} /><Text style={styles.footerText}>Loading…</Text></View> : !hasMore ? <Text style={styles.endText}>End of list</Text> : null} />}
     </SafeAreaView>
   );
 }
@@ -146,18 +145,19 @@ const styles = StyleSheet.create({
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent },
   liveText: { color: colors.accent, fontSize: 9, fontWeight: '900', letterSpacing: 0.6 },
   loader: { flex: 1 },
-  results: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, gap: spacing.sm },
-  card: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
-  pressed: { opacity: 0.74, transform: [{ scale: 0.99 }] },
-  poster: { width: 72, height: 104, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh },
-  cardBody: { flex: 1, minWidth: 0, gap: 5 },
-  cardTopline: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  horizontalResults: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, gap: spacing.sm },
+  card: { width: 138, padding: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  pressed: { opacity: 0.74, transform: [{ scale: 0.98 }] },
+  posterWrap: { position: 'relative' },
+  poster: { width: '100%', height: 164, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh },
+  ratingBadge: { position: 'absolute', top: 7, right: 7, flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 4, borderRadius: 10, backgroundColor: colors.accent },
+  ratingBadgeText: { color: colors.bg, fontSize: 10, fontWeight: '900' },
+  cardTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '900', lineHeight: 18, marginTop: spacing.sm },
+  cardMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 5 },
   mediaPill: { color: colors.accent, fontSize: 9, fontWeight: '900', letterSpacing: 0.7 },
-  rating: { color: colors.textDim, fontSize: 11, fontWeight: '800' },
-  cardTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '900', lineHeight: 20 },
-  cardMeta: { color: colors.textDim, fontSize: fontSizes.xs, lineHeight: 17 },
-  reviewCta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
-  reviewCtaText: { color: colors.accent, fontSize: fontSizes.xs, fontWeight: '900' },
+  year: { color: colors.textDim, fontSize: 11, fontWeight: '800' },
+  reviewCta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.sm },
+  reviewCtaText: { color: colors.accent, fontSize: 11, fontWeight: '900' },
   footer: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.lg },
   footerText: { color: colors.textDim, fontSize: fontSizes.xs },
   endText: { color: colors.textFaint, textAlign: 'center', fontSize: fontSizes.xs, paddingVertical: spacing.lg },
