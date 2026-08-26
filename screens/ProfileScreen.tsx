@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Switch, View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { ActivityIndicator, Alert, Share, Switch, View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
@@ -127,7 +127,7 @@ export default function ProfileScreen() {
             <Text style={styles.handle}>@{profile.username || 'member'}</Text>
             <View style={styles.profileActions}>
               <Pressable style={({ pressed }) => [styles.editButton, pressed && styles.pressed]} onPress={() => navigation.navigate('EditProfile')}><Text style={styles.editButtonText}>Edit profile</Text></Pressable>
-              <Pressable style={({ pressed }) => [styles.shareButton, pressed && styles.pressed]} onPress={() => Alert.alert('Profile link', 'Profile sharing is ready to connect to your share sheet.')} accessibilityLabel="Share profile"><Ionicons name="share-outline" size={19} color={colors.text} /></Pressable>
+              <Pressable style={({ pressed }) => [styles.shareButton, pressed && styles.pressed]} onPress={() => Share.share({ message: `Check out ${user.name || profile.username} on Reelog.` })} accessibilityLabel="Share profile"><Ionicons name="share-outline" size={19} color={colors.text} /></Pressable>
             </View>
           </View>
         </View>
