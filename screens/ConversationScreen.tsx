@@ -179,11 +179,11 @@ export default function ConversationScreen() {
 
         {pendingImage ? <View style={styles.previewBar}><Image source={{ uri: pendingImage.uri }} style={styles.previewImage} /><View style={styles.previewCopy}><Text style={styles.previewTitle}>Ready to send</Text><Text style={styles.previewMeta}>{pendingImage.width} × {pendingImage.height}</Text></View><Pressable onPress={() => setPendingImage(null)} style={styles.previewCancel}><Ionicons name="close" size={19} color={colors.textDim} /></Pressable><Pressable onPress={handleSendImage} style={styles.previewSend} disabled={sendImageMutation.isPending}><Ionicons name="send" size={16} color="#04120C" /></Pressable></View> : null}
         <View style={styles.inputBar}>
-          <Pressable style={styles.attachBtn} onPress={() => setCardPickerOpen(true)} accessibilityLabel="Share movie card">
-            <Ionicons name="film-outline" size={21} color={colors.textDim} />
+          <Pressable style={({ pressed }) => [styles.attachBtn, pressed && styles.iconBtnPressed]} onPress={() => setCardPickerOpen(true)} accessibilityLabel="Share movie card">
+            <Ionicons name="film-outline" size={19} color={colors.accent} />
           </Pressable>
-          <Pressable style={styles.attachBtn} onPress={() => Alert.alert('Send photo', 'Choose a source', [{ text: 'Camera', onPress: () => handlePickImage(true) }, { text: 'Photo library', onPress: () => handlePickImage(false) }, { text: 'Cancel', style: 'cancel' }])} disabled={sendImageMutation.isPending} accessibilityLabel="Send photo">
-            {sendImageMutation.isPending ? <ActivityIndicator size="small" color={colors.accent} /> : <Ionicons name="image-outline" size={21} color={colors.textDim} />}
+          <Pressable style={({ pressed }) => [styles.attachBtn, pressed && styles.iconBtnPressed]} onPress={() => Alert.alert('Send photo', 'Choose a source', [{ text: 'Camera', onPress: () => handlePickImage(true) }, { text: 'Photo library', onPress: () => handlePickImage(false) }, { text: 'Cancel', style: 'cancel' }])} disabled={sendImageMutation.isPending} accessibilityLabel="Send photo">
+            {sendImageMutation.isPending ? <ActivityIndicator size="small" color={colors.accent} /> : <Ionicons name="image-outline" size={19} color={colors.textDim} />}
           </Pressable>
           <TextInput
             style={styles.input}
@@ -195,8 +195,8 @@ export default function ConversationScreen() {
             returnKeyType="send"
             onSubmitEditing={handleSend}
           />
-          <Pressable style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]} onPress={handleSend} disabled={!text.trim()}>
-            <Ionicons name="send" size={17} color={text.trim() ? '#04120C' : colors.textFaint} />
+          <Pressable style={({ pressed }) => [styles.sendBtn, !text.trim() && styles.sendBtnDisabled, pressed && text.trim() && styles.sendBtnPressed]} onPress={handleSend} disabled={!text.trim()} accessibilityLabel="Send message">
+            <Ionicons name="arrow-up" size={19} color={text.trim() ? '#04120C' : colors.textFaint} />
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -239,7 +239,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: spacing.sm,
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     backgroundColor: colors.bg,
@@ -251,7 +253,8 @@ const styles = StyleSheet.create({
   previewMeta: { color: colors.textFaint, fontSize: 11, marginTop: 2 },
   previewCancel: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh },
   previewSend: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent },
-  attachBtn: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh },
+  attachBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border },
+  iconBtnPressed: { opacity: 0.68, transform: [{ scale: 0.95 }] },
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.65)' },
   cardPicker: { maxHeight: '82%', backgroundColor: colors.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: spacing.lg },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
@@ -285,12 +288,13 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   sendBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sendBtnDisabled: { backgroundColor: colors.surfaceHigh },
+  sendBtnDisabled: { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border },
+  sendBtnPressed: { opacity: 0.82, transform: [{ scale: 0.94 }] },
 });
