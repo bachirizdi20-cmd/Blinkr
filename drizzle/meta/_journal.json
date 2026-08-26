@@ -36,6 +36,20 @@
       "when": 1787703171204,
       "tag": "0004_clumsy_molly_hayes",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1787737975374,
+      "tag": "0005_stormy_cyclops",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1787738204772,
+      "tag": "0006_awesome_stranger",
+      "breakpoints": true
     }
   ]
 }

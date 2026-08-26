@@ -10,6 +10,8 @@ import { sdk } from "./_core/sdk";
 import { hashPassword, normalizeEmail, verifyPassword } from "./password";
 import { storagePut } from "./storage";
 import { assertLoginAllowed, clearLoginFailures, recordLoginFailure } from "./rate-limit";
+import { createAuthToken, consumeAuthToken, markEmailVerified, updateUserPassword } from "./db";
+import { sendAuthEmail } from "./email";
 
 const tmdbPathSchema = z.string().regex(
   /^\/(?:trending|movie|tv|discover|genre|search|person|authentication)(?:\/[A-Za-z0-9_,-]+)*$/,
@@ -18,8 +20,15 @@ const tmdbPathSchema = z.string().regex(
 
 const tmdbParamsSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]));
 
-function toPublicUser(user: { id: number; openId: string; name: string | null; email: string | null; loginMethod: string | null; lastSignedIn: Date }) {
-  return { id: user.id, openId: user.openId, name: user.name, email: user.email, loginMethod: user.loginMethod, lastSignedIn: user.lastSignedIn };
+function requestBaseUrl(req: { protocol?: string; headers: Record<string, unknown>; get?: (name: string) => string | undefined }) {
+  const forwarded = req.headers["x-forwarded-proto"];
+  const protocol = typeof forwarded === "string" ? forwarded.split(",")[0] : req.protocol ?? "http";
+  const host = req.get?.("host") ?? "localhost:3000";
+  return `${protocol}://${host}`;
+}
+
+function toPublicUser(user: { id: number; openId: string; name: string | null; email: string | null; loginMethod: string | null; lastSignedIn: Date; emailVerifiedAt?: Date | null }) {
+  return { id: user.id, openId: user.openId, name: user.name, email: user.email, loginMethod: user.loginMethod, lastSignedIn: user.lastSignedIn, emailVerifiedAt: user.emailVerifiedAt ?? null };
 }
 
 async function fetchTmdbResource(path: string, params: Record<string, string | number | boolean>) {
@@ -86,6 +95,19 @@ export const appRouter = router({
         });
         if (!user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not create account" });
 
+        const verificationToken = await createAuthToken({ userId: user.id, kind: "verify_email", ttlMs: 24 * 60 * 60 * 1000 });
+        try {
+          await sendAuthEmail({
+            to: email,
+            subject: "Verify your Reelog email",
+            title: "Verify your email",
+            body: "Confirm your email address to secure your Reelog account.",
+            actionUrl: `${requestBaseUrl(ctx.req)}/api/auth/verify?token=${encodeURIComponent(verificationToken)}`,
+          });
+        } catch (error) {
+          console.error("[Auth] Verification email failed", error);
+        }
+
         const sessionToken = await sdk.createSessionToken(user.openId, { name: user.name ?? email });
         const cookieOptions = getSessionCookieOptions(ctx.req);
         ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: 365 * 24 * 60 * 60 * 1000 });
@@ -115,6 +137,36 @@ export const appRouter = router({
         return { sessionToken, user: toPublicUser({ ...user, lastSignedIn: new Date() }) };
       }),
     me: publicProcedure.query((opts) => opts.ctx.user),
+    requestVerification: protectedProcedure.mutation(async ({ ctx }) => {
+      if (!ctx.user.email) throw new TRPCError({ code: "BAD_REQUEST", message: "An email address is required" });
+      const token = await createAuthToken({ userId: ctx.user.id, kind: "verify_email", ttlMs: 24 * 60 * 60 * 1000 });
+      await sendAuthEmail({ to: ctx.user.email, subject: "Verify your Reelog email", title: "Verify your email", body: "Confirm your email address to secure your Reelog account.", actionUrl: `${requestBaseUrl(ctx.req)}/api/auth/verify?token=${encodeURIComponent(token)}` });
+      return { success: true } as const;
+    }),
+    verifyEmail: publicProcedure.input(z.object({ token: z.string().min(32).max(128) })).mutation(async ({ input }) => {
+      const token = await consumeAuthToken(input.token, "verify_email");
+      if (!token) throw new TRPCError({ code: "BAD_REQUEST", message: "This verification link is invalid or expired" });
+      await markEmailVerified(token.userId);
+      return { success: true } as const;
+    }),
+    forgotPassword: publicProcedure.input(z.object({ email: z.string().trim().email().max(320) })).mutation(async ({ ctx, input }) => {
+      const user = await db.getUserByEmail(normalizeEmail(input.email));
+      if (user?.email && user.passwordHash) {
+        const token = await createAuthToken({ userId: user.id, kind: "reset_password", ttlMs: 30 * 60 * 1000 });
+        try {
+          await sendAuthEmail({ to: user.email, subject: "Reset your Reelog password", title: "Reset your password", body: "Use the secure link below to choose a new password. This link expires in 30 minutes.", actionUrl: `${requestBaseUrl(ctx.req)}/reset-password?token=${encodeURIComponent(token)}` });
+        } catch (error) {
+          console.error("[Auth] Reset email failed", error);
+        }
+      }
+      return { success: true } as const;
+    }),
+    resetPassword: publicProcedure.input(z.object({ token: z.string().min(32).max(128), password: z.string().min(8).max(128) })).mutation(async ({ input }) => {
+      const token = await consumeAuthToken(input.token, "reset_password");
+      if (!token) throw new TRPCError({ code: "BAD_REQUEST", message: "This reset link is invalid or expired" });
+      await updateUserPassword(token.userId, await hashPassword(input.password));
+      return { success: true } as const;
+    }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
@@ -179,6 +231,19 @@ export const appRouter = router({
       await db.deleteUserReview(ctx.user.id, input.mediaType, input.mediaId);
       return { success: true } as const;
     }),
+  }),
+  social: router({
+    users: protectedProcedure.input(z.object({ query: z.string().trim().max(80).default("") })).query(({ ctx, input }) => db.searchUsers(ctx.user.id, input.query)),
+    following: protectedProcedure.query(({ ctx }) => db.listFollowingIds(ctx.user.id)),
+    feed: protectedProcedure.query(({ ctx }) => db.listSocialFeed(ctx.user.id)),
+    toggleFollow: protectedProcedure.input(z.object({ userId: z.number().int().positive() })).mutation(({ ctx, input }) => db.toggleFollow(ctx.user.id, input.userId)),
+    notifications: protectedProcedure.query(({ ctx }) => db.listNotifications(ctx.user.id)),
+    markNotificationsRead: protectedProcedure.mutation(async ({ ctx }) => { await db.markNotificationsRead(ctx.user.id); return { success: true } as const; }),
+    block: protectedProcedure.input(z.object({ userId: z.number().int().positive() })).mutation(({ ctx, input }) => db.addBlock(ctx.user.id, input.userId)),
+    report: protectedProcedure.input(z.object({ targetType: z.enum(["review", "comment", "user"]), targetId: z.number().int().positive(), reason: z.enum(["spam", "harassment", "spoiler", "other"]), details: z.string().trim().max(1000).optional() })).mutation(({ ctx, input }) => db.createReport({ reporterId: ctx.user.id, ...input })),
+    toggleLike: protectedProcedure.input(z.object({ reviewId: z.number().int().positive() })).mutation(({ ctx, input }) => db.toggleReviewLike(ctx.user.id, input.reviewId)),
+    comments: protectedProcedure.input(z.object({ reviewId: z.number().int().positive() })).query(({ input }) => db.listReviewComments(input.reviewId)),
+    addComment: protectedProcedure.input(z.object({ reviewId: z.number().int().positive(), text: z.string().trim().min(1).max(1000) })).mutation(({ ctx, input }) => db.addReviewComment(ctx.user.id, input.reviewId, input.text)),
   }),
   library: router({
     mine: protectedProcedure.query(({ ctx }) => db.listUserMediaStatuses(ctx.user.id)),

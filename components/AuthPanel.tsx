@@ -9,7 +9,7 @@ import { colors, fontSizes, radius, spacing } from "@/lib/theme";
 type Props = { onAuthenticated: () => Promise<void> | void };
 
 export function AuthPanel({ onAuthenticated }: Props) {
-  const [mode, setMode] = React.useState<"login" | "register">("login");
+  const [mode, setMode] = React.useState<"login" | "register" | "forgot">("login");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [name, setName] = React.useState("");
@@ -30,13 +30,21 @@ export function AuthPanel({ onAuthenticated }: Props) {
     onSuccess: complete,
     onError: (mutationError) => setError(mutationError.message),
   });
-  const busy = login.isPending || register.isPending || oauthLoading;
+  const forgotPassword = trpc.auth.forgotPassword.useMutation({
+    onSuccess: () => setError("If an account exists for this email, a reset link has been sent."),
+    onError: (mutationError) => setError(mutationError.message),
+  });
+  const busy = login.isPending || register.isPending || forgotPassword.isPending || oauthLoading;
 
   const submit = () => {
     setError(null);
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail || !normalizedEmail.includes("@")) {
       setError("Enter a valid email address.");
+      return;
+    }
+    if (mode === "forgot") {
+      forgotPassword.mutate({ email: normalizedEmail });
       return;
     }
     if (password.length < 8) {
@@ -72,13 +80,14 @@ export function AuthPanel({ onAuthenticated }: Props) {
         <TextInput value={name} onChangeText={setName} placeholder="Full name" placeholderTextColor={colors.textFaint} autoCapitalize="words" style={styles.input} editable={!busy} />
       ) : null}
       <TextInput value={email} onChangeText={setEmail} placeholder="Email address" placeholderTextColor={colors.textFaint} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} style={styles.input} editable={!busy} />
-      <TextInput value={password} onChangeText={setPassword} placeholder="Password (8+ characters)" placeholderTextColor={colors.textFaint} secureTextEntry style={styles.input} editable={!busy} returnKeyType="done" onSubmitEditing={submit} />
+      {mode !== "forgot" ? <TextInput value={password} onChangeText={setPassword} placeholder="Password (8+ characters)" placeholderTextColor={colors.textFaint} secureTextEntry style={styles.input} editable={!busy} returnKeyType="done" onSubmitEditing={submit} /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Pressable onPress={submit} disabled={busy} style={({ pressed }) => [styles.primary, pressed && { opacity: 0.82 }, busy && { opacity: 0.65 }]}>
-        {login.isPending || register.isPending ? <ActivityIndicator color={colors.bg} /> : <Text style={styles.primaryText}>{mode === "register" ? "Create account" : "Sign in"}</Text>}
+        {login.isPending || register.isPending || forgotPassword.isPending ? <ActivityIndicator color={colors.bg} /> : <Text style={styles.primaryText}>{mode === "register" ? "Create account" : mode === "forgot" ? "Send reset link" : "Sign in"}</Text>}
       </Pressable>
+      {mode === "login" ? <Pressable onPress={() => { setMode("forgot"); setError(null); }} disabled={busy} style={styles.switch}><Text style={styles.switchText}>Forgot password?</Text></Pressable> : null}
       <Pressable onPress={() => { setMode(mode === "login" ? "register" : "login"); setError(null); }} disabled={busy} style={styles.switch}>
-        <Text style={styles.switchText}>{mode === "login" ? "New to Reelog? Create an account" : "Already have an account? Sign in"}</Text>
+        <Text style={styles.switchText}>{mode === "login" || mode === "forgot" ? "New to Reelog? Create an account" : "Already have an account? Sign in"}</Text>
       </Pressable>
       <View style={styles.divider}><View style={styles.line} /><Text style={styles.or}>OR</Text><View style={styles.line} /></View>
       <Pressable onPress={oauth} disabled={busy} style={({ pressed }) => [styles.oauth, pressed && { opacity: 0.82 }, busy && { opacity: 0.65 }]}>

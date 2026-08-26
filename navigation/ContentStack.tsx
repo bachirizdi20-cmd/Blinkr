@@ -18,6 +18,7 @@ import SearchScreen from '../screens/SearchScreen';
 import ConversationScreen from '../screens/ConversationScreen';
 import PeopleScreen from '../screens/PeopleScreen';
 import UserProfileScreen from '../screens/UserProfileScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
 import { colors } from '../lib/theme';
 
 const Stack = createNativeStackNavigator<ContentStackParamList>();
@@ -46,6 +47,7 @@ export default function ContentStackNavigator({ initialRouteName, HomeComponent 
       <Stack.Screen name="Conversation" component={ConversationScreen} options={{ headerShown: false }} />
       <Stack.Screen name="People" component={PeopleScreen} options={{ headerShown: false }} />
       <Stack.Screen name="UserProfile" component={UserProfileScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Lists" component={ListsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ListDetail" component={ListDetailScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Diary" component={DiaryScreen} options={{ headerShown: false }} />

@@ -28,6 +28,7 @@ export default function ProfileScreen() {
   const syncMutation = trpc.account.sync.useMutation();
   const privacyMutation = trpc.account.updatePrivacy.useMutation();
   const deleteMutation = trpc.account.delete.useMutation();
+  const requestVerification = trpc.auth.requestVerification.useMutation();
   const accountQuery = trpc.account.me.useQuery(undefined, { enabled: !!user, retry: false });
   const remoteReviewsQuery = trpc.reviews.mine.useQuery(undefined, { enabled: !!user, retry: false });
   const remoteLibraryQuery = trpc.library.mine.useQuery(undefined, { enabled: !!user, retry: false });
@@ -80,6 +81,17 @@ export default function ProfileScreen() {
   const recentReviews = diary.filter((e) => !!e.review).sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
   const likeItems = Object.values(likes).sort((a, b) => b.likedAt - a.likedAt).slice(0, 8);
 
+  const emailVerified = Boolean((accountQuery.data?.user as { emailVerifiedAt?: Date | null } | undefined)?.emailVerifiedAt);
+
+  const handleRequestVerification = async () => {
+    try {
+      await requestVerification.mutateAsync();
+      Alert.alert('Verification email sent', 'Check your inbox and follow the link to verify your email.');
+    } catch {
+      Alert.alert('Could not send email', 'Please try again later.');
+    }
+  };
+
   const handlePrivacyChange = (isPrivate: boolean) => {
     lib.updateProfile({ isPrivate });
     privacyMutation.mutate({ isPrivate });
@@ -115,7 +127,10 @@ export default function ProfileScreen() {
             <Text style={styles.username}>{user.name || profile.username}</Text>
             <Text style={styles.bio} numberOfLines={2}>{profile.bio || user.email || 'Tell people what you love to watch.'}</Text>
           </View>
-          <Pressable style={styles.editBtn} onPress={() => navigation.navigate('People')}>
+          <Pressable style={styles.editBtn} onPress={() => navigation.navigate('Notifications')} accessibilityLabel="Notifications">
+            <Ionicons name="notifications-outline" size={17} color={colors.text} />
+          </Pressable>
+          <Pressable style={styles.editBtn} onPress={() => navigation.navigate('People')} accessibilityLabel="Discover people">
             <Ionicons name="person-add-outline" size={16} color={colors.text} />
           </Pressable>
           <Pressable style={styles.editBtn} onPress={() => navigation.navigate('EditProfile')}>
@@ -156,6 +171,7 @@ export default function ProfileScreen() {
             <Text style={styles.cloudStatText}>{remoteReviewsQuery.data?.length ?? 0} cloud reviews</Text>
             <Text style={styles.cloudStatText}>{remoteLibraryQuery.data?.length ?? 0} library items</Text>
           </View>
+          {!emailVerified && user.email ? <Pressable onPress={handleRequestVerification} disabled={requestVerification.isPending} style={styles.verifyButton}><Ionicons name="mail-outline" size={15} color={colors.accent} /><Text style={styles.verifyText}>{requestVerification.isPending ? 'Sending...' : 'Verify your email'}</Text></Pressable> : null}
         </View>
 
         <View style={styles.section}>
@@ -298,6 +314,8 @@ const styles = StyleSheet.create({
   cloudStats: { marginHorizontal: spacing.lg, marginTop: spacing.sm, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   cloudStatsTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '800', marginBottom: spacing.sm },
   cloudStatsRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  verifyButton: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.md, alignSelf: 'flex-start' as const },
+  verifyText: { color: colors.accent, fontSize: fontSizes.xs, fontWeight: '800' as const },
   cloudStatText: { color: colors.textDim, fontSize: 12 },
   accountSettings: { marginHorizontal: spacing.lg, marginTop: spacing.sm, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   settingsTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800', marginBottom: spacing.md },

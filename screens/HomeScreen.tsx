@@ -30,6 +30,8 @@ import {
 import { NormalizedItem } from '../types/tmdb';
 import { useMetadata } from '../context/MetadataContext';
 import { useSocial } from '../context/SocialContext';
+import { useAuth } from '../hooks/use-auth';
+import { trpc } from '../lib/trpc';
 import { SocialReview } from '../types/social';
 import { colors, fontSizes, spacing, radius } from '../lib/theme';
 
@@ -50,7 +52,10 @@ interface SectionData {
 
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
+  const { user } = useAuth();
   const { movieGenres } = useMetadata();
+  const notificationsQuery = trpc.social.notifications.useQuery(undefined, { enabled: Boolean(user) });
+  const unreadNotifications = (notificationsQuery.data ?? []).filter((item) => !item.readAt).length;
   const [category, setCategory] = useState<Category>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [trending, setTrending] = useState<NormalizedItem[]>([]);
@@ -209,9 +214,15 @@ export default function HomeScreen() {
             <Text style={styles.brand}>Reelog</Text>
             <Text style={styles.tagline}>Track every story you watch</Text>
           </View>
-          <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Search')}>
-            <Ionicons name="search" size={20} color={colors.text} />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Notifications')}>
+              <Ionicons name="notifications-outline" size={20} color={colors.text} />
+              {unreadNotifications > 0 ? <View style={styles.notificationDot}><Text style={styles.notificationCount}>{unreadNotifications > 9 ? '9+' : unreadNotifications}</Text></View> : null}
+            </Pressable>
+            <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Search')}>
+              <Ionicons name="search" size={20} color={colors.text} />
+            </Pressable>
+          </View>
         </View>
 
         {hero && (
@@ -397,6 +408,9 @@ function formatSocialTime(value: number) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  notificationDot: { position: 'absolute' as const, top: -5, right: -5, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: colors.danger, alignItems: 'center' as const, justifyContent: 'center' as const, paddingHorizontal: 3 },
+  notificationCount: { color: '#fff', fontSize: 9, fontWeight: '800' as const },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -21,6 +21,7 @@ export type ContentStackParamList = {
   EditProfile: undefined;
   Conversation: { userId: string };
   People: { initialFilter?: PeopleFilter } | undefined;
+  Notifications: undefined;
   UserProfile: { userId: string };
   ReviewModal: {
     mediaType: MediaType;

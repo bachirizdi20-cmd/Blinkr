@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, isNull, gt, or, not, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertMediaStatus, InsertReview, InsertUser, InsertUserData, MediaStatus, Review, mediaStatuses, reviews, UserData, userData, users } from "../drizzle/schema";
+import { InsertMediaStatus, InsertReview, InsertUser, InsertUserData, MediaStatus, Review, authTokens, blocks, follows, notifications, reports, reviewComments, reviewLikes, mediaStatuses, reviews, UserData, userData, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import { randomBytes, createHash } from "node:crypto";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -90,6 +91,46 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+export async function createAuthToken(input: { userId: number; kind: "verify_email" | "reset_password"; ttlMs: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const raw = randomBytes(32).toString("base64url");
+  const tokenHash = createHash("sha256").update(raw).digest("hex");
+  await db.update(authTokens).set({ consumedAt: new Date() }).where(and(eq(authTokens.userId, input.userId), eq(authTokens.kind, input.kind), isNull(authTokens.consumedAt)));
+  await db.insert(authTokens).values({ userId: input.userId, tokenHash, kind: input.kind, expiresAt: new Date(Date.now() + input.ttlMs) });
+  return raw;
+}
+
+export async function consumeAuthToken(raw: string, kind: "verify_email" | "reset_password") {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const tokenHash = createHash("sha256").update(raw).digest("hex");
+  const rows = await db.select().from(authTokens).where(and(eq(authTokens.tokenHash, tokenHash), eq(authTokens.kind, kind), isNull(authTokens.consumedAt), gt(authTokens.expiresAt, new Date()))).limit(1);
+  const token = rows[0];
+  if (!token) return undefined;
+  await db.update(authTokens).set({ consumedAt: new Date() }).where(eq(authTokens.id, token.id));
+  return token;
+}
+
+export async function markEmailVerified(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users).set({ emailVerifiedAt: new Date() }).where(eq(users.id, userId));
+}
+
+export async function updateUserPassword(userId: number, passwordHash: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users).set({ passwordHash }).where(eq(users.id, userId));
+}
+
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return result[0];
+}
+
 export async function getUserByEmail(email: string) {
   const db = await getDb();
   if (!db) {
@@ -120,6 +161,105 @@ export async function createEmailUser(input: {
     lastSignedIn: new Date(),
   });
   return getUserByOpenId(openId);
+}
+
+export async function searchUsers(viewerId: number, query: string) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({ id: users.id, name: users.name, username: userData.username, bio: userData.bio, avatarUrl: userData.avatarUrl, isPrivate: userData.isPrivate }).from(users).leftJoin(userData, eq(userData.userId, users.id)).where(not(eq(users.id, viewerId))).limit(50);
+  const needle = query.trim().toLowerCase();
+  return rows.filter((row) => !needle || `${row.username ?? ""} ${row.name ?? ""}`.toLowerCase().includes(needle));
+}
+
+export async function toggleFollow(followerId: number, followingId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  if (followerId === followingId) throw new Error("Cannot follow yourself");
+  const existing = await db.select().from(follows).where(and(eq(follows.followerId, followerId), eq(follows.followingId, followingId))).limit(1);
+  if (existing[0]) {
+    await db.delete(follows).where(eq(follows.id, existing[0].id));
+    return { following: false } as const;
+  }
+  await db.insert(follows).values({ followerId, followingId });
+  await db.insert(notifications).values({ userId: followingId, actorId: followerId, kind: "follow" });
+  return { following: true } as const;
+}
+
+export async function listFollowingIds(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({ followingId: follows.followingId }).from(follows).where(eq(follows.followerId, userId));
+  return rows.map((row) => row.followingId);
+}
+
+export async function listSocialFeed(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const followingIds = await listFollowingIds(userId);
+  if (!followingIds.length) return [];
+  const blocked = await db.select({ blockedUserId: blocks.blockedUserId }).from(blocks).where(eq(blocks.userId, userId));
+  const blockedIds = blocked.map((row) => row.blockedUserId);
+  const allowedIds = followingIds.filter((id) => !blockedIds.includes(id));
+  if (!allowedIds.length) return [];
+  return db.select({ review: reviews, username: userData.username, displayName: users.name, avatarUrl: userData.avatarUrl }).from(reviews).innerJoin(users, eq(users.id, reviews.userId)).leftJoin(userData, eq(userData.userId, reviews.userId)).where(and(inArray(reviews.userId, allowedIds), or(isNull(userData.isPrivate), eq(userData.isPrivate, false)))).orderBy(desc(reviews.updatedAt)).limit(50);
+}
+
+export async function toggleReviewLike(userId: number, reviewId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const review = (await db.select().from(reviews).where(eq(reviews.id, reviewId)).limit(1))[0];
+  if (!review) throw new Error("Review not found");
+  const existing = await db.select().from(reviewLikes).where(and(eq(reviewLikes.reviewId, reviewId), eq(reviewLikes.userId, userId))).limit(1);
+  if (existing[0]) {
+    await db.delete(reviewLikes).where(eq(reviewLikes.id, existing[0].id));
+    return { liked: false } as const;
+  }
+  await db.insert(reviewLikes).values({ reviewId, userId });
+  if (review.userId !== userId) await db.insert(notifications).values({ userId: review.userId, actorId: userId, kind: "like", reviewId });
+  return { liked: true } as const;
+}
+
+export async function addReviewComment(userId: number, reviewId: number, text: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const review = (await db.select().from(reviews).where(eq(reviews.id, reviewId)).limit(1))[0];
+  if (!review) throw new Error("Review not found");
+  await db.insert(reviewComments).values({ reviewId, userId, text });
+  if (review.userId !== userId) await db.insert(notifications).values({ userId: review.userId, actorId: userId, kind: "comment", reviewId });
+  return { success: true } as const;
+}
+
+export async function listReviewComments(reviewId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ comment: reviewComments, name: users.name, username: userData.username }).from(reviewComments).innerJoin(users, eq(users.id, reviewComments.userId)).leftJoin(userData, eq(userData.userId, reviewComments.userId)).where(eq(reviewComments.reviewId, reviewId)).orderBy(desc(reviewComments.createdAt)).limit(100);
+}
+
+export async function listNotifications(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt)).limit(100);
+}
+
+export async function markNotificationsRead(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(notifications).set({ readAt: new Date() }).where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
+}
+
+export async function addBlock(userId: number, blockedUserId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(blocks).values({ userId, blockedUserId }).onDuplicateKeyUpdate({ set: { blockedUserId } });
+  await db.delete(follows).where(or(and(eq(follows.followerId, userId), eq(follows.followingId, blockedUserId)), and(eq(follows.followerId, blockedUserId), eq(follows.followingId, userId))));
+  return { success: true } as const;
+}
+
+export async function createReport(input: { reporterId: number; targetType: string; targetId: number; reason: string; details?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(reports).values(input);
+  return { success: true } as const;
 }
 
 export async function getUserData(userId: number): Promise<UserData | undefined> {

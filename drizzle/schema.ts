@@ -16,6 +16,7 @@ export const users = mysqlTable("users", {
   name: text("name"),
   email: varchar("email", { length: 320 }),
   passwordHash: text("passwordHash"),
+  emailVerifiedAt: timestamp("emailVerifiedAt"),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -43,6 +44,77 @@ export const userData = mysqlTable("user_data", {
 
 export type UserData = typeof userData.$inferSelect;
 export type InsertUserData = typeof userData.$inferInsert;
+
+export const authTokens = mysqlTable("auth_tokens", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  tokenHash: varchar("tokenHash", { length: 128 }).notNull().unique(),
+  kind: mysqlEnum("kind", ["verify_email", "reset_password"]).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  consumedAt: timestamp("consumedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userKindIdx: uniqueIndex("auth_tokens_user_kind_idx").on(table.userId, table.kind, table.consumedAt),
+}));
+
+export type AuthToken = typeof authTokens.$inferSelect;
+export type InsertAuthToken = typeof authTokens.$inferInsert;
+
+export const follows = mysqlTable("follows", {
+  id: int("id").autoincrement().primaryKey(),
+  followerId: int("followerId").notNull(),
+  followingId: int("followingId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  pairIdx: uniqueIndex("follows_pair_idx").on(table.followerId, table.followingId),
+}));
+
+export const reviewLikes = mysqlTable("review_likes", {
+  id: int("id").autoincrement().primaryKey(),
+  reviewId: int("reviewId").notNull(),
+  userId: int("userId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  pairIdx: uniqueIndex("review_likes_pair_idx").on(table.reviewId, table.userId),
+}));
+
+export const reviewComments = mysqlTable("review_comments", {
+  id: int("id").autoincrement().primaryKey(),
+  reviewId: int("reviewId").notNull(),
+  userId: int("userId").notNull(),
+  text: text("text").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const notifications = mysqlTable("notifications", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  actorId: int("actorId"),
+  kind: mysqlEnum("kind", ["follow", "like", "comment"]).notNull(),
+  reviewId: int("reviewId"),
+  readAt: timestamp("readAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const blocks = mysqlTable("blocks", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  blockedUserId: int("blockedUserId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  pairIdx: uniqueIndex("blocks_pair_idx").on(table.userId, table.blockedUserId),
+}));
+
+export const reports = mysqlTable("reports", {
+  id: int("id").autoincrement().primaryKey(),
+  reporterId: int("reporterId").notNull(),
+  targetType: varchar("targetType", { length: 32 }).notNull(),
+  targetId: int("targetId").notNull(),
+  reason: varchar("reason", { length: 64 }).notNull(),
+  details: text("details"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
 
 export const reviews = mysqlTable("reviews", {
   id: int("id").autoincrement().primaryKey(),
