@@ -43,3 +43,40 @@ export const userData = mysqlTable("user_data", {
 
 export type UserData = typeof userData.$inferSelect;
 export type InsertUserData = typeof userData.$inferInsert;
+
+export const reviews = mysqlTable("reviews", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  mediaType: varchar("mediaType", { length: 8 }).notNull(),
+  mediaId: int("mediaId").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  posterPath: varchar("posterPath", { length: 255 }),
+  rating: int("rating").notNull(),
+  review: longtext("review").notNull(),
+  spoiler: boolean("spoiler").notNull().default(false),
+  watchedDate: timestamp("watchedDate"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userMediaIdx: uniqueIndex("reviews_user_media_idx").on(table.userId, table.mediaType, table.mediaId),
+}));
+
+export type Review = typeof reviews.$inferSelect;
+export type InsertReview = typeof reviews.$inferInsert;
+
+export const mediaStatuses = mysqlTable("media_statuses", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  mediaType: varchar("mediaType", { length: 8 }).notNull(),
+  mediaId: int("mediaId").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  posterPath: varchar("posterPath", { length: 255 }),
+  status: varchar("status", { length: 16 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userMediaIdx: uniqueIndex("media_statuses_user_media_idx").on(table.userId, table.mediaType, table.mediaId),
+}));
+
+export type MediaStatus = typeof mediaStatuses.$inferSelect;
+export type InsertMediaStatus = typeof mediaStatuses.$inferInsert;

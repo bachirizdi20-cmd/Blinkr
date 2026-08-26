@@ -18,6 +18,7 @@ import RatingStars from '../components/RatingStars';
 import { ContentStackParamList } from '../navigation/types';
 import { useLibrary } from '../context/LibraryContext';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
+import { trpc } from '../lib/trpc';
 
 type RouteT = RouteProp<ContentStackParamList, 'ReviewModal'>;
 
@@ -34,26 +35,42 @@ export default function ReviewModalScreen() {
   const [date, setDate] = useState(existing?.watchedDate ?? new Date().toISOString().slice(0, 10));
   const [rewatch, setRewatch] = useState(existing?.rewatch ?? false);
   const [spoiler, setSpoiler] = useState(existing?.spoiler ?? false);
+  const [saving, setSaving] = useState(false);
+  const saveReviewMutation = trpc.reviews.save.useMutation();
+  const deleteReviewMutation = trpc.reviews.delete.useMutation();
 
-  const handleSave = () => {
-    const payload = {
-      mediaType,
-      mediaId,
-      title,
-      posterPath,
-      genreIds,
-      watchedDate: date,
-      rating: rating > 0 ? rating : undefined,
-      review: review.trim() ? review.trim() : undefined,
-      rewatch,
-      spoiler,
-    };
-    if (existing) {
-      lib.updateDiaryEntry(existing.id, payload);
-    } else {
-      lib.addDiaryEntry(payload);
+  const handleSave = async () => {
+    const trimmedReview = review.trim();
+    if (rating === 0 && !trimmedReview) {
+      Alert.alert('Add a rating or review', 'Choose a rating or write a few words before saving.');
+      return;
     }
-    navigation.goBack();
+    const watchedDate = date.trim() ? new Date(`${date.trim()}T00:00:00.000Z`) : null;
+    if (watchedDate && Number.isNaN(watchedDate.getTime())) {
+      Alert.alert('Invalid date', 'Use the YYYY-MM-DD format.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveReviewMutation.mutateAsync({
+        mediaType,
+        mediaId,
+        title,
+        posterPath: posterPath ?? null,
+        rating,
+        review: trimmedReview,
+        spoiler,
+        watchedDate: watchedDate?.toISOString() ?? null,
+      });
+      const payload = { mediaType, mediaId, title, posterPath, genreIds, watchedDate: date, rating: rating > 0 ? rating : undefined, review: trimmedReview || undefined, rewatch, spoiler };
+      if (existing) lib.updateDiaryEntry(existing.id, payload);
+      else lib.addDiaryEntry(payload);
+      navigation.goBack();
+    } catch (error) {
+      Alert.alert('Could not save review', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = () => {
@@ -63,9 +80,14 @@ export default function ReviewModalScreen() {
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: () => {
-          lib.deleteDiaryEntry(existing.id);
-          navigation.goBack();
+        onPress: async () => {
+          try {
+            await deleteReviewMutation.mutateAsync({ mediaType, mediaId });
+            lib.deleteDiaryEntry(existing.id);
+            navigation.goBack();
+          } catch (error) {
+            Alert.alert('Could not delete review', error instanceof Error ? error.message : 'Please try again.');
+          }
         },
       },
     ]);
@@ -79,8 +101,8 @@ export default function ReviewModalScreen() {
             <Text style={styles.cancelText}>Cancel</Text>
           </Pressable>
           <Text style={styles.headerTitle}>{existing ? 'Edit Log' : 'Log Entry'}</Text>
-          <Pressable onPress={handleSave} hitSlop={8}>
-            <Text style={styles.saveText}>Save</Text>
+          <Pressable onPress={handleSave} hitSlop={8} disabled={saving}>
+            <Text style={[styles.saveText, saving && { opacity: 0.5 }]}>{saving ? 'Saving…' : 'Save'}</Text>
           </Pressable>
         </View>
 

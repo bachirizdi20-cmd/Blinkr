@@ -27,6 +27,8 @@ import { fetchDetail, posterUrl, backdropUrl, profileUrl } from '../lib/tmdb';
 import { DetailResult } from '../types/tmdb';
 import { useLibrary, mediaKey } from '../context/LibraryContext';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
+import { trpc } from '../lib/trpc';
+import { useAuth } from '../hooks/use-auth';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type RouteT = RouteProp<ContentStackParamList, 'Detail'>;
@@ -52,6 +54,11 @@ export default function DetailScreen() {
   const route = useRoute<RouteT>();
   const { mediaType, id } = route.params;
   const lib = useLibrary();
+  const { user } = useAuth();
+  const setStatusMutation = trpc.library.setStatus.useMutation();
+  const removeStatusMutation = trpc.library.removeStatus.useMutation();
+  const myReviewQuery = trpc.reviews.getMine.useQuery({ mediaType, mediaId: id }, { enabled: !!user, retry: false });
+  const myStatusQuery = trpc.library.getStatus.useQuery({ mediaType, mediaId: id }, { enabled: !!user, retry: false });
 
   const [detail, setDetail] = useState<DetailResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,8 +85,9 @@ export default function DetailScreen() {
   const key = mediaKey(mediaType, id);
   const inWatchlist = lib.isInWatchlist(mediaType, id);
   const liked = lib.isLiked(mediaType, id);
-  const watched = lib.isWatched(mediaType, id);
-  const userRating = lib.getLatestRating(mediaType, id) ?? 0;
+  const watched = lib.isWatched(mediaType, id) || myStatusQuery.data?.status === 'watched';
+  const watching = myStatusQuery.data?.status === 'watching';
+  const userRating = lib.getLatestRating(mediaType, id) || myReviewQuery.data?.rating || 0;
   const diaryEntries = lib.getDiaryForMedia(mediaType, id);
 
   const mediaRef = useMemo(
@@ -125,9 +133,36 @@ export default function DetailScreen() {
     lib.setQuickRating(mediaRef, rating);
   };
 
-  const handleToggleWatched = () => {
+  const handleToggleWatched = async () => {
     if (!mediaRef) return;
     lib.toggleWatchedQuick(mediaRef);
+    try {
+      if (watched) await removeStatusMutation.mutateAsync({ mediaType, mediaId: id });
+      else await setStatusMutation.mutateAsync({ mediaType, mediaId: id, title: detail.title, posterPath: detail.posterPath, status: 'watched' });
+    } catch (error) {
+      Alert.alert('Sync failed', error instanceof Error ? error.message : 'Your local change was kept.');
+    }
+  };
+
+  const handleSetWatching = async () => {
+    if (!mediaRef) return;
+    try {
+      await setStatusMutation.mutateAsync({ mediaType, mediaId: id, title: detail.title, posterPath: detail.posterPath, status: watching ? 'watchlist' : 'watching' });
+      await myStatusQuery.refetch();
+    } catch (error) {
+      Alert.alert('Sync failed', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+
+  const handleToggleWatchlist = async () => {
+    if (!mediaRef) return;
+    lib.toggleWatchlist(mediaRef);
+    try {
+      if (inWatchlist) await removeStatusMutation.mutateAsync({ mediaType, mediaId: id });
+      else await setStatusMutation.mutateAsync({ mediaType, mediaId: id, title: detail.title, posterPath: detail.posterPath, status: 'watchlist' });
+    } catch (error) {
+      Alert.alert('Sync failed', error instanceof Error ? error.message : 'Your local change was kept.');
+    }
   };
 
   const handleDeleteEntry = (entryId: string) => {
@@ -196,7 +231,11 @@ export default function DetailScreen() {
                 <Ionicons name={watched ? 'checkmark-circle' : 'checkmark-circle-outline'} size={24} color={watched ? colors.accent : colors.text} />
                 <Text style={[styles.actionLabel, watched && { color: colors.accent }]}>Watched</Text>
               </Pressable>
-              <Pressable style={styles.actionBtn} onPress={() => mediaRef && lib.toggleWatchlist(mediaRef)}>
+              <Pressable style={styles.actionBtn} onPress={handleSetWatching}>
+                <Ionicons name={watching ? 'play-circle' : 'play-circle-outline'} size={24} color={watching ? colors.accent2 : colors.text} />
+                <Text style={[styles.actionLabel, watching && { color: colors.accent2 }]}>Watching</Text>
+              </Pressable>
+              <Pressable style={styles.actionBtn} onPress={handleToggleWatchlist}>
                 <Ionicons name={inWatchlist ? 'bookmark' : 'bookmark-outline'} size={24} color={inWatchlist ? colors.accent3 : colors.text} />
                 <Text style={[styles.actionLabel, inWatchlist && { color: colors.accent3 }]}>Watchlist</Text>
               </Pressable>
@@ -245,6 +284,13 @@ export default function DetailScreen() {
               <Ionicons name="play-circle" size={20} color={colors.bg} />
               <Text style={styles.trailerText}>Watch Trailer</Text>
             </Pressable>
+          )}
+
+          {myReviewQuery.data && (
+            <View style={styles.ownReviewCard}>
+              <View style={styles.ownReviewHeader}><Text style={styles.sectionTitle}>Your review</Text><RatingStars rating={myReviewQuery.data.rating} size={15} /></View>
+              {!!myReviewQuery.data.review && <Text style={styles.ownReviewBody}>{myReviewQuery.data.review}</Text>}
+            </View>
           )}
 
           <Text style={styles.sectionTitle}>Overview</Text>
@@ -474,6 +520,9 @@ const styles = StyleSheet.create({
   },
   trailerText: { color: colors.bg, fontWeight: '800', fontSize: fontSizes.md },
   sectionTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800', marginTop: spacing.xl, marginBottom: spacing.sm },
+  ownReviewCard: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginBottom: spacing.lg },
+  ownReviewHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  ownReviewBody: { color: colors.textDim, fontSize: fontSizes.sm, lineHeight: 20, marginTop: spacing.sm },
   overview: { color: colors.textDim, fontSize: fontSizes.md, lineHeight: 22 },
   directorText: { fontSize: fontSizes.sm, marginTop: spacing.md },
   peopleSection: { marginBottom: spacing.lg },

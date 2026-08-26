@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, InsertUserData, UserData, userData, users } from "../drizzle/schema";
+import { InsertMediaStatus, InsertReview, InsertUser, InsertUserData, MediaStatus, Review, mediaStatuses, reviews, UserData, userData, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -150,9 +150,73 @@ export async function upsertUserData(userId: number, patch: Partial<Omit<InsertU
   return await getUserData(userId);
 }
 
+export async function getUserReview(userId: number, mediaType: string, mediaId: number): Promise<Review | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(reviews).where(and(eq(reviews.userId, userId), eq(reviews.mediaType, mediaType), eq(reviews.mediaId, mediaId))).limit(1);
+  return result[0];
+}
+
+export async function listUserReviews(userId: number): Promise<Review[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(reviews).where(eq(reviews.userId, userId)).orderBy(desc(reviews.updatedAt));
+}
+
+export async function upsertReview(input: Omit<InsertReview, 'id' | 'createdAt' | 'updatedAt'>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const existing = await getUserReview(input.userId, input.mediaType, input.mediaId);
+  if (existing) {
+    await db.update(reviews).set({ title: input.title, posterPath: input.posterPath, rating: input.rating, review: input.review, spoiler: input.spoiler, watchedDate: input.watchedDate }).where(eq(reviews.id, existing.id));
+    return getUserReview(input.userId, input.mediaType, input.mediaId);
+  }
+  await db.insert(reviews).values(input);
+  return getUserReview(input.userId, input.mediaType, input.mediaId);
+}
+
+export async function deleteUserReview(userId: number, mediaType: string, mediaId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(reviews).where(and(eq(reviews.mediaType, mediaType), eq(reviews.mediaId, mediaId), eq(reviews.userId, userId)));
+}
+
+export async function listUserMediaStatuses(userId: number): Promise<MediaStatus[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(mediaStatuses).where(eq(mediaStatuses.userId, userId)).orderBy(desc(mediaStatuses.updatedAt));
+}
+
+export async function getUserMediaStatus(userId: number, mediaType: string, mediaId: number): Promise<MediaStatus | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(mediaStatuses).where(and(eq(mediaStatuses.userId, userId), eq(mediaStatuses.mediaType, mediaType), eq(mediaStatuses.mediaId, mediaId))).limit(1);
+  return result[0];
+}
+
+export async function upsertMediaStatus(input: Omit<InsertMediaStatus, 'id' | 'createdAt' | 'updatedAt'>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const existing = await getUserMediaStatus(input.userId, input.mediaType, input.mediaId);
+  if (existing) {
+    await db.update(mediaStatuses).set({ title: input.title, posterPath: input.posterPath, status: input.status }).where(eq(mediaStatuses.id, existing.id));
+    return getUserMediaStatus(input.userId, input.mediaType, input.mediaId);
+  }
+  await db.insert(mediaStatuses).values(input);
+  return getUserMediaStatus(input.userId, input.mediaType, input.mediaId);
+}
+
+export async function deleteMediaStatus(userId: number, mediaType: string, mediaId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(mediaStatuses).where(and(eq(mediaStatuses.userId, userId), eq(mediaStatuses.mediaType, mediaType), eq(mediaStatuses.mediaId, mediaId)));
+}
+
 export async function deleteUserAccount(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  await db.delete(reviews).where(eq(reviews.userId, userId));
+  await db.delete(mediaStatuses).where(eq(mediaStatuses.userId, userId));
   await db.delete(userData).where(eq(userData.userId, userId));
   await db.delete(users).where(eq(users.id, userId));
 }

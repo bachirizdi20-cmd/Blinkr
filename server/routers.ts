@@ -9,6 +9,7 @@ import { ENV } from "./_core/env";
 import { sdk } from "./_core/sdk";
 import { hashPassword, normalizeEmail, verifyPassword } from "./password";
 import { storagePut } from "./storage";
+import { assertLoginAllowed, clearLoginFailures, recordLoginFailure } from "./rate-limit";
 
 const tmdbPathSchema = z.string().regex(
   /^\/(?:trending|movie|tv|discover|genre|search|person|authentication)(?:\/[A-Za-z0-9_,-]+)*$/,
@@ -94,11 +95,18 @@ export const appRouter = router({
       .input(z.object({ email: z.string().trim().email().max(320), password: z.string().min(1).max(128) }))
       .mutation(async ({ ctx, input }) => {
         const email = normalizeEmail(input.email);
+        try {
+          assertLoginAllowed(email);
+        } catch {
+          throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many failed attempts. Please wait and try again." });
+        }
         const user = await db.getUserByEmail(email);
         const valid = Boolean(user?.passwordHash && await verifyPassword(input.password, user.passwordHash));
         if (!user || !valid) {
+          recordLoginFailure(email);
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Email or password is incorrect" });
         }
+        clearLoginFailures(email);
 
         await db.upsertUser({ openId: user.openId, lastSignedIn: new Date() });
         const sessionToken = await sdk.createSessionToken(user.openId, { name: user.name ?? email });
@@ -143,6 +151,56 @@ export const appRouter = router({
         ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
         return { success: true } as const;
       }),
+  }),
+  reviews: router({
+    mine: protectedProcedure.query(({ ctx }) => db.listUserReviews(ctx.user.id)),
+    getMine: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv"]), mediaId: z.number().int().positive() })).query(({ ctx, input }) => db.getUserReview(ctx.user.id, input.mediaType, input.mediaId)),
+    save: protectedProcedure.input(z.object({
+      mediaType: z.enum(["movie", "tv"]),
+      mediaId: z.number().int().positive(),
+      title: z.string().trim().min(1).max(255),
+      posterPath: z.string().max(255).nullable().optional(),
+      rating: z.number().int().min(0).max(10),
+      review: z.string().trim().max(5000),
+      spoiler: z.boolean().default(false),
+      watchedDate: z.string().datetime().nullable().optional(),
+    })).mutation(({ ctx, input }) => db.upsertReview({
+      userId: ctx.user.id,
+      mediaType: input.mediaType,
+      mediaId: input.mediaId,
+      title: input.title,
+      posterPath: input.posterPath ?? null,
+      rating: input.rating,
+      review: input.review,
+      spoiler: input.spoiler,
+      watchedDate: input.watchedDate ? new Date(input.watchedDate) : null,
+    })),
+    delete: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv"]), mediaId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      await db.deleteUserReview(ctx.user.id, input.mediaType, input.mediaId);
+      return { success: true } as const;
+    }),
+  }),
+  library: router({
+    mine: protectedProcedure.query(({ ctx }) => db.listUserMediaStatuses(ctx.user.id)),
+    getStatus: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv"]), mediaId: z.number().int().positive() })).query(({ ctx, input }) => db.getUserMediaStatus(ctx.user.id, input.mediaType, input.mediaId)),
+    setStatus: protectedProcedure.input(z.object({
+      mediaType: z.enum(["movie", "tv"]),
+      mediaId: z.number().int().positive(),
+      title: z.string().trim().min(1).max(255),
+      posterPath: z.string().max(255).nullable().optional(),
+      status: z.enum(["watched", "watching", "watchlist"]),
+    })).mutation(({ ctx, input }) => db.upsertMediaStatus({
+      userId: ctx.user.id,
+      mediaType: input.mediaType,
+      mediaId: input.mediaId,
+      title: input.title,
+      posterPath: input.posterPath ?? null,
+      status: input.status,
+    })),
+    removeStatus: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv"]), mediaId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      await db.deleteMediaStatus(ctx.user.id, input.mediaType, input.mediaId);
+      return { success: true } as const;
+    }),
   }),
   tmdb: router({
     get: publicProcedure

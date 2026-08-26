@@ -29,6 +29,8 @@ export default function ProfileScreen() {
   const privacyMutation = trpc.account.updatePrivacy.useMutation();
   const deleteMutation = trpc.account.delete.useMutation();
   const accountQuery = trpc.account.me.useQuery(undefined, { enabled: !!user, retry: false });
+  const remoteReviewsQuery = trpc.reviews.mine.useQuery(undefined, { enabled: !!user, retry: false });
+  const remoteLibraryQuery = trpc.library.mine.useQuery(undefined, { enabled: !!user, retry: false });
   const lib = useLibrary();
   const social = useSocial();
   const { profile, stats, diary, lists, likes } = lib;
@@ -146,6 +148,14 @@ export default function ProfileScreen() {
           <StatCard label="Shows" value={stats.showsWatched} />
           <StatCard label="This Year" value={stats.thisYear} />
           <StatCard label="Avg Rating" value={stats.avgRating ? stats.avgRating.toFixed(1) : '—'} />
+        </View>
+
+        <View style={styles.cloudStats}>
+          <Text style={styles.cloudStatsTitle}>Synced across devices</Text>
+          <View style={styles.cloudStatsRow}>
+            <Text style={styles.cloudStatText}>{remoteReviewsQuery.data?.length ?? 0} cloud reviews</Text>
+            <Text style={styles.cloudStatText}>{remoteLibraryQuery.data?.length ?? 0} library items</Text>
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -285,6 +295,10 @@ const styles = StyleSheet.create({
   favoriteItem: { position: 'relative', width: 100 },
   removeFavorite: { position: 'absolute', top: 7, right: 7, width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.bg },
   skeletonTitle: { color: colors.textDim, fontSize: fontSizes.md, fontWeight: '800', marginBottom: spacing.md },
+  cloudStats: { marginHorizontal: spacing.lg, marginTop: spacing.sm, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  cloudStatsTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '800', marginBottom: spacing.sm },
+  cloudStatsRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  cloudStatText: { color: colors.textDim, fontSize: 12 },
   accountSettings: { marginHorizontal: spacing.lg, marginTop: spacing.sm, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   settingsTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800', marginBottom: spacing.md },
   settingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
