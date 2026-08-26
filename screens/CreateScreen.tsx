@@ -120,7 +120,7 @@ export default function CreateScreen() {
         <Pressable onPress={() => setActiveTab('tv')} style={[styles.tab, activeTab === 'tv' && styles.tabActive]} accessibilityRole="tab" accessibilityState={{ selected: activeTab === 'tv' }}><Ionicons name="tv-outline" size={17} color={activeTab === 'tv' ? colors.bg : colors.textDim} /><Text style={[styles.tabText, activeTab === 'tv' && styles.tabTextActive]}>TV Shows</Text></Pressable>
       </View>
       <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{isSearching ? `Results for “${trimmedQuery}”` : activeTab === 'movie' ? 'Popular movies' : 'Popular TV shows'}</Text><View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>TMDB LIVE</Text></View></View>
-      {firstLoading ? <ActivityIndicator color={colors.accent} style={styles.loader} /> : showError ? <GeneralErrorState title="Could not load titles" message="Check your connection and try again." onRetry={() => browseQuery.refetch()} /> : showEmpty ? <EmptyState icon="film-outline" title="No titles found" message="Try another search or switch between Movies and TV Shows." /> : <FlatList horizontal data={items} keyExtractor={(item) => `${item.mediaType}-${item.id}`} renderItem={renderItem} onEndReached={loadMore} onEndReachedThreshold={0.7} contentContainerStyle={styles.horizontalResults} showsHorizontalScrollIndicator={false} ListFooterComponent={browseQuery.isFetching && page > 1 ? <View style={styles.footer}><ActivityIndicator color={colors.accent} /><Text style={styles.footerText}>Loading…</Text></View> : !hasMore ? <Text style={styles.endText}>End of list</Text> : null} />}
+      {firstLoading ? <ActivityIndicator color={colors.accent} style={styles.loader} /> : showError ? <GeneralErrorState title="Could not load titles" message="Check your connection and try again." onRetry={() => browseQuery.refetch()} /> : showEmpty ? <EmptyState icon="film-outline" title="No titles found" message="Try another search or switch between Movies and TV Shows." /> : <FlatList data={items} numColumns={3} keyExtractor={(item) => `${item.mediaType}-${item.id}`} renderItem={renderItem} onEndReached={loadMore} onEndReachedThreshold={0.55} contentContainerStyle={styles.gridResults} columnWrapperStyle={styles.gridRow} showsVerticalScrollIndicator={false} ListFooterComponent={browseQuery.isFetching && page > 1 ? <View style={styles.footer}><ActivityIndicator color={colors.accent} /><Text style={styles.footerText}>Loading more titles…</Text></View> : !hasMore ? <Text style={styles.endText}>End of list</Text> : null} />}
     </SafeAreaView>
   );
 }
@@ -145,19 +145,20 @@ const styles = StyleSheet.create({
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent },
   liveText: { color: colors.accent, fontSize: 9, fontWeight: '900', letterSpacing: 0.6 },
   loader: { flex: 1 },
-  horizontalResults: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, gap: spacing.sm },
-  card: { width: 138, padding: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  gridResults: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
+  gridRow: { justifyContent: 'space-between', marginBottom: spacing.sm },
+  card: { width: '31.5%', padding: 6, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   pressed: { opacity: 0.74, transform: [{ scale: 0.98 }] },
   posterWrap: { position: 'relative' },
-  poster: { width: '100%', height: 164, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh },
-  ratingBadge: { position: 'absolute', top: 7, right: 7, flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 4, borderRadius: 10, backgroundColor: colors.accent },
-  ratingBadgeText: { color: colors.bg, fontSize: 10, fontWeight: '900' },
-  cardTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '900', lineHeight: 18, marginTop: spacing.sm },
-  cardMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 5 },
-  mediaPill: { color: colors.accent, fontSize: 9, fontWeight: '900', letterSpacing: 0.7 },
-  year: { color: colors.textDim, fontSize: 11, fontWeight: '800' },
-  reviewCta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.sm },
-  reviewCtaText: { color: colors.accent, fontSize: 11, fontWeight: '900' },
+  poster: { width: '100%', aspectRatio: 0.68, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh },
+  ratingBadge: { position: 'absolute', top: 5, right: 5, flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 5, paddingVertical: 3, borderRadius: 9, backgroundColor: colors.accent },
+  ratingBadgeText: { color: colors.bg, fontSize: 9, fontWeight: '900' },
+  cardTitle: { color: colors.text, fontSize: 11, fontWeight: '900', lineHeight: 15, marginTop: 6, minHeight: 30 },
+  cardMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
+  mediaPill: { color: colors.accent, fontSize: 8, fontWeight: '900', letterSpacing: 0.5 },
+  year: { color: colors.textDim, fontSize: 10, fontWeight: '800' },
+  reviewCta: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 6 },
+  reviewCtaText: { color: colors.accent, fontSize: 10, fontWeight: '900' },
   footer: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.lg },
   footerText: { color: colors.textDim, fontSize: fontSizes.xs },
   endText: { color: colors.textFaint, textAlign: 'center', fontSize: fontSizes.xs, paddingVertical: spacing.lg },
