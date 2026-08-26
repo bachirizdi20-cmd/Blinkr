@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { profileUrl } from '../lib/tmdb';
 import { CastMember } from '../types/tmdb';
-import { colors, radius, fontSizes, spacing } from '../lib/theme';
+import { colors, fontSizes, spacing } from '../lib/theme';
 
 interface Props {
   cast: CastMember[];

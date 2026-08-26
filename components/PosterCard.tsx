@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { posterUrl } from '../lib/tmdb';
@@ -22,7 +22,6 @@ interface Props {
   showRating?: boolean;
 }
 
-const { width: SCREEN_W } = Dimensions.get('window');
 
 export default function PosterCard({ item, onPress, width, showRating = true }: Props) {
   const cardWidth = width ?? 108;

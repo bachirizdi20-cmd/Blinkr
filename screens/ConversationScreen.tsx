@@ -118,7 +118,9 @@ export default function ConversationScreen() {
   };
 
   const remoteMessages = (messagesQuery.data ?? []).map((item: any) => ({ ...item, id: String(item.id), sender: item.senderId === Number(authUser?.id) ? 'me' : 'them', createdAt: new Date(item.createdAt), text: item.text ?? '' }));
-  const data = remoteMessages.length ? remoteMessages : [...convo.messages].reverse();
+  const isRemoteLoading = Boolean(authUser) && messagesQuery.isLoading;
+  // Authenticated conversations must use the server as the source of truth; local mock history is only for guest mode.
+  const data = authUser ? remoteMessages : [...convo.messages].reverse();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -139,7 +141,9 @@ export default function ConversationScreen() {
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={90}>
-        {data.length === 0 ? (
+        {isRemoteLoading ? (
+          <View style={styles.loadingState}><ActivityIndicator color={colors.accent} /><Text style={styles.loadingText}>Loading conversation…</Text></View>
+        ) : data.length === 0 ? (
           <View style={{ flex: 1 }}>
             <EmptyState icon="chatbubble-ellipses-outline" title={`Say hi to ${user.displayName}`} message={user.bio} />
           </View>
@@ -222,6 +226,8 @@ const styles = StyleSheet.create({
   headerName: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800' },
   headerStatus: { color: colors.textFaint, fontSize: 11, marginTop: 1 },
   messagesContent: { padding: spacing.lg, gap: spacing.sm },
+  loadingState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+  loadingText: { color: colors.textDim, fontSize: fontSizes.sm },
   bubbleRow: { marginBottom: spacing.sm, maxWidth: '80%' },
   bubbleRowMine: { alignSelf: 'flex-end', alignItems: 'flex-end' },
   bubbleRowTheirs: { alignSelf: 'flex-start', alignItems: 'flex-start' },
