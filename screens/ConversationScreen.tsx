@@ -11,6 +11,7 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -41,6 +42,11 @@ export default function ConversationScreen() {
   const messagesQuery = trpc.social.messages.useQuery({ otherUserId: numericOtherUserId }, { enabled: Boolean(authUser), retry: 1 });
   const sendMessageMutation = trpc.social.sendMessage.useMutation({ onSuccess: () => messagesQuery.refetch() });
   const sendImageMutation = trpc.social.sendImage.useMutation({ onSuccess: () => messagesQuery.refetch() });
+  const [failedCard, setFailedCard] = useState<any>(null);
+  const shareMediaMutation = trpc.social.shareMedia.useMutation({ onSuccess: () => { setFailedCard(null); messagesQuery.refetch(); setCardPickerOpen(false); setCardSearch(''); }, onError: (_error, variables) => setFailedCard(variables) });
+  const [cardPickerOpen, setCardPickerOpen] = useState(false);
+  const [cardSearch, setCardSearch] = useState('');
+  const cardSearchQuery = trpc.tmdb.get.useQuery({ path: '/search/multi', params: { query: cardSearch, include_adult: false } }, { enabled: cardPickerOpen && cardSearch.trim().length >= 2, retry: 1 });
   const user = social.getUser(userId);
   const convo = social.getConversation(userId);
   const isTyping = !!social.typingUserIds[userId];
@@ -173,6 +179,9 @@ export default function ConversationScreen() {
 
         {pendingImage ? <View style={styles.previewBar}><Image source={{ uri: pendingImage.uri }} style={styles.previewImage} /><View style={styles.previewCopy}><Text style={styles.previewTitle}>Ready to send</Text><Text style={styles.previewMeta}>{pendingImage.width} × {pendingImage.height}</Text></View><Pressable onPress={() => setPendingImage(null)} style={styles.previewCancel}><Ionicons name="close" size={19} color={colors.textDim} /></Pressable><Pressable onPress={handleSendImage} style={styles.previewSend} disabled={sendImageMutation.isPending}><Ionicons name="send" size={16} color="#04120C" /></Pressable></View> : null}
         <View style={styles.inputBar}>
+          <Pressable style={styles.attachBtn} onPress={() => setCardPickerOpen(true)} accessibilityLabel="Share movie card">
+            <Ionicons name="film-outline" size={21} color={colors.textDim} />
+          </Pressable>
           <Pressable style={styles.attachBtn} onPress={() => Alert.alert('Send photo', 'Choose a source', [{ text: 'Camera', onPress: () => handlePickImage(true) }, { text: 'Photo library', onPress: () => handlePickImage(false) }, { text: 'Cancel', style: 'cancel' }])} disabled={sendImageMutation.isPending} accessibilityLabel="Send photo">
             {sendImageMutation.isPending ? <ActivityIndicator size="small" color={colors.accent} /> : <Ionicons name="image-outline" size={21} color={colors.textDim} />}
           </Pressable>
@@ -191,6 +200,9 @@ export default function ConversationScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+      <Modal visible={cardPickerOpen} animationType="slide" transparent onRequestClose={() => setCardPickerOpen(false)}>
+        <View style={styles.modalBackdrop}><View style={styles.cardPicker}><View style={styles.modalHeader}><Text style={styles.modalTitle}>Share a film or series</Text><Pressable onPress={() => setCardPickerOpen(false)}><Ionicons name="close" size={22} color={colors.text} /></Pressable></View><TextInput autoFocus value={cardSearch} onChangeText={setCardSearch} placeholder="Search TMDB..." placeholderTextColor={colors.textFaint} style={styles.cardSearchInput} />{failedCard ? <View style={styles.retryRow}><Text style={styles.retryText}>Could not share the card.</Text><Pressable onPress={() => shareMediaMutation.mutate(failedCard)} disabled={shareMediaMutation.isPending}><Text style={styles.retryAction}>Retry</Text></Pressable></View> : null}{cardSearchQuery.isLoading ? <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.lg }} /> : <FlatList data={(((cardSearchQuery.data as any)?.results ?? [])).filter((r: any) => r.media_type === 'movie' || r.media_type === 'tv')} keyExtractor={(item: any) => `${item.media_type}-${item.id}`} contentContainerStyle={{ paddingBottom: spacing.lg }} ListEmptyComponent={cardSearch.length >= 2 ? <EmptyState icon="search-outline" title="No titles found" message="Try another title." /> : <EmptyState icon="film-outline" title="Search for a title" message="Find a movie or series to share." />} renderItem={({ item }: { item: any }) => <Pressable style={styles.cardResult} disabled={shareMediaMutation.isPending} onPress={() => shareMediaMutation.mutate({ otherUserId: numericOtherUserId, mediaType: item.media_type, mediaId: item.id, title: item.title, posterPath: item.posterPath, rating: item.voteAverage ?? 0, overview: item.overview ?? null })}><Image source={{ uri: item.posterPath ? `https://image.tmdb.org/t/p/w200${item.posterPath}` : undefined }} style={styles.resultPoster} /><View style={styles.resultCopy}><Text style={styles.resultTitle} numberOfLines={2}>{item.title}</Text><Text style={styles.resultMeta}>{item.media_type === 'tv' ? 'Series' : 'Film'} · ★ {(item.voteAverage ?? 0).toFixed(1)}</Text></View>{shareMediaMutation.isPending ? <ActivityIndicator color={colors.accent} /> : <Ionicons name="paper-plane-outline" size={18} color={colors.accent} />}</Pressable>} />}</View></View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -240,6 +252,19 @@ const styles = StyleSheet.create({
   previewCancel: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh },
   previewSend: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent },
   attachBtn: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh },
+  modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.65)' },
+  cardPicker: { maxHeight: '82%', backgroundColor: colors.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: spacing.lg },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
+  modalTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800' },
+  cardSearchInput: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, color: colors.text, paddingHorizontal: spacing.md, height: 44, marginBottom: spacing.md },
+  cardResult: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.sm, marginBottom: spacing.sm },
+  resultPoster: { width: 48, height: 70, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh },
+  resultCopy: { flex: 1 },
+  resultTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '800' },
+  resultMeta: { color: colors.textDim, fontSize: 11, marginTop: 5 },
+  retryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,80,100,0.12)', borderRadius: radius.md, padding: spacing.sm, marginBottom: spacing.md },
+  retryText: { color: colors.textDim, fontSize: 12 },
+  retryAction: { color: colors.accent, fontWeight: '800', fontSize: 12 },
   mediaCard: { flexDirection: 'row', width: 245, minHeight: 118, overflow: 'hidden', borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.xs },
   cardPoster: { width: 76, height: 118, backgroundColor: colors.surfaceHigh },
   cardCopy: { flex: 1, padding: spacing.sm, justifyContent: 'center' },
