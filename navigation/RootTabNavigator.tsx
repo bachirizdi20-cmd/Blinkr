@@ -1,10 +1,11 @@
 import React from 'react';
+import { View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import ContentStackNavigator from './ContentStack';
 import HomeScreen from '../screens/HomeScreen';
 import ChatsScreen from '../screens/ChatsScreen';
-import WatchlistScreen from '../screens/WatchlistScreen';
+import CreateScreen from '../screens/CreateScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import { trpc } from '../lib/trpc';
@@ -22,8 +23,8 @@ function ChatsStackScreen() {
   return <ContentStackNavigator initialRouteName="ChatsMain" HomeComponent={ChatsScreen} />;
 }
 
-function WatchlistStackScreen() {
-  return <ContentStackNavigator initialRouteName="WatchlistMain" HomeComponent={WatchlistScreen} />;
+function CreateStackScreen() {
+  return <ContentStackNavigator initialRouteName="CreateMain" HomeComponent={CreateScreen} />;
 }
 
 function NotificationsStackScreen() {
@@ -72,9 +73,12 @@ export default function RootTabNavigator() {
         component={ChatsStackScreen}
       />
       <Tab.Screen
-        name="Watchlist"
-        options={{ tabBarIcon: ({ color, size }) => <Ionicons name="bookmark" size={size} color={color} /> }}
-        component={WatchlistStackScreen}
+        name="Create"
+        options={{
+          tabBarLabel: 'Create',
+          tabBarIcon: ({ color }) => <View style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent, marginTop: -18, borderWidth: 4, borderColor: colors.bgElevated }}><Ionicons name="add" size={28} color={colors.bg} /></View>,
+        }}
+        component={CreateStackScreen}
       />
       <Tab.Screen
         name="Notifications"

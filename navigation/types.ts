@@ -6,6 +6,7 @@ export type ContentStackParamList = {
   HomeMain: undefined;
   ChatsMain: undefined;
   WatchlistMain: undefined;
+  CreateMain: undefined;
   ProfileMain: undefined;
   Detail: { mediaType: MediaType; id: number };
   Season: { tvId: number; seasonNumber: number; tvName: string };
