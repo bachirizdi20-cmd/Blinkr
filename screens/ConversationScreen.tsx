@@ -40,6 +40,9 @@ export default function ConversationScreen() {
   const social = useSocial();
   const { user: authUser } = useAuth();
   const messagesQuery = trpc.social.messages.useQuery({ otherUserId: numericOtherUserId }, { enabled: Boolean(authUser), retry: 1 });
+  const typingStatusQuery = trpc.social.typing.status.useQuery({ otherUserId: numericOtherUserId }, { enabled: Boolean(authUser), refetchInterval: 2000, staleTime: 0 });
+  const typingStartMutation = trpc.social.typing.start.useMutation();
+  const typingStopMutation = trpc.social.typing.stop.useMutation();
   const sendMessageMutation = trpc.social.sendMessage.useMutation({ onSuccess: () => messagesQuery.refetch() });
   const sendImageMutation = trpc.social.sendImage.useMutation({ onSuccess: () => messagesQuery.refetch() });
   const [failedCard, setFailedCard] = useState<any>(null);
@@ -49,16 +52,35 @@ export default function ConversationScreen() {
   const cardSearchQuery = trpc.tmdb.get.useQuery({ path: '/search/multi', params: { query: cardSearch, include_adult: false } }, { enabled: cardPickerOpen && cardSearch.trim().length >= 2, retry: 1 });
   const user = social.getUser(userId);
   const convo = social.getConversation(userId);
-  const isTyping = !!social.typingUserIds[userId];
+  const isTyping = authUser ? Boolean(typingStatusQuery.data?.isTyping) : !!social.typingUserIds[userId];
   const [text, setText] = useState('');
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pendingImage, setPendingImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const listRef = useRef<FlatList>(null);
 
   useFocusEffect(
     React.useCallback(() => {
       social.markRead(userId);
-    }, [userId])
+      return () => {
+        if (typingTimer.current) clearTimeout(typingTimer.current);
+        if (authUser) typingStopMutation.mutate({ otherUserId: numericOtherUserId });
+      };
+    }, [userId, authUser, numericOtherUserId])
   );
+
+  const handleTextChange = (value: string) => {
+    setText(value);
+    if (!authUser) return;
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    if (!value.trim()) {
+      typingStopMutation.mutate({ otherUserId: numericOtherUserId });
+      return;
+    }
+    typingStartMutation.mutate({ otherUserId: numericOtherUserId });
+    typingTimer.current = setTimeout(() => {
+      typingStopMutation.mutate({ otherUserId: numericOtherUserId });
+    }, 2500);
+  };
 
   if (!user) {
     return (
@@ -74,6 +96,10 @@ export default function ConversationScreen() {
       if (authUser) await sendMessageMutation.mutateAsync({ otherUserId: numericOtherUserId, text: text.trim() });
       else social.sendMessage(userId, text);
       setText('');
+      if (authUser) {
+        if (typingTimer.current) clearTimeout(typingTimer.current);
+        typingStopMutation.mutate({ otherUserId: numericOtherUserId });
+      }
     } catch { Alert.alert('Could not send message', 'Please try again.'); }
   };
 
@@ -163,9 +189,7 @@ export default function ConversationScreen() {
                     {!!(item as any).mediaUrl && <Image source={{ uri: (item as any).mediaUrl }} style={styles.messageImage} resizeMode="cover" />}
                     {!!item.text && <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.text}</Text>}
                   </View>
-                  <Text style={[styles.bubbleTime, mine ? styles.bubbleTimeMine : styles.bubbleTimeTheirs]}>
-                    {formatMessageTime(item.createdAt)}
-                  </Text>
+                  <View style={styles.messageMeta}><Text style={[styles.bubbleTime, mine ? styles.bubbleTimeMine : styles.bubbleTimeTheirs]}>{formatMessageTime(item.createdAt)}</Text>{mine ? <Text style={styles.readStatus}>{(item as any).readAt ? 'Read' : 'Sent'}</Text> : null}</View>
                 </View>
               );
             }}
@@ -192,7 +216,7 @@ export default function ConversationScreen() {
           <TextInput
             style={styles.input}
             value={text}
-            onChangeText={setText}
+            onChangeText={handleTextChange}
             placeholder={`Message ${user.displayName}`}
             placeholderTextColor={colors.textFaint}
             multiline
@@ -228,6 +252,8 @@ const styles = StyleSheet.create({
   messagesContent: { padding: spacing.lg, gap: spacing.sm },
   loadingState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
   loadingText: { color: colors.textDim, fontSize: fontSizes.sm },
+  messageMeta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3, marginHorizontal: 4 },
+  readStatus: { color: colors.textFaint, fontSize: 10 },
   bubbleRow: { marginBottom: spacing.sm, maxWidth: '80%' },
   bubbleRowMine: { alignSelf: 'flex-end', alignItems: 'flex-end' },
   bubbleRowTheirs: { alignSelf: 'flex-start', alignItems: 'flex-start' },
