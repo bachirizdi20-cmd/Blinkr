@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, desc, isNull, gt, or, not, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertMediaStatus, InsertReview, InsertUser, InsertUserData, MediaStatus, Review, authTokens, blocks, follows, notifications, reports, reviewComments, reviewLikes, mediaStatuses, reviews, UserData, userData, users } from "../drizzle/schema";
+import { InsertMediaStatus, InsertReview, InsertUser, InsertUserData, MediaStatus, Review, authTokens, blocks, follows, notifications, reports, reviewComments, reviewLikes, mediaStatuses, reviews, UserData, userData, users, conversations, chatMessages, InsertChatMessage } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { randomBytes, createHash } from "node:crypto";
 
@@ -359,4 +359,53 @@ export async function deleteUserAccount(userId: number) {
   await db.delete(mediaStatuses).where(eq(mediaStatuses.userId, userId));
   await db.delete(userData).where(eq(userData.userId, userId));
   await db.delete(users).where(eq(users.id, userId));
+}
+
+
+function orderedPair(a: number, b: number) {
+  return a < b ? { participantAId: a, participantBId: b } : { participantAId: b, participantBId: a };
+}
+
+export async function getOrCreateConversation(userId: number, otherUserId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  if (userId === otherUserId) throw new Error("Cannot create a conversation with yourself");
+  const pair = orderedPair(userId, otherUserId);
+  const existing = await db.select().from(conversations).where(and(eq(conversations.participantAId, pair.participantAId), eq(conversations.participantBId, pair.participantBId))).limit(1);
+  if (existing[0]) return existing[0];
+  await db.insert(conversations).values(pair);
+  const created = await db.select().from(conversations).where(and(eq(conversations.participantAId, pair.participantAId), eq(conversations.participantBId, pair.participantBId))).limit(1);
+  return created[0];
+}
+
+export async function userCanAccessConversation(userId: number, conversationId: number) {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.select().from(conversations).where(and(eq(conversations.id, conversationId), or(eq(conversations.participantAId, userId), eq(conversations.participantBId, userId)))).limit(1);
+  return Boolean(rows[0]);
+}
+
+export async function listChatMessages(userId: number, otherUserId: number) {
+  const conversation = await getOrCreateConversation(userId, otherUserId);
+  const db = await getDb();
+  if (!db || !conversation) return [];
+  await db.update(chatMessages).set({ readAt: new Date() }).where(and(eq(chatMessages.conversationId, conversation.id), not(eq(chatMessages.senderId, userId)), isNull(chatMessages.readAt)));
+  return db.select().from(chatMessages).where(and(eq(chatMessages.conversationId, conversation.id), isNull(chatMessages.deletedAt))).orderBy(desc(chatMessages.createdAt)).limit(100);
+}
+
+export async function createChatMessage(input: Omit<InsertChatMessage, "id" | "createdAt">, recipientId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const allowed = await userCanAccessConversation(input.senderId, input.conversationId);
+  if (!allowed) throw new Error("Conversation access denied");
+  await db.insert(chatMessages).values(input);
+  const message = await db.select().from(chatMessages).where(and(eq(chatMessages.conversationId, input.conversationId), eq(chatMessages.senderId, input.senderId))).orderBy(desc(chatMessages.createdAt)).limit(1);
+  await db.insert(notifications).values({ userId: recipientId, actorId: input.senderId, kind: "comment" });
+  return message[0];
+}
+
+export async function deleteChatMessage(userId: number, messageId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(chatMessages).set({ deletedAt: new Date() }).where(and(eq(chatMessages.id, messageId), eq(chatMessages.senderId, userId)));
 }

@@ -152,3 +152,32 @@ export const mediaStatuses = mysqlTable("media_statuses", {
 
 export type MediaStatus = typeof mediaStatuses.$inferSelect;
 export type InsertMediaStatus = typeof mediaStatuses.$inferInsert;
+
+
+export const conversations = mysqlTable("conversations", {
+  id: int("id").autoincrement().primaryKey(),
+  participantAId: int("participantAId").notNull(),
+  participantBId: int("participantBId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({ pairIdx: uniqueIndex("conversations_pair_idx").on(table.participantAId, table.participantBId) }));
+
+export const chatMessages = mysqlTable("chat_messages", {
+  id: int("id").autoincrement().primaryKey(),
+  conversationId: int("conversationId").notNull(),
+  senderId: int("senderId").notNull(),
+  text: text("text"),
+  mediaType: varchar("mediaType", { length: 16 }),
+  mediaUrl: text("mediaUrl"),
+  mediaKey: text("mediaKey"),
+  mediaMimeType: varchar("mediaMimeType", { length: 96 }),
+  mediaSize: int("mediaSize"),
+  replyToId: int("replyToId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  readAt: timestamp("readAt"),
+  deletedAt: timestamp("deletedAt"),
+});
+
+export type Conversation = typeof conversations.$inferSelect;
+export type ChatMessage = typeof chatMessages.$inferSelect;
+export type InsertChatMessage = typeof chatMessages.$inferInsert;

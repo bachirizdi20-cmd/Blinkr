@@ -244,6 +244,22 @@ export const appRouter = router({
     toggleLike: protectedProcedure.input(z.object({ reviewId: z.number().int().positive() })).mutation(({ ctx, input }) => db.toggleReviewLike(ctx.user.id, input.reviewId)),
     comments: protectedProcedure.input(z.object({ reviewId: z.number().int().positive() })).query(({ input }) => db.listReviewComments(input.reviewId)),
     addComment: protectedProcedure.input(z.object({ reviewId: z.number().int().positive(), text: z.string().trim().min(1).max(1000) })).mutation(({ ctx, input }) => db.addReviewComment(ctx.user.id, input.reviewId, input.text)),
+    conversation: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive() })).query(({ ctx, input }) => db.getOrCreateConversation(ctx.user.id, input.otherUserId)),
+    messages: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive() })).query(({ ctx, input }) => db.listChatMessages(ctx.user.id, input.otherUserId)),
+    sendMessage: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive(), text: z.string().trim().min(1).max(4000), replyToId: z.number().int().positive().optional() })).mutation(async ({ ctx, input }) => {
+      const conversation = await db.getOrCreateConversation(ctx.user.id, input.otherUserId);
+      if (!conversation) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Conversation unavailable' });
+      return db.createChatMessage({ conversationId: conversation.id, senderId: ctx.user.id, text: input.text, replyToId: input.replyToId ?? null }, input.otherUserId);
+    }),
+    deleteMessage: protectedProcedure.input(z.object({ messageId: z.number().int().positive() })).mutation(({ ctx, input }) => db.deleteChatMessage(ctx.user.id, input.messageId)),
+    sendImage: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive(), base64: z.string().min(1).max(10_000_000), mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']), size: z.number().int().positive().max(8_000_000), replyToId: z.number().int().positive().optional() })).mutation(async ({ ctx, input }) => {
+      const conversation = await db.getOrCreateConversation(ctx.user.id, input.otherUserId);
+      if (!conversation) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Conversation unavailable' });
+      const buffer = Buffer.from(input.base64, 'base64');
+      if (buffer.length > 8_000_000) throw new TRPCError({ code: 'PAYLOAD_TOO_LARGE', message: 'Image is too large' });
+      const uploaded = await storagePut(`chat/${ctx.user.id}/${Date.now()}.jpg`, buffer, input.mimeType);
+      return db.createChatMessage({ conversationId: conversation.id, senderId: ctx.user.id, text: null, mediaType: 'image', mediaUrl: uploaded.url, mediaKey: uploaded.key, mediaMimeType: input.mimeType, mediaSize: input.size, replyToId: input.replyToId ?? null }, input.otherUserId);
+    }),
   }),
   library: router({
     mine: protectedProcedure.query(({ ctx }) => db.listUserMediaStatuses(ctx.user.id)),

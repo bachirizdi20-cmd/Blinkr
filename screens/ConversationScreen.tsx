@@ -9,6 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -21,6 +23,10 @@ import { useSocial } from '../context/SocialContext';
 import { ChatMessage } from '../types/social';
 import { formatMessageTime } from '../lib/format';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import { trpc } from '../lib/trpc';
+import { useAuth } from '../hooks/use-auth';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type RouteT = RouteProp<ContentStackParamList, 'Conversation'>;
@@ -30,10 +36,15 @@ export default function ConversationScreen() {
   const route = useRoute<RouteT>();
   const { userId } = route.params;
   const social = useSocial();
+  const { user: authUser } = useAuth();
+  const messagesQuery = trpc.social.messages.useQuery({ otherUserId: Number(userId) }, { enabled: Boolean(authUser), retry: 1 });
+  const sendMessageMutation = trpc.social.sendMessage.useMutation({ onSuccess: () => messagesQuery.refetch() });
+  const sendImageMutation = trpc.social.sendImage.useMutation({ onSuccess: () => messagesQuery.refetch() });
   const user = social.getUser(userId);
   const convo = social.getConversation(userId);
   const isTyping = !!social.typingUserIds[userId];
   const [text, setText] = useState('');
+  const [pendingImage, setPendingImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const listRef = useRef<FlatList>(null);
 
   useFocusEffect(
@@ -50,10 +61,39 @@ export default function ConversationScreen() {
     );
   }
 
-  const handleSend = () => {
-    if (!text.trim()) return;
-    social.sendMessage(userId, text);
-    setText('');
+  const handleSend = async () => {
+    if (!text.trim() || sendMessageMutation.isPending) return;
+    try {
+      if (authUser) await sendMessageMutation.mutateAsync({ otherUserId: Number(userId), text: text.trim() });
+      else social.sendMessage(userId, text);
+      setText('');
+    } catch { Alert.alert('Could not send message', 'Please try again.'); }
+  };
+
+  const handlePickImage = async (fromCamera: boolean) => {
+    try {
+      if (fromCamera) {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (permission.status !== 'granted') { Alert.alert('Camera permission needed', 'Allow camera access to take a photo.'); return; }
+      }
+      const result = fromCamera
+        ? await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.72 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.72 });
+      if (result.canceled || !result.assets[0]) return;
+      const asset = result.assets[0];
+      if (asset.fileSize && asset.fileSize > 8_000_000) { Alert.alert('Image too large', 'Choose an image smaller than 8 MB.'); return; }
+      if (!authUser) { Alert.alert('Sign in required', 'Sign in to send photos.'); return; }
+      setPendingImage(asset);
+    } catch { Alert.alert('Could not select image', 'Please try again.'); }
+  };
+
+  const handleSendImage = async () => {
+    if (!pendingImage || !authUser || sendImageMutation.isPending) return;
+    try {
+      const base64 = await FileSystem.readAsStringAsync(pendingImage.uri, { encoding: FileSystem.EncodingType.Base64 });
+      await sendImageMutation.mutateAsync({ otherUserId: Number(userId), base64, mimeType: pendingImage.mimeType === 'image/png' ? 'image/png' : 'image/jpeg', size: pendingImage.fileSize ?? base64.length });
+      setPendingImage(null);
+    } catch { Alert.alert('Could not send image', 'Please try again.'); }
   };
 
   const handleDelete = () => {
@@ -70,7 +110,8 @@ export default function ConversationScreen() {
     ]);
   };
 
-  const data = [...convo.messages].reverse();
+  const remoteMessages = (messagesQuery.data ?? []).map((item: any) => ({ ...item, id: String(item.id), sender: item.senderId === Number(authUser?.id) ? 'me' : 'them', createdAt: new Date(item.createdAt), text: item.text ?? '' }));
+  const data = remoteMessages.length ? remoteMessages : [...convo.messages].reverse();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -107,7 +148,8 @@ export default function ConversationScreen() {
               return (
                 <View style={[styles.bubbleRow, mine ? styles.bubbleRowMine : styles.bubbleRowTheirs]}>
                   <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-                    <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.text}</Text>
+                    {!!(item as any).mediaUrl && <Image source={{ uri: (item as any).mediaUrl }} style={styles.messageImage} resizeMode="cover" />}
+                    {!!item.text && <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.text}</Text>}
                   </View>
                   <Text style={[styles.bubbleTime, mine ? styles.bubbleTimeMine : styles.bubbleTimeTheirs]}>
                     {formatMessageTime(item.createdAt)}
@@ -127,7 +169,11 @@ export default function ConversationScreen() {
           />
         )}
 
+        {pendingImage ? <View style={styles.previewBar}><Image source={{ uri: pendingImage.uri }} style={styles.previewImage} /><View style={styles.previewCopy}><Text style={styles.previewTitle}>Ready to send</Text><Text style={styles.previewMeta}>{pendingImage.width} × {pendingImage.height}</Text></View><Pressable onPress={() => setPendingImage(null)} style={styles.previewCancel}><Ionicons name="close" size={19} color={colors.textDim} /></Pressable><Pressable onPress={handleSendImage} style={styles.previewSend} disabled={sendImageMutation.isPending}><Ionicons name="send" size={16} color="#04120C" /></Pressable></View> : null}
         <View style={styles.inputBar}>
+          <Pressable style={styles.attachBtn} onPress={() => Alert.alert('Send photo', 'Choose a source', [{ text: 'Camera', onPress: () => handlePickImage(true) }, { text: 'Photo library', onPress: () => handlePickImage(false) }, { text: 'Cancel', style: 'cancel' }])} disabled={sendImageMutation.isPending} accessibilityLabel="Send photo">
+            {sendImageMutation.isPending ? <ActivityIndicator size="small" color={colors.accent} /> : <Ionicons name="image-outline" size={21} color={colors.textDim} />}
+          </Pressable>
           <TextInput
             style={styles.input}
             value={text}
@@ -184,6 +230,15 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     backgroundColor: colors.bg,
   },
+  previewBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.surface },
+  previewImage: { width: 48, height: 48, borderRadius: radius.sm },
+  previewCopy: { flex: 1 },
+  previewTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '800' },
+  previewMeta: { color: colors.textFaint, fontSize: 11, marginTop: 2 },
+  previewCancel: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh },
+  previewSend: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent },
+  attachBtn: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh },
+  messageImage: { width: 190, height: 190, borderRadius: radius.md, marginBottom: spacing.xs },
   input: {
     flex: 1,
     backgroundColor: colors.surface,
