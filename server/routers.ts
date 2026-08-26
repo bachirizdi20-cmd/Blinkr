@@ -238,6 +238,7 @@ export const appRouter = router({
     feed: protectedProcedure.query(({ ctx }) => db.listSocialFeed(ctx.user.id)),
     toggleFollow: protectedProcedure.input(z.object({ userId: z.number().int().positive() })).mutation(({ ctx, input }) => db.toggleFollow(ctx.user.id, input.userId)),
     notifications: protectedProcedure.query(({ ctx }) => db.listNotifications(ctx.user.id)),
+    markNotificationRead: protectedProcedure.input(z.object({ notificationId: z.number().int().positive() })).mutation(async ({ ctx, input }) => { await db.markNotificationRead(ctx.user.id, input.notificationId); return { success: true } as const; }),
     markNotificationsRead: protectedProcedure.mutation(async ({ ctx }) => { await db.markNotificationsRead(ctx.user.id); return { success: true } as const; }),
     block: protectedProcedure.input(z.object({ userId: z.number().int().positive() })).mutation(({ ctx, input }) => db.addBlock(ctx.user.id, input.userId)),
     report: protectedProcedure.input(z.object({ targetType: z.enum(["review", "comment", "user"]), targetId: z.number().int().positive(), reason: z.enum(["spam", "harassment", "spoiler", "other"]), details: z.string().trim().max(1000).optional() })).mutation(({ ctx, input }) => db.createReport({ reporterId: ctx.user.id, ...input })),

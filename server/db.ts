@@ -241,6 +241,12 @@ export async function listNotifications(userId: number) {
   return db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt)).limit(100);
 }
 
+export async function markNotificationRead(userId: number, notificationId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(notifications).set({ readAt: new Date() }).where(and(eq(notifications.userId, userId), eq(notifications.id, notificationId), isNull(notifications.readAt)));
+}
+
 export async function markNotificationsRead(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
