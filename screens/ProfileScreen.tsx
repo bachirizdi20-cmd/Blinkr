@@ -114,186 +114,61 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-                    {profile.avatarUri ? (
-            <Image source={{ uri: profile.avatarUri }} style={styles.avatar} contentFit="cover" />
-          ) : (
-            <View style={[styles.avatar, { backgroundColor: profile.avatarColor }]}>
-              <Text style={styles.avatarText}>{initials}</Text>
-            </View>
-          )}
+        <View style={styles.topNav}>
+          <Pressable onPress={() => navigation.goBack()} style={styles.topNavButton} accessibilityLabel="Go back"><Ionicons name="chevron-back" size={24} color={colors.text} /></Pressable>
+          <Text style={styles.topNavTitle}>Profile</Text>
+          <Pressable onPress={() => Alert.alert('Profile options', undefined, [{ text: 'Edit profile', onPress: () => navigation.navigate('EditProfile') }, { text: 'Notifications', onPress: () => navigation.navigate('Notifications') }, { text: 'Sign out', style: 'destructive', onPress: () => logout() }, { text: 'Cancel', style: 'cancel' }])} style={styles.topNavButton} accessibilityLabel="Profile options"><Ionicons name="ellipsis-vertical" size={21} color={colors.text} /></Pressable>
+        </View>
 
-          <View style={{ flex: 1 }}>
+        <View style={styles.profileHero}>
+          {profile.avatarUri ? <Image source={{ uri: profile.avatarUri }} style={styles.avatar} contentFit="cover" /> : <View style={[styles.avatar, { backgroundColor: profile.avatarColor }]}><Text style={styles.avatarText}>{initials}</Text></View>}
+          <View style={styles.profileInfo}>
             <Text style={styles.username}>{user.name || profile.username}</Text>
-            <Text style={styles.bio} numberOfLines={2}>{profile.bio || user.email || 'Tell people what you love to watch.'}</Text>
-          </View>
-          <Pressable style={styles.editBtn} onPress={() => navigation.navigate('Notifications')} accessibilityLabel="Notifications">
-            <Ionicons name="notifications-outline" size={17} color={colors.text} />
-          </Pressable>
-          <Pressable style={styles.editBtn} onPress={() => navigation.navigate('People')} accessibilityLabel="Discover people">
-            <Ionicons name="person-add-outline" size={16} color={colors.text} />
-          </Pressable>
-          <Pressable style={styles.editBtn} onPress={() => navigation.navigate('EditProfile')}>
-            <Ionicons name="pencil" size={16} color={colors.text} />
-          </Pressable>
-          <Pressable style={styles.editBtn} onPress={() => logout()} accessibilityLabel="Sign out">
-            <Ionicons name="log-out-outline" size={17} color={colors.text} />
-          </Pressable>
-        </View>
-
-        <View style={styles.socialRow}>
-          <Pressable style={styles.socialCard} onPress={() => navigation.navigate('People', { initialFilter: 'following' })}>
-            <Text style={styles.socialValue}>{social.myFollowingCount}</Text>
-            <Text style={styles.socialLabel}>Following</Text>
-          </Pressable>
-          <View style={styles.socialDivider} />
-          <Pressable style={styles.socialCard} onPress={() => navigation.navigate('People', { initialFilter: 'followers' })}>
-            <Text style={styles.socialValue}>{social.myFollowerCount}</Text>
-            <Text style={styles.socialLabel}>Followers</Text>
-          </Pressable>
-          <View style={styles.socialDivider} />
-          <Pressable style={styles.socialCard} onPress={() => navigation.getParent()?.navigate('Chats' as never)}>
-            <Text style={styles.socialValue}>{social.totalUnread}</Text>
-            <Text style={styles.socialLabel}>Unread Chats</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.statsGrid}>
-          <StatCard label="Films" value={stats.filmsWatched} />
-          <StatCard label="Shows" value={stats.showsWatched} />
-          <StatCard label="This Year" value={stats.thisYear} />
-          <StatCard label="Avg Rating" value={stats.avgRating ? stats.avgRating.toFixed(1) : '—'} />
-        </View>
-
-        <View style={styles.cloudStats}>
-          <Text style={styles.cloudStatsTitle}>Synced across devices</Text>
-          <View style={styles.cloudStatsRow}>
-            <Text style={styles.cloudStatText}>{remoteReviewsQuery.data?.length ?? 0} cloud reviews</Text>
-            <Text style={styles.cloudStatText}>{remoteLibraryQuery.data?.length ?? 0} library items</Text>
-          </View>
-          {!emailVerified && user.email ? <Pressable onPress={handleRequestVerification} disabled={requestVerification.isPending} style={styles.verifyButton}><Ionicons name="mail-outline" size={15} color={colors.accent} /><Text style={styles.verifyText}>{requestVerification.isPending ? 'Sending...' : 'Verify your email'}</Text></Pressable> : null}
-        </View>
-
-        <View style={styles.section}>
-          <SectionHeader title="Diary" subtitle={`${diary.length} logged`} onSeeAll={() => navigation.navigate('Diary')} />
-          {recentDiary.length === 0 ? (
-            <EmptyState icon="book-outline" title="No entries yet" message="Log what you watch to build your diary." />
-          ) : (
-            <View style={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}>
-              {recentDiary.map((entry) => (
-                <Pressable
-                  key={entry.id}
-                  style={styles.diaryRow}
-                  onPress={() => navigation.navigate('Detail', { mediaType: entry.mediaType, id: entry.mediaId })}
-                >
-                  <Image source={{ uri: posterUrl(entry.posterPath, 'w200') ?? undefined }} style={styles.diaryPoster} contentFit="cover" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.diaryTitle} numberOfLines={1}>{entry.title}</Text>
-                    <Text style={styles.diaryDate}>{entry.watchedDate}</Text>
-                    {!!entry.rating && <RatingStars rating={entry.rating} size={13} />}
-                  </View>
-                </Pressable>
-              ))}
+            <Text style={styles.handle}>@{profile.username || 'member'}</Text>
+            <View style={styles.profileActions}>
+              <Pressable style={({ pressed }) => [styles.editButton, pressed && styles.pressed]} onPress={() => navigation.navigate('EditProfile')}><Text style={styles.editButtonText}>Edit profile</Text></Pressable>
+              <Pressable style={({ pressed }) => [styles.shareButton, pressed && styles.pressed]} onPress={() => Alert.alert('Profile link', 'Profile sharing is ready to connect to your share sheet.')} accessibilityLabel="Share profile"><Ionicons name="share-outline" size={19} color={colors.text} /></Pressable>
             </View>
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <SectionHeader title="Reviews" subtitle={`${diary.filter((e) => !!e.review).length} written`} onSeeAll={() => navigation.navigate('Reviews')} />
-          {recentReviews.length === 0 ? (
-            <EmptyState icon="chatbox-ellipses-outline" title="No reviews yet" message="Share your thoughts when you log a title." />
-          ) : (
-            <View style={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}>
-              {recentReviews.map((entry) => (
-                <Pressable
-                  key={entry.id}
-                  style={styles.reviewCard}
-                  onPress={() => navigation.navigate('Detail', { mediaType: entry.mediaType, id: entry.mediaId })}
-                >
-                  <Text style={styles.reviewTitle} numberOfLines={1}>{entry.title}</Text>
-                  {!!entry.rating && <RatingStars rating={entry.rating} size={13} />}
-                  <Text style={styles.reviewBody} numberOfLines={3}>{entry.review}</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <SectionHeader title="Your Lists" subtitle={`${lists.length} lists`} onSeeAll={() => navigation.navigate('Lists')} />
-          {lists.length === 0 ? (
-            <EmptyState icon="list-outline" title="No lists yet" message="Create curated collections of your favorite titles." />
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
-              {lists.slice(0, 8).map((list) => (
-                <Pressable key={list.id} style={styles.listCard} onPress={() => navigation.navigate('ListDetail', { listId: list.id })}>
-                  <View style={styles.listCoverRow}>
-                    {list.items.slice(0, 3).map((it, idx) => (
-                      <Image
-                        key={idx}
-                        source={{ uri: posterUrl(it.posterPath, 'w200') ?? undefined }}
-                        style={[styles.listCoverPoster, { marginLeft: idx === 0 ? 0 : -24 }]}
-                        contentFit="cover"
-                      />
-                    ))}
-                    {list.items.length === 0 && (
-                      <View style={[styles.listCoverPoster, styles.listCoverEmpty]}>
-                        <Ionicons name="film-outline" size={20} color={colors.textFaint} />
-                      </View>
-                    )}
-                  </View>
-                  <Text style={styles.listName} numberOfLines={1}>{list.name}</Text>
-                  <Text style={styles.listCount}>{list.items.length} titles</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <SectionHeader title="Favorites" subtitle={`${Object.keys(likes).length} saved`} onSeeAll={() => navigation.navigate('Likes')} />
-          {likeItems.length === 0 ? (
-            <EmptyState icon="heart-outline" title="No favorites yet" message="Tap the heart on a title to save it here." />
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}>
-              {likeItems.map((item) => (
-                <View key={`${item.mediaType}-${item.mediaId}`} style={styles.favoriteItem}>
-                  <PosterCard
-                    item={{ id: item.mediaId, mediaType: item.mediaType, title: item.title, posterPath: item.posterPath, date: item.date, voteAverage: item.voteAverage }}
-                    width={100}
-                    onPress={() => navigation.navigate('Detail', { mediaType: item.mediaType, id: item.mediaId })}
-                  />
-                  <Pressable
-                    accessibilityLabel={`Remove ${item.title} from favorites`}
-                    style={styles.removeFavorite}
-                    onPress={() => lib.toggleLike(item)}
-                  >
-                    <Ionicons name="heart" size={14} color={colors.bg} />
-                  </Pressable>
-                </View>
-              ))}
-            </ScrollView>
-          )}
-        </View>
-
-        <View style={styles.accountSettings}>
-          <Text style={styles.settingsTitle}>Account & Privacy</Text>
-          <View style={styles.settingRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.settingLabel}>Private activity</Text>
-              <Text style={styles.settingHint}>Hide your reviews and lists from people who do not follow you.</Text>
-            </View>
-            <Switch value={!!profile.isPrivate} onValueChange={handlePrivacyChange} trackColor={{ false: colors.surfaceHigh, true: colors.accent }} thumbColor={colors.text} />
           </View>
-          <Pressable style={styles.deleteButton} onPress={handleDeleteAccount} disabled={deleteMutation.isPending}>
-            <Ionicons name="trash-outline" size={17} color={colors.danger} />
-            <Text style={styles.deleteText}>{deleteMutation.isPending ? 'Deleting…' : 'Delete account'}</Text>
-          </Pressable>
         </View>
+        <Text style={styles.bio} numberOfLines={3}>{profile.bio || 'Tell people what you love to watch.'}</Text>
+        <View style={styles.metaRow}><Ionicons name="location-outline" size={17} color={colors.textDim} /><Text style={styles.metaText}>Your cinematic world</Text><Ionicons name="calendar-outline" size={17} color={colors.textDim} /><Text style={styles.metaText}>Member</Text></View>
+
+        <View style={styles.statsStrip}>
+          <StatCard label="Films" value={stats.filmsWatched + stats.showsWatched} />
+          <StatCard label="This year" value={stats.thisYear} />
+          <StatCard label="Lists" value={lists.length} />
+          <Pressable style={styles.statCard} onPress={() => navigation.navigate('People', { initialFilter: 'following' })}><Text style={styles.statValue}>{social.myFollowingCount}</Text><Text style={styles.statLabel}>Following</Text></Pressable>
+          <Pressable style={styles.statCard} onPress={() => navigation.navigate('People', { initialFilter: 'followers' })}><Text style={styles.statValue}>{social.myFollowerCount}</Text><Text style={styles.statLabel}>Followers</Text></Pressable>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.profileTabs}>
+          <ProfileTab icon="person-circle-outline" label="Profile" active />
+          <ProfileTab icon="book-outline" label="Diary" onPress={() => navigation.navigate('Diary')} />
+          <ProfileTab icon="list-outline" label="Lists" onPress={() => navigation.navigate('Lists')} />
+          <ProfileTab icon="star-outline" label="Ratings" onPress={() => navigation.navigate('Reviews')} />
+          <ProfileTab icon="bookmark-outline" label="Watchlist" onPress={() => navigation.navigate('WatchlistMain')} />
+        </ScrollView>
+
+        <View style={styles.section}><View style={styles.referenceSectionHeader}><Text style={styles.referenceSectionTitle}>Favorite films</Text><Pressable onPress={() => navigation.navigate('Likes')}><Text style={styles.viewAll}>View all</Text></Pressable></View>
+          {likeItems.length === 0 ? <EmptyState icon="heart-outline" title="No favorites yet" message="Tap the heart on a title to save it here." /> : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.posterRail}>{likeItems.slice(0, 8).map((item) => <View key={`${item.mediaType}-${item.mediaId}`} style={styles.favoriteItem}><PosterCard item={{ id: item.mediaId, mediaType: item.mediaType, title: item.title, posterPath: item.posterPath, date: item.date, voteAverage: item.voteAverage }} width={112} onPress={() => navigation.navigate('Detail', { mediaType: item.mediaType, id: item.mediaId })} /><Pressable accessibilityLabel={`Remove ${item.title} from favorites`} style={styles.removeFavorite} onPress={() => lib.toggleLike(item)}><Ionicons name="heart" size={14} color={colors.bg} /></Pressable></View>)}</ScrollView>}
+        </View>
+
+        <View style={styles.contentColumns}>
+          <View style={styles.activityPanel}><View style={styles.panelHeader}><Text style={styles.panelTitle}>Activity</Text><Ionicons name="pulse-outline" size={18} color={colors.accent} /></View>{recentReviews.length === 0 ? <Text style={styles.emptyPanel}>Your ratings and reviews will appear here.</Text> : recentReviews.slice(0, 3).map((entry) => <Pressable key={entry.id} style={styles.activityRow} onPress={() => navigation.navigate('Detail', { mediaType: entry.mediaType, id: entry.mediaId })}><View style={styles.activityAvatar}><Text style={styles.activityInitial}>{initials.slice(0, 1)}</Text></View><View style={{ flex: 1 }}><Text style={styles.activityText}>{user.name || profile.username} rated</Text><Text style={styles.activityTitle} numberOfLines={1}>{entry.title}</Text>{!!entry.rating && <RatingStars rating={entry.rating} size={12} />}</View></Pressable>)}</View>
+          <View style={styles.activityPanel}><View style={styles.panelHeader}><Text style={styles.panelTitle}>Diary</Text><Pressable onPress={() => navigation.navigate('Diary')}><Text style={styles.viewAll}>View all</Text></Pressable></View>{recentDiary.length === 0 ? <Text style={styles.emptyPanel}>Start logging what you watch.</Text> : recentDiary.slice(0, 3).map((entry) => <Pressable key={entry.id} style={styles.diaryRow} onPress={() => navigation.navigate('Detail', { mediaType: entry.mediaType, id: entry.mediaId })}><View style={styles.dateBadge}><Text style={styles.dateMonth}>{entry.watchedDate?.slice(0, 3) || 'LOG'}</Text><Text style={styles.dateDay}>{entry.watchedDate?.slice(-2) || '—'}</Text></View><View style={{ flex: 1 }}><Text style={styles.diaryTitle} numberOfLines={1}>{entry.title}</Text><Text style={styles.diaryDate}>{entry.watchedDate}</Text>{!!entry.rating && <RatingStars rating={entry.rating} size={12} />}</View></Pressable>)}</View>
+        </View>
+
+        <View style={styles.cloudStats}><Text style={styles.cloudStatsTitle}>Synced across devices</Text><View style={styles.cloudStatsRow}><Text style={styles.cloudStatText}>{remoteReviewsQuery.data?.length ?? 0} cloud reviews</Text><Text style={styles.cloudStatText}>{remoteLibraryQuery.data?.length ?? 0} library items</Text></View>{!emailVerified && user.email ? <Pressable onPress={handleRequestVerification} disabled={requestVerification.isPending} style={styles.verifyButton}><Ionicons name="mail-outline" size={15} color={colors.accent} /><Text style={styles.verifyText}>{requestVerification.isPending ? 'Sending...' : 'Verify your email'}</Text></Pressable> : null}</View>
+        <View style={styles.accountSettings}><Text style={styles.settingsTitle}>Account & Privacy</Text><View style={styles.settingRow}><View style={{ flex: 1 }}><Text style={styles.settingLabel}>Private activity</Text><Text style={styles.settingHint}>Hide your reviews and lists from people who do not follow you.</Text></View><Switch value={!!profile.isPrivate} onValueChange={handlePrivacyChange} trackColor={{ false: colors.surfaceHigh, true: colors.accent }} thumbColor={colors.text} /></View><Pressable style={styles.deleteButton} onPress={handleDeleteAccount} disabled={deleteMutation.isPending}><Ionicons name="trash-outline" size={17} color={colors.danger} /><Text style={styles.deleteText}>{deleteMutation.isPending ? 'Deleting…' : 'Delete account'}</Text></Pressable></View>
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function ProfileTab({ icon, label, active, onPress }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; active?: boolean; onPress?: () => void }) {
+  return <Pressable onPress={onPress} style={[styles.profileTab, active && styles.profileTabActive]}><Ionicons name={icon} size={21} color={active ? colors.accent : colors.textDim} /><Text style={[styles.profileTabLabel, active && styles.profileTabLabelActive]}>{label}</Text></Pressable>;
 }
 
 function StatCard({ label, value }: { label: string; value: number | string }) {
@@ -307,6 +182,42 @@ function StatCard({ label, value }: { label: string; value: number | string }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+  topNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
+  topNavButton: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
+  topNavTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800' },
+  profileHero: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, paddingHorizontal: spacing.lg, paddingTop: spacing.xl, paddingBottom: spacing.md },
+  profileInfo: { flex: 1, gap: 4 },
+  handle: { color: colors.textDim, fontSize: fontSizes.md },
+  profileActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
+  editButton: { height: 42, paddingHorizontal: spacing.lg, borderRadius: radius.md, backgroundColor: colors.surfaceHigh, alignItems: 'center', justifyContent: 'center' },
+  editButtonText: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '800' },
+  shareButton: { width: 42, height: 42, borderRadius: radius.md, backgroundColor: colors.surfaceHigh, alignItems: 'center', justifyContent: 'center' },
+  pressed: { opacity: 0.72, transform: [{ scale: 0.97 }] },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.lg, marginBottom: spacing.lg },
+  metaText: { color: colors.textDim, fontSize: 12, marginRight: spacing.sm },
+  statsStrip: { flexDirection: 'row', paddingHorizontal: spacing.lg, marginBottom: spacing.lg, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border, paddingVertical: spacing.md },
+  profileTabs: { paddingHorizontal: spacing.md, gap: spacing.xs, borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: spacing.xl },
+  profileTab: { minWidth: 86, alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: spacing.sm, paddingVertical: spacing.md, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  profileTabActive: { borderBottomColor: colors.accent },
+  profileTabLabel: { color: colors.textDim, fontSize: 11, fontWeight: '700' },
+  profileTabLabelActive: { color: colors.accent },
+  referenceSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, marginBottom: spacing.md },
+  referenceSectionTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800' },
+  viewAll: { color: colors.accent, fontSize: fontSizes.sm, fontWeight: '800' },
+  posterRail: { paddingHorizontal: spacing.lg, gap: spacing.sm },
+  contentColumns: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg, marginTop: spacing.xl },
+  activityPanel: { flex: 1, minWidth: 0, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
+  panelHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  panelTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800' },
+  emptyPanel: { color: colors.textDim, fontSize: 12, lineHeight: 18, padding: spacing.md },
+  activityRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  activityAvatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  activityInitial: { color: colors.bg, fontSize: 13, fontWeight: '900' },
+  activityText: { color: colors.textDim, fontSize: 11 },
+  activityTitle: { color: colors.text, fontSize: 13, fontWeight: '800', marginVertical: 2 },
+  dateBadge: { width: 46, height: 48, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh, alignItems: 'center', justifyContent: 'center' },
+  dateMonth: { color: colors.textDim, fontSize: 10, fontWeight: '800' },
+  dateDay: { color: colors.text, fontSize: 17, fontWeight: '800' },
   skeletonReviews: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
   favoriteItem: { position: 'relative', width: 100 },
   removeFavorite: { position: 'absolute', top: 7, right: 7, width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.bg },
