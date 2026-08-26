@@ -273,6 +273,13 @@ export default function DetailScreen() {
                 <Ionicons name="list-outline" size={24} color={colors.text} />
                 <Text style={styles.actionLabel}>Add to List</Text>
               </Pressable>
+              <Pressable
+                style={styles.actionBtn}
+                onPress={() => navigation.navigate('People', { shareMedia: { mediaType, mediaId: id, title: detail.title, posterPath: detail.posterPath, rating: detail.voteAverage ?? 0, overview: detail.overview ?? null } })}
+              >
+                <Ionicons name="paper-plane-outline" size={24} color={colors.text} />
+                <Text style={styles.actionLabel}>Share Card</Text>
+              </Pressable>
             </View>
           </View>
 

@@ -26,6 +26,8 @@ export default function PeopleScreen() {
   const remoteUsers = trpc.social.users.useQuery({ query }, { enabled: Boolean(user) });
   const remoteFollowing = trpc.social.following.useQuery(undefined, { enabled: Boolean(user) });
   const followMutation = trpc.social.toggleFollow.useMutation({ onSuccess: () => remoteFollowing.refetch() });
+  const shareMutation = trpc.social.shareMedia.useMutation({ onSuccess: () => navigation.goBack() });
+  const shareMedia = route.params?.shareMedia;
 
   const people = useMemo(() => {
     if (!remoteUsers.data?.length) return social.users;
@@ -114,6 +116,7 @@ export default function PeopleScreen() {
                     {following ? 'Following' : 'Follow'}
                   </Text>
                 </Pressable>
+                {shareMedia ? <Pressable style={styles.shareBtn} disabled={shareMutation.isPending} onPress={() => shareMutation.mutate({ otherUserId: Number(item.id.replace('remote-', '')), ...shareMedia })} accessibilityLabel={`Share ${shareMedia.title} with ${item.displayName}`}><Ionicons name="paper-plane-outline" size={16} color={colors.accent} /></Pressable> : null}
               </Pressable>
             );
           }}
@@ -158,4 +161,5 @@ const styles = StyleSheet.create({
   followingBtn: { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border },
   followBtnText: { color: '#04120C', fontSize: fontSizes.xs, fontWeight: '800' },
   followingBtnText: { color: colors.text },
+  shareBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh },
 });

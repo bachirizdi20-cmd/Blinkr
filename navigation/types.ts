@@ -20,7 +20,7 @@ export type ContentStackParamList = {
   AllReviews: { mediaType: MediaType; id: number; title: string };
   EditProfile: undefined;
   Conversation: { userId: string };
-  People: { initialFilter?: PeopleFilter } | undefined;
+  People: { initialFilter?: PeopleFilter; shareMedia?: { mediaType: MediaType; mediaId: number; title: string; posterPath: string | null; rating: number; overview?: string | null } } | undefined;
   Notifications: undefined;
   UserProfile: { userId: string };
   ReviewModal: {

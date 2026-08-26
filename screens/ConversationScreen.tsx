@@ -35,9 +35,10 @@ export default function ConversationScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<RouteT>();
   const { userId } = route.params;
+  const numericOtherUserId = Number(String(userId).replace(/^remote-/, ''));
   const social = useSocial();
   const { user: authUser } = useAuth();
-  const messagesQuery = trpc.social.messages.useQuery({ otherUserId: Number(userId) }, { enabled: Boolean(authUser), retry: 1 });
+  const messagesQuery = trpc.social.messages.useQuery({ otherUserId: numericOtherUserId }, { enabled: Boolean(authUser), retry: 1 });
   const sendMessageMutation = trpc.social.sendMessage.useMutation({ onSuccess: () => messagesQuery.refetch() });
   const sendImageMutation = trpc.social.sendImage.useMutation({ onSuccess: () => messagesQuery.refetch() });
   const user = social.getUser(userId);
@@ -64,7 +65,7 @@ export default function ConversationScreen() {
   const handleSend = async () => {
     if (!text.trim() || sendMessageMutation.isPending) return;
     try {
-      if (authUser) await sendMessageMutation.mutateAsync({ otherUserId: Number(userId), text: text.trim() });
+      if (authUser) await sendMessageMutation.mutateAsync({ otherUserId: numericOtherUserId, text: text.trim() });
       else social.sendMessage(userId, text);
       setText('');
     } catch { Alert.alert('Could not send message', 'Please try again.'); }
@@ -91,7 +92,7 @@ export default function ConversationScreen() {
     if (!pendingImage || !authUser || sendImageMutation.isPending) return;
     try {
       const base64 = await FileSystem.readAsStringAsync(pendingImage.uri, { encoding: FileSystem.EncodingType.Base64 });
-      await sendImageMutation.mutateAsync({ otherUserId: Number(userId), base64, mimeType: pendingImage.mimeType === 'image/png' ? 'image/png' : 'image/jpeg', size: pendingImage.fileSize ?? base64.length });
+      await sendImageMutation.mutateAsync({ otherUserId: numericOtherUserId, base64, mimeType: pendingImage.mimeType === 'image/png' ? 'image/png' : 'image/jpeg', size: pendingImage.fileSize ?? base64.length });
       setPendingImage(null);
     } catch { Alert.alert('Could not send image', 'Please try again.'); }
   };
@@ -148,6 +149,7 @@ export default function ConversationScreen() {
               return (
                 <View style={[styles.bubbleRow, mine ? styles.bubbleRowMine : styles.bubbleRowTheirs]}>
                   <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+                    {!!(item as any).sharedMediaId && <Pressable style={styles.mediaCard} onPress={() => navigation.navigate('Detail', { mediaType: (item as any).sharedMediaType, id: Number((item as any).sharedMediaId) })}><Image source={{ uri: (item as any).sharedPosterPath ? `https://image.tmdb.org/t/p/w300${(item as any).sharedPosterPath}` : undefined }} style={styles.cardPoster} resizeMode="cover" /><View style={styles.cardCopy}><Text style={styles.cardLabel}>Shared from TMDB</Text><Text style={styles.cardTitle} numberOfLines={2}>{(item as any).sharedTitle}</Text><Text style={styles.cardRating}>★ {(((item as any).sharedRating ?? 0) / 10).toFixed(1)}</Text></View></Pressable>}
                     {!!(item as any).mediaUrl && <Image source={{ uri: (item as any).mediaUrl }} style={styles.messageImage} resizeMode="cover" />}
                     {!!item.text && <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.text}</Text>}
                   </View>
@@ -238,6 +240,12 @@ const styles = StyleSheet.create({
   previewCancel: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh },
   previewSend: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent },
   attachBtn: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh },
+  mediaCard: { flexDirection: 'row', width: 245, minHeight: 118, overflow: 'hidden', borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.xs },
+  cardPoster: { width: 76, height: 118, backgroundColor: colors.surfaceHigh },
+  cardCopy: { flex: 1, padding: spacing.sm, justifyContent: 'center' },
+  cardLabel: { color: colors.textFaint, fontSize: 10, fontWeight: '700', marginBottom: 4 },
+  cardTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '800', lineHeight: 18 },
+  cardRating: { color: colors.accent, fontSize: 12, fontWeight: '800', marginTop: 7 },
   messageImage: { width: 190, height: 190, borderRadius: radius.md, marginBottom: spacing.xs },
   input: {
     flex: 1,

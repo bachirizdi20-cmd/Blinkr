@@ -252,6 +252,11 @@ export const appRouter = router({
       return db.createChatMessage({ conversationId: conversation.id, senderId: ctx.user.id, text: input.text, replyToId: input.replyToId ?? null }, input.otherUserId);
     }),
     deleteMessage: protectedProcedure.input(z.object({ messageId: z.number().int().positive() })).mutation(({ ctx, input }) => db.deleteChatMessage(ctx.user.id, input.messageId)),
+    shareMedia: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive(), mediaType: z.enum(['movie', 'tv']), mediaId: z.number().int().positive(), title: z.string().trim().min(1).max(255), posterPath: z.string().max(255).nullable().optional(), rating: z.number().min(0).max(10), overview: z.string().max(1200).nullable().optional() })).mutation(async ({ ctx, input }) => {
+      const conversation = await db.getOrCreateConversation(ctx.user.id, input.otherUserId);
+      if (!conversation) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Conversation unavailable' });
+      return db.createChatMessage({ conversationId: conversation.id, senderId: ctx.user.id, text: null, sharedMediaType: input.mediaType, sharedMediaId: input.mediaId, sharedTitle: input.title, sharedPosterPath: input.posterPath ?? null, sharedRating: Math.round(input.rating * 10), sharedOverview: input.overview ?? null }, input.otherUserId);
+    }),
     sendImage: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive(), base64: z.string().min(1).max(10_000_000), mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']), size: z.number().int().positive().max(8_000_000), replyToId: z.number().int().positive().optional() })).mutation(async ({ ctx, input }) => {
       const conversation = await db.getOrCreateConversation(ctx.user.id, input.otherUserId);
       if (!conversation) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Conversation unavailable' });
