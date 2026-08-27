@@ -12,6 +12,7 @@ import { storagePut } from "./storage";
 import { assertLoginAllowed, clearLoginFailures, recordLoginFailure } from "./rate-limit";
 import { createAuthToken, consumeAuthToken, markEmailVerified, updateUserPassword } from "./db";
 import { sendAuthEmail } from "./email";
+import { searchBooks } from "./book-api";
 
 const tmdbPathSchema = z.string().regex(
   /^\/(?:trending|movie|tv|discover|genre|search|person|authentication)(?:\/[A-Za-z0-9_,-]+)*$/,
@@ -206,9 +207,9 @@ export const appRouter = router({
   }),
   reviews: router({
     mine: protectedProcedure.query(({ ctx }) => db.listUserReviews(ctx.user.id)),
-    getMine: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv"]), mediaId: z.number().int().positive() })).query(({ ctx, input }) => db.getUserReview(ctx.user.id, input.mediaType, input.mediaId)),
+    getMine: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book"]), mediaId: z.number().int().positive() })).query(({ ctx, input }) => db.getUserReview(ctx.user.id, input.mediaType, input.mediaId)),
     save: protectedProcedure.input(z.object({
-      mediaType: z.enum(["movie", "tv"]),
+      mediaType: z.enum(["movie", "tv", "book"]),
       mediaId: z.number().int().positive(),
       title: z.string().trim().min(1).max(255),
       posterPath: z.string().max(255).nullable().optional(),
@@ -227,7 +228,7 @@ export const appRouter = router({
       spoiler: input.spoiler,
       watchedDate: input.watchedDate ? new Date(input.watchedDate) : null,
     })),
-    delete: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv"]), mediaId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+    delete: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book"]), mediaId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
       await db.deleteUserReview(ctx.user.id, input.mediaType, input.mediaId);
       return { success: true } as const;
     }),
@@ -304,6 +305,11 @@ export const appRouter = router({
       await db.deleteMediaStatus(ctx.user.id, input.mediaType, input.mediaId);
       return { success: true } as const;
     }),
+  }),
+  books: router({
+    search: publicProcedure
+      .input(z.object({ query: z.string().trim().max(120).default(""), page: z.number().int().min(1).max(10000).default(1), limit: z.number().int().min(1).max(40).default(24) }))
+      .query(({ input }) => searchBooks(input.query, input.page, input.limit)),
   }),
   tmdb: router({
     get: publicProcedure

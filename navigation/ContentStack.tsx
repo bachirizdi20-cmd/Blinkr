@@ -2,6 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ContentStackParamList } from './types';
 import DetailScreen from '../screens/DetailScreen';
+import BookDetailScreen from '../screens/BookDetailScreen';
 import SeasonScreen from '../screens/SeasonScreen';
 import PersonScreen from '../screens/PersonScreen';
 import CategoryListScreen from '../screens/CategoryListScreen';
@@ -44,6 +45,7 @@ export default function ContentStackNavigator({ initialRouteName, HomeComponent 
       <Stack.Screen name="WatchlistMain" component={HomeComponent} options={{ headerShown: false }} />
       <Stack.Screen name="ProfileMain" component={HomeComponent} options={{ headerShown: false }} />
       <Stack.Screen name="Detail" component={DetailScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="BookDetail" component={BookDetailScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Season" component={SeasonScreen} options={{ title: '' }} />
       <Stack.Screen name="Person" component={PersonScreen} options={{ title: '' }} />
       <Stack.Screen name="CategoryList" component={CategoryListScreen} options={({ route }: any) => ({ title: route.params?.title ?? '' })} />

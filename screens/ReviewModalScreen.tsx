@@ -62,9 +62,11 @@ export default function ReviewModalScreen() {
         spoiler,
         watchedDate: watchedDate?.toISOString() ?? null,
       });
-      const payload = { mediaType, mediaId, title, posterPath, genreIds, watchedDate: date, rating: rating > 0 ? rating : undefined, review: trimmedReview || undefined, rewatch, spoiler };
-      if (existing) lib.updateDiaryEntry(existing.id, payload);
-      else lib.addDiaryEntry(payload);
+      if (mediaType !== 'book') {
+        const payload = { mediaType, mediaId, title, posterPath, genreIds, watchedDate: date, rating: rating > 0 ? rating : undefined, review: trimmedReview || undefined, rewatch, spoiler };
+        if (existing) lib.updateDiaryEntry(existing.id, payload);
+        else lib.addDiaryEntry(payload);
+      }
       navigation.goBack();
     } catch (error) {
       Alert.alert('Could not save review', error instanceof Error ? error.message : 'Please try again.');
