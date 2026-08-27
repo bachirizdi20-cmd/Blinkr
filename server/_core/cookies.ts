@@ -47,8 +47,7 @@ function getParentDomain(hostname: string): string | undefined {
 export function getSessionCookieOptions(
   req: Request,
 ): Pick<CookieOptions, "domain" | "httpOnly" | "path" | "sameSite" | "secure"> {
-  const rawHost = req.hostname || req.get?.("host") || "localhost";
-  const hostname = rawHost.split(",")[0]?.trim().split(":")[0] || "localhost";
+  const hostname = req.hostname || req.headers.host?.split(':')[0] || 'localhost';
   const domain = getParentDomain(hostname);
 
   return {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -11,116 +11,41 @@ import EmptyState from '../components/EmptyState';
 import GeneralErrorState from '../components/GeneralErrorState';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
-type MediaTab = 'movie' | 'tv';
-
-type BrowseItem = {
-  id: number;
-  mediaType: MediaTab;
-  title: string;
-  posterPath: string | null;
-  date: string;
-  voteAverage: number;
-  overview: string;
-  genreIds: number[];
-};
-
-function normalizeItem(item: any, fallbackType: MediaTab): BrowseItem | null {
-  if (!item?.id) return null;
-  const mediaType: MediaTab = item.media_type === 'tv' || fallbackType === 'tv' ? 'tv' : 'movie';
-  return {
-    id: Number(item.id),
-    mediaType,
-    title: item.title ?? item.name ?? 'Untitled',
-    posterPath: item.posterPath ?? item.poster_path ?? null,
-    date: item.date ?? item.release_date ?? item.first_air_date ?? '',
-    voteAverage: Number(item.voteAverage ?? item.vote_average ?? 0),
-    overview: item.overview ?? '',
-    genreIds: item.genreIds ?? item.genre_ids ?? [],
-  };
-}
+type Category = 'all' | 'movie' | 'tv' | 'anime';
+const CATEGORIES: { key: Category; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
+  { key: 'all', label: 'All', icon: 'sparkles-outline' },
+  { key: 'movie', label: 'Films', icon: 'film-outline' },
+  { key: 'tv', label: 'Series', icon: 'tv-outline' },
+  { key: 'anime', label: 'Anime', icon: 'color-wand-outline' },
+];
 
 export default function CreateScreen() {
   const navigation = useNavigation<Nav>();
-  const [activeTab, setActiveTab] = useState<MediaTab>('movie');
+  const [category, setCategory] = useState<Category>('all');
   const [query, setQuery] = useState('');
-  const [page, setPage] = useState(1);
-  const [items, setItems] = useState<BrowseItem[]>([]);
-  const [hasMore, setHasMore] = useState(true);
-  const trimmedQuery = query.trim();
-  const isSearching = trimmedQuery.length >= 2;
-  const path = isSearching ? '/search/multi' : activeTab === 'movie' ? '/movie/popular' : '/tv/popular';
-  const params: Record<string, string | number | boolean> = isSearching
-    ? { query: trimmedQuery, page, include_adult: false }
-    : { page };
-  const browseQuery = trpc.tmdb.get.useQuery({ path, params }, { retry: 1 });
+  const searchQuery = trpc.tmdb.get.useQuery({ path: '/search/multi', params: { query: query.trim(), include_adult: false } }, { enabled: query.trim().length >= 2, retry: 1 });
+  const results = useMemo(() => {
+    const items = ((searchQuery.data as any)?.results ?? []).filter((item: any) => item.media_type === 'movie' || item.media_type === 'tv');
+    if (category === 'all') return items;
+    if (category === 'anime') return items.filter((item: any) => Array.isArray(item.genre_ids) && item.genre_ids.includes(16));
+    return items.filter((item: any) => item.media_type === category);
+  }, [searchQuery.data, category]);
 
-  useEffect(() => {
-    setPage(1);
-    setItems([]);
-    setHasMore(true);
-  }, [activeTab, trimmedQuery]);
-
-  useEffect(() => {
-    const data = browseQuery.data as any;
-    if (!data) return;
-    const normalized: BrowseItem[] = (data.results ?? [])
-      .map((item: any) => normalizeItem(item, activeTab))
-      .filter((item: BrowseItem | null): item is BrowseItem => Boolean(item))
-      .filter((item: BrowseItem) => !isSearching || item.mediaType === activeTab);
-    setItems((current) => {
-      const base = page === 1 ? [] : current;
-      const seen = new Set(base.map((item: BrowseItem) => `${item.mediaType}-${item.id}`));
-      return [...base, ...normalized.filter((item: BrowseItem) => !seen.has(`${item.mediaType}-${item.id}`))];
-    });
-    const totalPages = Math.min(Number(data.total_pages ?? 1), 500);
-    setHasMore(page < totalPages && normalized.length > 0);
-  }, [browseQuery.data, page, activeTab, isSearching]);
-
-  const openReview = (item: BrowseItem) => {
-    navigation.navigate('ReviewModal', {
-      mediaType: item.mediaType,
-      mediaId: item.id,
-      title: item.title,
-      posterPath: item.posterPath,
-      genreIds: item.genreIds,
-    });
-  };
-
-  const loadMore = () => {
-    if (browseQuery.isFetching || !hasMore || items.length === 0) return;
-    setPage((current) => current + 1);
-  };
-
-  const renderItem = ({ item }: { item: BrowseItem }) => (
-    <Pressable onPress={() => openReview(item)} style={({ pressed }) => [styles.card, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={`Write a review for ${item.title}`}>
-      <View style={styles.posterWrap}>
-        <Image source={item.posterPath ? { uri: `https://image.tmdb.org/t/p/w342${item.posterPath}` } : undefined} style={styles.poster} />
-        <View style={styles.ratingBadge}><Ionicons name="star" size={11} color={colors.bg} /><Text style={styles.ratingBadgeText}>{item.voteAverage > 0 ? item.voteAverage.toFixed(1) : '—'}</Text></View>
-      </View>
-      <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
-      <View style={styles.cardMetaRow}><Text style={styles.mediaPill}>{item.mediaType === 'movie' ? 'MOVIE' : 'TV'}</Text><Text style={styles.year}>{item.date ? item.date.slice(0, 4) : '—'}</Text></View>
-      <View style={styles.reviewCta}><Text style={styles.reviewCtaText}>Review</Text><Ionicons name="arrow-forward" size={13} color={colors.accent} /></View>
-    </Pressable>
-  );
-
-  const firstLoading = browseQuery.isLoading && page === 1;
-  const showError = browseQuery.isError && items.length === 0;
-  const showEmpty = !firstLoading && !showError && items.length === 0;
+  const openReview = (item: any) => navigation.navigate('ReviewModal', {
+    mediaType: item.media_type,
+    mediaId: item.id,
+    title: item.title ?? item.name ?? 'Untitled',
+    posterPath: item.posterPath ?? null,
+    genreIds: item.genre_ids ?? [],
+  });
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <View><Text style={styles.eyebrow}>CREATE</Text><Text style={styles.title}>Share your take</Text></View>
-        <Pressable onPress={() => navigation.navigate('Search')} style={styles.headerButton} accessibilityLabel="Open full search"><Ionicons name="search-outline" size={20} color={colors.text} /></Pressable>
-      </View>
-      <Text style={styles.subtitle}>Find something you watched and turn it into a story.</Text>
-      <View style={styles.searchBar}><Ionicons name="search" size={18} color={colors.textFaint} /><TextInput style={styles.searchInput} placeholder="Search films and TV shows..." placeholderTextColor={colors.textFaint} value={query} onChangeText={setQuery} autoCorrect={false} returnKeyType="search" />{query.length > 0 ? <Pressable onPress={() => setQuery('')} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textFaint} /></Pressable> : null}</View>
-      <View style={styles.tabs} accessibilityRole="tablist">
-        <Pressable onPress={() => setActiveTab('movie')} style={[styles.tab, activeTab === 'movie' && styles.tabActive]} accessibilityRole="tab" accessibilityState={{ selected: activeTab === 'movie' }}><Ionicons name="film-outline" size={17} color={activeTab === 'movie' ? colors.bg : colors.textDim} /><Text style={[styles.tabText, activeTab === 'movie' && styles.tabTextActive]}>Movies</Text></Pressable>
-        <Pressable onPress={() => setActiveTab('tv')} style={[styles.tab, activeTab === 'tv' && styles.tabActive]} accessibilityRole="tab" accessibilityState={{ selected: activeTab === 'tv' }}><Ionicons name="tv-outline" size={17} color={activeTab === 'tv' ? colors.bg : colors.textDim} /><Text style={[styles.tabText, activeTab === 'tv' && styles.tabTextActive]}>TV Shows</Text></Pressable>
-      </View>
-      <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{isSearching ? `Results for “${trimmedQuery}”` : activeTab === 'movie' ? 'Popular movies' : 'Popular TV shows'}</Text><View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>TMDB LIVE</Text></View></View>
-      {firstLoading ? <ActivityIndicator color={colors.accent} style={styles.loader} /> : showError ? <GeneralErrorState title="Could not load titles" message="Check your connection and try again." onRetry={() => browseQuery.refetch()} /> : showEmpty ? <EmptyState icon="film-outline" title="No titles found" message="Try another search or switch between Movies and TV Shows." /> : <FlatList data={items} numColumns={3} keyExtractor={(item) => `${item.mediaType}-${item.id}`} renderItem={renderItem} onEndReached={loadMore} onEndReachedThreshold={0.55} contentContainerStyle={styles.gridResults} columnWrapperStyle={styles.gridRow} showsVerticalScrollIndicator={false} ListFooterComponent={browseQuery.isFetching && page > 1 ? <View style={styles.footer}><ActivityIndicator color={colors.accent} /><Text style={styles.footerText}>Loading more titles…</Text></View> : !hasMore ? <Text style={styles.endText}>End of list</Text> : null} />}
+      <View style={styles.header}><View><Text style={styles.eyebrow}>CREATE</Text><Text style={styles.title}>Share your take</Text></View><Pressable onPress={() => navigation.navigate('Search')} style={styles.headerButton} accessibilityLabel="Open full search"><Ionicons name="search-outline" size={20} color={colors.text} /></Pressable></View>
+      <Text style={styles.subtitle}>Find something you watched and make it part of your story.</Text>
+      <View style={styles.searchBar}><Ionicons name="search" size={18} color={colors.textFaint} /><TextInput style={styles.searchInput} placeholder="Search films, series, anime..." placeholderTextColor={colors.textFaint} value={query} onChangeText={setQuery} autoCorrect={false} returnKeyType="search" />{query.length > 0 ? <Pressable onPress={() => setQuery('')} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textFaint} /></Pressable> : null}</View>
+      <FlatList horizontal showsHorizontalScrollIndicator={false} data={CATEGORIES} keyExtractor={(item) => item.key} contentContainerStyle={styles.categories} renderItem={({ item }) => <Pressable onPress={() => setCategory(item.key)} style={[styles.category, category === item.key && styles.categoryActive]} accessibilityRole="tab" accessibilityState={{ selected: category === item.key }}><Ionicons name={item.icon} size={16} color={category === item.key ? colors.bg : colors.textDim} /><Text style={[styles.categoryText, category === item.key && styles.categoryTextActive]}>{item.label}</Text></Pressable>} />
+      {searchQuery.isLoading ? <ActivityIndicator color={colors.accent} style={styles.loader} /> : searchQuery.isError ? <GeneralErrorState title="Could not search TMDB" message="Check your connection and try again." onRetry={() => searchQuery.refetch()} /> : query.trim().length < 2 ? <EmptyState icon="create-outline" title="Start creating" message="Search for a film, series, or anime to write a review and share it with the community." /> : <FlatList data={results} keyExtractor={(item: any) => `${item.media_type}-${item.id}`} contentContainerStyle={styles.results} ListEmptyComponent={<EmptyState icon="search-outline" title="No titles found" message="Try another title or category." />} renderItem={({ item }: { item: any }) => <Pressable onPress={() => openReview(item)} style={({ pressed }) => [styles.result, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={`Write a review for ${item.title ?? item.name}`}><Image source={{ uri: item.posterPath ? `https://image.tmdb.org/t/p/w200${item.posterPath}` : undefined }} style={styles.poster} /><View style={styles.resultCopy}><Text style={styles.resultTitle} numberOfLines={2}>{item.title ?? item.name}</Text><Text style={styles.meta}>{item.media_type === 'tv' ? 'Series' : 'Film'} · ★ {(item.voteAverage ?? 0).toFixed(1)}</Text><Text style={styles.cta}>Write a review <Ionicons name="arrow-forward" size={13} color={colors.accent} /></Text></View><Ionicons name="chevron-forward" size={18} color={colors.textFaint} /></Pressable>} />}
     </SafeAreaView>
   );
 }
@@ -134,32 +59,18 @@ const styles = StyleSheet.create({
   headerButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   searchBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginHorizontal: spacing.lg, paddingHorizontal: spacing.md, minHeight: 48, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   searchInput: { flex: 1, color: colors.text, fontSize: fontSizes.md },
-  tabs: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.md },
-  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 44, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  tabActive: { backgroundColor: colors.accent, borderColor: colors.accent },
-  tabText: { color: colors.textDim, fontSize: fontSizes.sm, fontWeight: '900' },
-  tabTextActive: { color: colors.bg },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
-  sectionTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '900' },
-  liveBadge: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent },
-  liveText: { color: colors.accent, fontSize: 9, fontWeight: '900', letterSpacing: 0.6 },
-  loader: { flex: 1 },
-  gridResults: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
-  gridRow: { justifyContent: 'space-between', marginBottom: spacing.sm },
-  card: { width: '31.5%', padding: 6, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
-  pressed: { opacity: 0.74, transform: [{ scale: 0.98 }] },
-  posterWrap: { position: 'relative' },
-  poster: { width: '100%', aspectRatio: 0.68, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh },
-  ratingBadge: { position: 'absolute', top: 5, right: 5, flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 5, paddingVertical: 3, borderRadius: 9, backgroundColor: colors.accent },
-  ratingBadgeText: { color: colors.bg, fontSize: 9, fontWeight: '900' },
-  cardTitle: { color: colors.text, fontSize: 11, fontWeight: '900', lineHeight: 15, marginTop: 6, minHeight: 30 },
-  cardMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
-  mediaPill: { color: colors.accent, fontSize: 8, fontWeight: '900', letterSpacing: 0.5 },
-  year: { color: colors.textDim, fontSize: 10, fontWeight: '800' },
-  reviewCta: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 6 },
-  reviewCtaText: { color: colors.accent, fontSize: 10, fontWeight: '900' },
-  footer: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.lg },
-  footerText: { color: colors.textDim, fontSize: fontSizes.xs },
-  endText: { color: colors.textFaint, textAlign: 'center', fontSize: fontSizes.xs, paddingVertical: spacing.lg },
+  categories: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.lg },
+  category: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.md, paddingVertical: 10, borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  categoryActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  categoryText: { color: colors.textDim, fontSize: fontSizes.sm, fontWeight: '800' },
+  categoryTextActive: { color: colors.bg },
+  loader: { marginTop: spacing.xl },
+  results: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, gap: spacing.sm },
+  result: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  pressed: { opacity: 0.74, transform: [{ scale: 0.99 }] },
+  poster: { width: 58, height: 82, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh },
+  resultCopy: { flex: 1, gap: 4 },
+  resultTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800' },
+  meta: { color: colors.textDim, fontSize: fontSizes.xs },
+  cta: { color: colors.accent, fontSize: fontSizes.xs, fontWeight: '900' },
 });

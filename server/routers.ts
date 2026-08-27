@@ -4,16 +4,7 @@ import { COOKIE_NAME } from "../shared/const.js";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import * as db from './db';
-
-const typingPresence = new Map<string, number>();
-const typingKey = (senderId: number, recipientId: number) => `${senderId}:${recipientId}`;
-function clearExpiredTyping() {
-  const now = Date.now();
-  for (const [key, expiresAt] of typingPresence) {
-    if (expiresAt <= now) typingPresence.delete(key);
-  }
-}
+import * as db from "./db";
 import { ENV } from "./_core/env";
 import { sdk } from "./_core/sdk";
 import { hashPassword, normalizeEmail, verifyPassword } from "./password";
@@ -256,21 +247,6 @@ export const appRouter = router({
     addComment: protectedProcedure.input(z.object({ reviewId: z.number().int().positive(), text: z.string().trim().min(1).max(1000) })).mutation(({ ctx, input }) => db.addReviewComment(ctx.user.id, input.reviewId, input.text)),
     conversation: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive() })).query(({ ctx, input }) => db.getOrCreateConversation(ctx.user.id, input.otherUserId)),
     messages: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive() })).query(({ ctx, input }) => db.listChatMessages(ctx.user.id, input.otherUserId)),
-    typing: router({
-      start: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive() })).mutation(({ ctx, input }) => {
-        clearExpiredTyping();
-        typingPresence.set(typingKey(ctx.user.id, input.otherUserId), Date.now() + 3500);
-        return { success: true } as const;
-      }),
-      stop: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive() })).mutation(({ ctx, input }) => {
-        typingPresence.delete(typingKey(ctx.user.id, input.otherUserId));
-        return { success: true } as const;
-      }),
-      status: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive() })).query(({ ctx, input }) => {
-        clearExpiredTyping();
-        return { isTyping: (typingPresence.get(typingKey(input.otherUserId, ctx.user.id)) ?? 0) > Date.now() };
-      }),
-    }),
     sendMessage: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive(), text: z.string().trim().min(1).max(4000), replyToId: z.number().int().positive().optional() })).mutation(async ({ ctx, input }) => {
       const conversation = await db.getOrCreateConversation(ctx.user.id, input.otherUserId);
       if (!conversation) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Conversation unavailable' });

@@ -40,9 +40,6 @@ export default function ConversationScreen() {
   const social = useSocial();
   const { user: authUser } = useAuth();
   const messagesQuery = trpc.social.messages.useQuery({ otherUserId: numericOtherUserId }, { enabled: Boolean(authUser), retry: 1 });
-  const typingStatusQuery = trpc.social.typing.status.useQuery({ otherUserId: numericOtherUserId }, { enabled: Boolean(authUser), refetchInterval: 2000, staleTime: 0 });
-  const typingStartMutation = trpc.social.typing.start.useMutation();
-  const typingStopMutation = trpc.social.typing.stop.useMutation();
   const sendMessageMutation = trpc.social.sendMessage.useMutation({ onSuccess: () => messagesQuery.refetch() });
   const sendImageMutation = trpc.social.sendImage.useMutation({ onSuccess: () => messagesQuery.refetch() });
   const [failedCard, setFailedCard] = useState<any>(null);
@@ -52,35 +49,16 @@ export default function ConversationScreen() {
   const cardSearchQuery = trpc.tmdb.get.useQuery({ path: '/search/multi', params: { query: cardSearch, include_adult: false } }, { enabled: cardPickerOpen && cardSearch.trim().length >= 2, retry: 1 });
   const user = social.getUser(userId);
   const convo = social.getConversation(userId);
-  const isTyping = authUser ? Boolean(typingStatusQuery.data?.isTyping) : !!social.typingUserIds[userId];
+  const isTyping = !!social.typingUserIds[userId];
   const [text, setText] = useState('');
-  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pendingImage, setPendingImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const listRef = useRef<FlatList>(null);
 
   useFocusEffect(
     React.useCallback(() => {
       social.markRead(userId);
-      return () => {
-        if (typingTimer.current) clearTimeout(typingTimer.current);
-        if (authUser) typingStopMutation.mutate({ otherUserId: numericOtherUserId });
-      };
-    }, [userId, authUser, numericOtherUserId])
+    }, [userId])
   );
-
-  const handleTextChange = (value: string) => {
-    setText(value);
-    if (!authUser) return;
-    if (typingTimer.current) clearTimeout(typingTimer.current);
-    if (!value.trim()) {
-      typingStopMutation.mutate({ otherUserId: numericOtherUserId });
-      return;
-    }
-    typingStartMutation.mutate({ otherUserId: numericOtherUserId });
-    typingTimer.current = setTimeout(() => {
-      typingStopMutation.mutate({ otherUserId: numericOtherUserId });
-    }, 2500);
-  };
 
   if (!user) {
     return (
@@ -96,10 +74,6 @@ export default function ConversationScreen() {
       if (authUser) await sendMessageMutation.mutateAsync({ otherUserId: numericOtherUserId, text: text.trim() });
       else social.sendMessage(userId, text);
       setText('');
-      if (authUser) {
-        if (typingTimer.current) clearTimeout(typingTimer.current);
-        typingStopMutation.mutate({ otherUserId: numericOtherUserId });
-      }
     } catch { Alert.alert('Could not send message', 'Please try again.'); }
   };
 
@@ -144,9 +118,7 @@ export default function ConversationScreen() {
   };
 
   const remoteMessages = (messagesQuery.data ?? []).map((item: any) => ({ ...item, id: String(item.id), sender: item.senderId === Number(authUser?.id) ? 'me' : 'them', createdAt: new Date(item.createdAt), text: item.text ?? '' }));
-  const isRemoteLoading = Boolean(authUser) && messagesQuery.isLoading;
-  // Authenticated conversations must use the server as the source of truth; local mock history is only for guest mode.
-  const data = authUser ? remoteMessages : [...convo.messages].reverse();
+  const data = remoteMessages.length ? remoteMessages : [...convo.messages].reverse();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -161,15 +133,18 @@ export default function ConversationScreen() {
             <Text style={styles.headerStatus}>{isTyping ? 'typing…' : user.followsYou ? 'Follows you' : `@${user.username}`}</Text>
           </View>
         </Pressable>
-        <Pressable onPress={handleDelete} hitSlop={8}>
-          <Ionicons name="trash-outline" size={20} color={colors.textFaint} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable onPress={() => Alert.alert('Search messages', 'Message search will be available here.')} hitSlop={8} accessibilityLabel="Search messages">
+            <Ionicons name="search-outline" size={20} color={colors.textDim} />
+          </Pressable>
+          <Pressable onPress={() => Alert.alert('Conversation options', undefined, [{ text: 'Delete conversation', style: 'destructive', onPress: handleDelete }, { text: 'Cancel', style: 'cancel' }])} hitSlop={8} accessibilityLabel="Conversation options">
+            <Ionicons name="ellipsis-vertical" size={20} color={colors.textDim} />
+          </Pressable>
+        </View>
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={90}>
-        {isRemoteLoading ? (
-          <View style={styles.loadingState}><ActivityIndicator color={colors.accent} /><Text style={styles.loadingText}>Loading conversation…</Text></View>
-        ) : data.length === 0 ? (
+        {data.length === 0 ? (
           <View style={{ flex: 1 }}>
             <EmptyState icon="chatbubble-ellipses-outline" title={`Say hi to ${user.displayName}`} message={user.bio} />
           </View>
@@ -189,7 +164,9 @@ export default function ConversationScreen() {
                     {!!(item as any).mediaUrl && <Image source={{ uri: (item as any).mediaUrl }} style={styles.messageImage} resizeMode="cover" />}
                     {!!item.text && <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.text}</Text>}
                   </View>
-                  <View style={styles.messageMeta}><Text style={[styles.bubbleTime, mine ? styles.bubbleTimeMine : styles.bubbleTimeTheirs]}>{formatMessageTime(item.createdAt)}</Text>{mine ? <Text style={styles.readStatus}>{(item as any).readAt ? 'Read' : 'Sent'}</Text> : null}</View>
+                  <Text style={[styles.bubbleTime, mine ? styles.bubbleTimeMine : styles.bubbleTimeTheirs]}>
+                    {formatMessageTime(item.createdAt)}
+                  </Text>
                 </View>
               );
             }}
@@ -207,6 +184,9 @@ export default function ConversationScreen() {
 
         {pendingImage ? <View style={styles.previewBar}><Image source={{ uri: pendingImage.uri }} style={styles.previewImage} /><View style={styles.previewCopy}><Text style={styles.previewTitle}>Ready to send</Text><Text style={styles.previewMeta}>{pendingImage.width} × {pendingImage.height}</Text></View><Pressable onPress={() => setPendingImage(null)} style={styles.previewCancel}><Ionicons name="close" size={19} color={colors.textDim} /></Pressable><Pressable onPress={handleSendImage} style={styles.previewSend} disabled={sendImageMutation.isPending}><Ionicons name="send" size={16} color="#04120C" /></Pressable></View> : null}
         <View style={styles.inputBar}>
+          <Pressable style={({ pressed }) => [styles.attachBtn, pressed && styles.iconBtnPressed]} onPress={() => Alert.alert('Share something', undefined, [{ text: 'Share a movie card', onPress: () => setCardPickerOpen(true) }, { text: 'Send a photo', onPress: () => Alert.alert('Send photo', 'Choose a source', [{ text: 'Camera', onPress: () => handlePickImage(true) }, { text: 'Photo library', onPress: () => handlePickImage(false) }, { text: 'Cancel', style: 'cancel' }]) }, { text: 'Cancel', style: 'cancel' }])} accessibilityLabel="More message options">
+            <Ionicons name="add" size={21} color={colors.textDim} />
+          </Pressable>
           <Pressable style={({ pressed }) => [styles.attachBtn, pressed && styles.iconBtnPressed]} onPress={() => setCardPickerOpen(true)} accessibilityLabel="Share movie card">
             <Ionicons name="film-outline" size={19} color={colors.accent} />
           </Pressable>
@@ -216,13 +196,16 @@ export default function ConversationScreen() {
           <TextInput
             style={styles.input}
             value={text}
-            onChangeText={handleTextChange}
+            onChangeText={setText}
             placeholder={`Message ${user.displayName}`}
             placeholderTextColor={colors.textFaint}
             multiline
             returnKeyType="send"
             onSubmitEditing={handleSend}
           />
+          <Pressable style={({ pressed }) => [styles.emojiBtn, pressed && styles.iconBtnPressed]} onPress={() => setText((current) => `${current}${current ? ' ' : ''}😊`)} accessibilityLabel="Add emoji">
+            <Ionicons name="happy-outline" size={20} color={colors.textDim} />
+          </Pressable>
           <Pressable style={({ pressed }) => [styles.sendBtn, !text.trim() && styles.sendBtnDisabled, pressed && text.trim() && styles.sendBtnPressed]} onPress={handleSend} disabled={!text.trim()} accessibilityLabel="Send message">
             <Ionicons name="arrow-up" size={19} color={text.trim() ? '#04120C' : colors.textFaint} />
           </Pressable>
@@ -247,13 +230,10 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   headerName: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800' },
   headerStatus: { color: colors.textFaint, fontSize: 11, marginTop: 1 },
   messagesContent: { padding: spacing.lg, gap: spacing.sm },
-  loadingState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
-  loadingText: { color: colors.textDim, fontSize: fontSizes.sm },
-  messageMeta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3, marginHorizontal: 4 },
-  readStatus: { color: colors.textFaint, fontSize: 10 },
   bubbleRow: { marginBottom: spacing.sm, maxWidth: '80%' },
   bubbleRowMine: { alignSelf: 'flex-end', alignItems: 'flex-end' },
   bubbleRowTheirs: { alignSelf: 'flex-start', alignItems: 'flex-start' },
@@ -319,6 +299,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  emojiBtn: { width: 34, height: 38, alignItems: 'center', justifyContent: 'center' },
   sendBtn: {
     width: 44,
     height: 44,
