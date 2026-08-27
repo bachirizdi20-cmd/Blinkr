@@ -258,10 +258,17 @@ export const appRouter = router({
       if (!conversation) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Conversation unavailable' });
       return db.createChatMessage({ conversationId: conversation.id, senderId: ctx.user.id, text: null, sharedMediaType: input.mediaType, sharedMediaId: input.mediaId, sharedTitle: input.title, sharedPosterPath: input.posterPath ?? null, sharedRating: Math.round(input.rating * 10), sharedOverview: input.overview ?? null }, input.otherUserId);
     }),
-    sendAttachment: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive(), base64: z.string().min(1).max(14_000_000), mediaType: z.enum(['image', 'gif', 'audio']), mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'audio/m4a', 'audio/mp4', 'audio/webm', 'audio/mpeg']), size: z.number().int().positive().max(10_000_000), replyToId: z.number().int().positive().optional() })).mutation(async ({ ctx, input }) => {
+    sendAttachment: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive(), base64: z.string().max(14_000_000).optional(), externalUrl: z.string().url().max(2000).optional(), mediaType: z.enum(['image', 'gif', 'audio']), mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'audio/m4a', 'audio/mp4', 'audio/webm', 'audio/mpeg']), size: z.number().int().nonnegative().max(10_000_000), replyToId: z.number().int().positive().optional() }).refine((input) => Boolean(input.base64) !== Boolean(input.externalUrl), { message: 'Provide exactly one attachment source' })).mutation(async ({ ctx, input }) => {
       const conversation = await db.getOrCreateConversation(ctx.user.id, input.otherUserId);
       if (!conversation) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Conversation unavailable' });
-      const buffer = Buffer.from(input.base64, 'base64');
+      if (input.externalUrl) {
+        if (input.mediaType !== 'gif') throw new TRPCError({ code: 'BAD_REQUEST', message: 'External URLs are only allowed for GIFs' });
+        let hostname = '';
+        try { hostname = new URL(input.externalUrl).hostname.toLowerCase(); } catch { throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid external media URL' }); }
+        if (!['media.giphy.com', 'i.giphy.com'].includes(hostname)) throw new TRPCError({ code: 'BAD_REQUEST', message: 'GIF URL must be hosted by GIPHY' });
+        return db.createChatMessage({ conversationId: conversation.id, senderId: ctx.user.id, text: null, mediaType: 'gif', mediaUrl: input.externalUrl, mediaKey: null, mediaMimeType: 'image/gif', mediaSize: null, replyToId: input.replyToId ?? null }, input.otherUserId);
+      }
+      const buffer = Buffer.from(input.base64!, 'base64');
       if (buffer.length > 10_000_000) throw new TRPCError({ code: 'PAYLOAD_TOO_LARGE', message: 'Attachment is too large' });
       const extension = input.mediaType === 'audio' ? 'm4a' : input.mediaType === 'gif' ? 'gif' : input.mimeType.split('/')[1] ?? 'jpg';
       const uploaded = await storagePut(`chat/${ctx.user.id}/${Date.now()}.${extension}`, buffer, input.mimeType);

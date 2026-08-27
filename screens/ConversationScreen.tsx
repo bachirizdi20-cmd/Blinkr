@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
+import { searchGiphy, GiphyGif } from '../lib/giphy';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import UserAvatar from '../components/UserAvatar';
 import EmptyState from '../components/EmptyState';
@@ -47,6 +48,12 @@ export default function ConversationScreen() {
   const [failedCard, setFailedCard] = useState<any>(null);
   const shareMediaMutation = trpc.social.shareMedia.useMutation({ onSuccess: () => { setFailedCard(null); messagesQuery.refetch(); setCardPickerOpen(false); setCardSearch(''); }, onError: (_error, variables) => setFailedCard(variables) });
   const [cardPickerOpen, setCardPickerOpen] = useState(false);
+  const [gifPickerOpen, setGifPickerOpen] = useState(false);
+  const [gifSearch, setGifSearch] = useState('');
+  const [gifResults, setGifResults] = useState<GiphyGif[]>([]);
+  const [gifOffset, setGifOffset] = useState(0);
+  const [gifLoading, setGifLoading] = useState(false);
+  const [gifError, setGifError] = useState<string | null>(null);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [cardSearch, setCardSearch] = useState('');
   const cardSearchQuery = trpc.tmdb.get.useQuery({ path: '/search/multi', params: { query: cardSearch, include_adult: false } }, { enabled: cardPickerOpen && cardSearch.trim().length >= 2, retry: 1 });
@@ -100,7 +107,45 @@ export default function ConversationScreen() {
     } catch { Alert.alert('Could not select image', 'Please try again.'); }
   };
 
-  const handlePickGif = async () => {
+  const loadGifs = async (query = gifSearch, offset = 0, replace = true) => {
+    if (gifLoading) return;
+    setGifLoading(true);
+    setGifError(null);
+    try {
+      const results = await searchGiphy(query, offset);
+      setGifResults((current) => replace ? results : [...current, ...results]);
+      setGifOffset(offset + results.length);
+    } catch (error) {
+      setGifError(error instanceof Error ? error.message : 'Could not load GIFs');
+    } finally {
+      setGifLoading(false);
+    }
+  };
+
+  const openGifPicker = () => {
+    setAttachmentOpen(false);
+    setGifPickerOpen(true);
+    setGifSearch('');
+    setGifOffset(0);
+    void loadGifs('', 0, true);
+  };
+
+  const handleSearchGifs = () => {
+    setGifOffset(0);
+    void loadGifs(gifSearch, 0, true);
+  };
+
+  const handleSelectGiphy = async (gif: GiphyGif) => {
+    if (!authUser || sendAttachmentMutation.isPending) return;
+    try {
+      await sendAttachmentMutation.mutateAsync({ otherUserId: numericOtherUserId, externalUrl: gif.images.original.url, mediaType: 'gif', mimeType: 'image/gif', size: 0 });
+      setGifPickerOpen(false);
+    } catch {
+      Alert.alert('Could not send GIF', 'Please try again.');
+    }
+  };
+
+  const handlePickLocalGif = async () => {
     if (!authUser) { Alert.alert('Sign in required', 'Sign in to send GIFs.'); return; }
     try {
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 1 });
@@ -260,6 +305,17 @@ export default function ConversationScreen() {
       <Modal visible={cardPickerOpen} animationType="slide" transparent onRequestClose={() => setCardPickerOpen(false)}>
         <View style={styles.modalBackdrop}><View style={styles.cardPicker}><View style={styles.modalHeader}><Text style={styles.modalTitle}>Share a film or series</Text><Pressable onPress={() => setCardPickerOpen(false)}><Ionicons name="close" size={22} color={colors.text} /></Pressable></View><TextInput autoFocus value={cardSearch} onChangeText={setCardSearch} placeholder="Search TMDB..." placeholderTextColor={colors.textFaint} style={styles.cardSearchInput} />{failedCard ? <View style={styles.retryRow}><Text style={styles.retryText}>Could not share the card.</Text><Pressable onPress={() => shareMediaMutation.mutate(failedCard)} disabled={shareMediaMutation.isPending}><Text style={styles.retryAction}>Retry</Text></Pressable></View> : null}{cardSearchQuery.isLoading ? <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.lg }} /> : <FlatList data={(((cardSearchQuery.data as any)?.results ?? [])).filter((r: any) => r.media_type === 'movie' || r.media_type === 'tv')} keyExtractor={(item: any) => `${item.media_type}-${item.id}`} contentContainerStyle={{ paddingBottom: spacing.lg }} ListEmptyComponent={cardSearch.length >= 2 ? <EmptyState icon="search-outline" title="No titles found" message="Try another title." /> : <EmptyState icon="film-outline" title="Search for a title" message="Find a movie or series to share." />} renderItem={({ item }: { item: any }) => <Pressable style={styles.cardResult} disabled={shareMediaMutation.isPending} onPress={() => shareMediaMutation.mutate({ otherUserId: numericOtherUserId, mediaType: item.media_type, mediaId: item.id, title: item.title, posterPath: item.posterPath, rating: item.voteAverage ?? 0, overview: item.overview ?? null })}><Image source={{ uri: item.posterPath ? `https://image.tmdb.org/t/p/w200${item.posterPath}` : undefined }} style={styles.resultPoster} /><View style={styles.resultCopy}><Text style={styles.resultTitle} numberOfLines={2}>{item.title}</Text><Text style={styles.resultMeta}>{item.media_type === 'tv' ? 'Series' : 'Film'} · ★ {(item.voteAverage ?? 0).toFixed(1)}</Text></View>{shareMediaMutation.isPending ? <ActivityIndicator color={colors.accent} /> : <Ionicons name="paper-plane-outline" size={18} color={colors.accent} />}</Pressable>} />}</View></View>
       </Modal>
+      <Modal visible={gifPickerOpen} transparent animationType="slide" onRequestClose={() => setGifPickerOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.gifPicker}>
+            <View style={styles.modalHeader}><Text style={styles.modalTitle}>Find a GIF</Text><Pressable onPress={() => setGifPickerOpen(false)}><Ionicons name="close" size={22} color={colors.text} /></Pressable></View>
+            <View style={styles.gifSearchRow}><TextInput autoFocus value={gifSearch} onChangeText={setGifSearch} onSubmitEditing={handleSearchGifs} placeholder="Search GIPHY..." placeholderTextColor={colors.textFaint} style={styles.gifSearchInput} returnKeyType="search" /><Pressable style={styles.gifSearchButton} onPress={handleSearchGifs}><Ionicons name="search" size={18} color="#04120C" /></Pressable></View>
+            {gifError ? <View style={styles.retryRow}><Text style={styles.retryText}>Could not load GIFs.</Text><Pressable onPress={() => loadGifs(gifSearch, 0, true)}><Text style={styles.retryAction}>Retry</Text></Pressable></View> : null}
+            {gifResults.length === 0 && gifLoading ? <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.lg }} /> : <FlatList data={gifResults} numColumns={2} keyExtractor={(item) => item.id} columnWrapperStyle={styles.gifColumns} contentContainerStyle={styles.gifGrid} onEndReached={() => { if (!gifLoading && gifResults.length > 0) void loadGifs(gifSearch, gifOffset, false); }} onEndReachedThreshold={0.5} ListEmptyComponent={!gifLoading ? <EmptyState icon="images-outline" title="No GIFs found" message="Try another search." /> : null} renderItem={({ item }) => <Pressable style={styles.gifResult} onPress={() => handleSelectGiphy(item)} disabled={sendAttachmentMutation.isPending}><Image source={{ uri: item.images.fixed_width.url }} style={styles.gifThumb} resizeMode="cover" />{sendAttachmentMutation.isPending ? <View style={styles.gifSending}><ActivityIndicator color={colors.accent} /></View> : null}</Pressable>} ListFooterComponent={gifLoading && gifResults.length > 0 ? <ActivityIndicator color={colors.accent} style={{ paddingVertical: spacing.md }} /> : null} />}
+            <Text style={styles.giphyAttribution}>Powered by GIPHY</Text>
+          </View>
+        </View>
+      </Modal>
       <Modal visible={attachmentOpen} transparent animationType="slide" onRequestClose={() => setAttachmentOpen(false)}>
         <View style={styles.attachmentBackdrop}>
           <Pressable style={styles.attachmentDismiss} onPress={() => setAttachmentOpen(false)} accessibilityLabel="Close attachment menu" />
@@ -271,7 +327,7 @@ export default function ConversationScreen() {
               <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Share a review', 'Open a movie from Create or Details to write and share a review.'); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(255, 195, 80, 0.16)' }]}><Ionicons name="star" size={22} color={colors.gold} /></View><Text style={styles.attachmentLabel}>Share a review</Text></Pressable>
               <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Share watchlist', 'Watchlist sharing will be available when a saved list is selected.'); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(80, 160, 255, 0.16)' }]}><Ionicons name="bookmark" size={22} color="#62B2FF" /></View><Text style={styles.attachmentLabel}>Share watchlist</Text></Pressable>
               <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Send photo', 'Choose a source', [{ text: 'Camera', onPress: () => handlePickImage(true) }, { text: 'Photo library', onPress: () => handlePickImage(false) }, { text: 'Cancel', style: 'cancel' }]); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(91, 178, 255, 0.16)' }]}><Ionicons name="image" size={22} color="#62B2FF" /></View><Text style={styles.attachmentLabel}>Send photo</Text></Pressable>
-              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); handlePickGif(); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(146, 91, 255, 0.18)' }]}><Text style={styles.gifLabel}>GIF</Text></View><Text style={styles.attachmentLabel}>Send GIF</Text></Pressable>
+              <Pressable style={styles.attachmentItem} onPress={openGifPicker}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(146, 91, 255, 0.18)' }]}><Text style={styles.gifLabel}>GIF</Text></View><Text style={styles.attachmentLabel}>Find GIF</Text></Pressable>
               <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); handleRecordToggle(); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(255, 126, 58, 0.16)' }]}><Ionicons name="mic" size={22} color="#FF8A4C" /></View><Text style={styles.attachmentLabel}>{recorderState.isRecording ? 'Stop recording' : 'Voice message'}</Text></Pressable>
               <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Share list', 'List sharing will be available when a saved list is selected.'); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(53, 211, 153, 0.16)' }]}><Ionicons name="list" size={22} color={colors.accent} /></View><Text style={styles.attachmentLabel}>Share list</Text></Pressable>
               <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('More options', 'More sharing options will appear here.'); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(140, 151, 170, 0.2)' }]}><Ionicons name="ellipsis-horizontal" size={22} color={colors.textDim} /></View><Text style={styles.attachmentLabel}>More</Text></Pressable>
@@ -334,6 +390,16 @@ const styles = StyleSheet.create({
   iconBtnPressed: { opacity: 0.68, transform: [{ scale: 0.95 }] },
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.65)' },
   cardPicker: { maxHeight: '82%', backgroundColor: colors.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: spacing.lg },
+  gifPicker: { maxHeight: '88%', backgroundColor: colors.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: spacing.lg },
+  gifSearchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+  gifSearchInput: { flex: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, color: colors.text, paddingHorizontal: spacing.md, height: 44 },
+  gifSearchButton: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent },
+  gifGrid: { paddingTop: spacing.sm, paddingBottom: spacing.sm },
+  gifColumns: { gap: spacing.sm, marginBottom: spacing.sm },
+  gifResult: { flex: 1, height: 132, borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.surfaceHigh },
+  gifThumb: { width: '100%', height: '100%' },
+  gifSending: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)' },
+  giphyAttribution: { color: colors.textFaint, fontSize: 10, textAlign: 'center', paddingTop: spacing.xs },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
   modalTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800' },
   cardSearchInput: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, color: colors.text, paddingHorizontal: spacing.md, height: 44, marginBottom: spacing.md },
