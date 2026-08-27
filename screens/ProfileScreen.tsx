@@ -127,7 +127,7 @@ export default function ProfileScreen() {
             <Text style={styles.handle}>@{profile.username || 'member'}</Text>
             <View style={styles.profileActions}>
               <Pressable style={({ pressed }) => [styles.editButton, pressed && styles.pressed]} onPress={() => navigation.navigate('EditProfile')}><Text style={styles.editButtonText}>Edit profile</Text></Pressable>
-              <Pressable style={({ pressed }) => [styles.shareButton, pressed && styles.pressed]} onPress={() => Share.share({ message: `Check out ${user.name || profile.username} on Reelog.` })} accessibilityLabel="Share profile"><Ionicons name="share-outline" size={19} color={colors.text} /></Pressable>
+              <Pressable style={({ pressed }) => [styles.shareButton, pressed && styles.pressed]} onPress={() => Share.share({ message: `Check out ${user.name || profile.username} on Blinkr.` })} accessibilityLabel="Share profile"><Ionicons name="share-outline" size={19} color={colors.text} /></Pressable>
             </View>
           </View>
         </View>

@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Easing, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Animated, Easing, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Image } from 'expo-image';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { trpc } from '../lib/trpc';
@@ -11,12 +12,65 @@ import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import GeneralErrorState from '../components/GeneralErrorState';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
+type FilterMode = 'all' | 'mentions' | 'likes' | 'comments' | 'follows';
+type NotificationItem = {
+  id: number;
+  userId: number;
+  actorId: number | null;
+  kind: 'follow' | 'like' | 'comment';
+  reviewId: number | null;
+  readAt: Date | null;
+  createdAt: Date | string;
+  actorName: string | null;
+  actorUsername: string | null;
+  actorAvatarUrl: string | null;
+  reviewTitle: string | null;
+  reviewPosterPath: string | null;
+  reviewRating: number | null;
+};
+
+const FILTERS: { key: FilterMode; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'mentions', label: 'Mentions' },
+  { key: 'likes', label: 'Likes' },
+  { key: 'comments', label: 'Comments' },
+  { key: 'follows', label: 'Follows' },
+];
 
 const COPY = {
-  follow: 'بدأ بمتابعتك',
-  like: 'أعجب بمراجعتك',
-  comment: 'علّق على مراجعتك',
+  follow: 'started following you',
+  like: 'liked your review',
+  comment: 'commented on your review',
 } as const;
+
+function actorLabel(item: NotificationItem) {
+  return item.actorName || item.actorUsername || 'Someone';
+}
+
+function relativeTime(value: Date | string) {
+  const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+  if (seconds < 60) return `${Math.max(1, seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days}d`;
+  return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function dayGroup(value: Date | string) {
+  const date = new Date(value);
+  const now = new Date();
+  const sameDay = date.toDateString() === now.toDateString();
+  return sameDay ? 'Today' : 'Yesterday';
+}
+
+function posterUri(path: string | null) {
+  if (!path) return undefined;
+  return path.startsWith('http') ? path : `https://image.tmdb.org/t/p/w154${path}`;
+}
 
 export default function NotificationsScreen() {
   const navigation = useNavigation<Nav>();
@@ -29,7 +83,8 @@ export default function NotificationsScreen() {
   const unreadCount = query.data?.filter((item) => !item.readAt).length ?? 0;
   const previousCount = useRef<number | null>(null);
   const [newNotificationId, setNewNotificationId] = useState<number | null>(null);
-  const [filterMode, setFilterMode] = useState<'all' | 'mentions' | 'likes' | 'comments' | 'follows'>('all');
+  const [filterMode, setFilterMode] = useState<FilterMode>('all');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const arrivalProgress = useRef(new Animated.Value(1)).current;
   const bellProgress = useRef(new Animated.Value(1)).current;
 
@@ -50,10 +105,11 @@ export default function NotificationsScreen() {
     previousCount.current = currentCount;
   }, [query.data, arrivalProgress, bellProgress]);
 
-  const handleNotificationPress = (item: NonNullable<typeof query.data>[number]) => {
+  const filteredNotifications = useMemo(() => (query.data ?? []).filter((item) => filterMode === 'all' || (filterMode === 'mentions' ? false : item.kind === filterMode.slice(0, -1))), [filterMode, query.data]);
+
+  const handleNotificationPress = (item: NotificationItem) => {
     if (!item.readAt) markOneRead.mutate({ notificationId: item.id });
     if (item.kind === 'follow') navigation.navigate('People');
-    else if (item.reviewId && item.actorId) navigation.navigate('Conversation', { userId: String(item.actorId) });
     else if (item.reviewId) navigation.navigate('Reviews');
   };
 
@@ -62,46 +118,46 @@ export default function NotificationsScreen() {
     followBackMutation.mutate({ userId: actorId });
   };
 
+  const showSettings = () => {
+    Alert.alert('Notification settings', 'Choose how Blinkr should show your social activity.', [
+      { text: notificationsEnabled ? 'Turn off notifications' : 'Turn on notifications', onPress: () => setNotificationsEnabled((value) => !value) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
   if (query.isLoading) return <SafeAreaView style={styles.safe}><ActivityIndicator color={colors.accent} style={styles.loader} /></SafeAreaView>;
   if (query.isError) return <SafeAreaView style={styles.safe}><GeneralErrorState title="Unable to load notifications" message={query.error.message} onRetry={() => query.refetch()} /></SafeAreaView>;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <View style={styles.headingBlock}>
-          <View style={styles.titleLine}><Text style={styles.title}>Notifications</Text>{unreadCount > 0 ? <View style={styles.countBadge}><Text style={styles.countText}>{unreadCount > 99 ? '99+' : unreadCount}</Text></View> : null}</View>
-          <Text style={styles.subtitle}>Stay updated with your movie circle</Text>
-        </View>
-        <View style={styles.headerActions}>
-          {unreadCount > 0 ? <Pressable onPress={() => markRead.mutate()} disabled={markRead.isPending} style={({ pressed }) => [styles.markAllButton, pressed && styles.pressed]}><Text style={styles.markAll}>{markRead.isPending ? 'Updating…' : 'Mark all as read'}</Text></Pressable> : null}
-          <Pressable onPress={() => Alert.alert('Notification settings', 'Notification preferences will be available here soon.')} style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]} accessibilityLabel="Notification settings"><Ionicons name="settings-outline" size={20} color={colors.textDim} /></Pressable>
-        </View>
-      </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-        {(['all', 'mentions', 'likes', 'comments', 'follows'] as const).map((mode) => (
-          <Pressable key={mode} onPress={() => setFilterMode(mode)} style={({ pressed }) => [styles.filterChip, filterMode === mode && styles.filterChipActive, pressed && styles.pressed]}>
-            <Text style={[styles.filterText, filterMode === mode && styles.filterTextActive]}>{mode[0].toUpperCase() + mode.slice(1)}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
       <FlatList
-        data={(query.data ?? []).filter((item) => filterMode === 'all' || (filterMode === 'mentions' ? false : item.kind === filterMode.slice(0, -1)))}
+        data={filteredNotifications}
         keyExtractor={(item) => String(item.id)}
         refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => query.refetch()} tintColor={colors.accent} />}
-        contentContainerStyle={(query.data ?? []).filter((item) => filterMode === 'all' || (filterMode === 'mentions' ? false : item.kind === filterMode.slice(0, -1))).length === 0 ? styles.emptyList : styles.list}
-        ListEmptyComponent={<View style={styles.empty}><View style={styles.emptyGlow}><View style={styles.emptyOrb}><Ionicons name="notifications-outline" size={42} color={colors.accent} /></View></View><Text style={styles.emptyEyebrow}>{filterMode === 'all' ? 'YOUR SOCIAL SCREENPLAY' : 'FILTERED NOTIFICATIONS'}</Text><Text style={styles.emptyTitle}>{filterMode === 'all' ? 'The story starts here' : 'Nothing here yet'}</Text><Text style={styles.emptyText}>{filterMode === 'all' ? 'When someone follows you, likes a review, or leaves a comment, the moment will appear in this space.' : 'New activity matching this filter will appear here.'}</Text></View>}
-        renderItem={({ item }) => {
+        contentContainerStyle={filteredNotifications.length === 0 ? styles.emptyList : styles.list}
+        ListHeaderComponent={<>
+          <View style={styles.header}>
+            <View style={styles.headingBlock}><Text style={styles.title}>Notifications</Text><Text style={styles.subtitle}>Stay updated with your movie circle</Text></View>
+            <View style={styles.headerActions}><Pressable onPress={() => markRead.mutate()} disabled={markRead.isPending || unreadCount === 0} style={({ pressed }) => [styles.markAllButton, (pressed || unreadCount === 0) && styles.mutedAction]}><Text style={styles.markAll}>{markRead.isPending ? 'Updating…' : 'Mark all as read'}</Text></Pressable><Animated.View style={{ transform: [{ scale: bellProgress }] }}><Pressable onPress={showSettings} style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]} accessibilityLabel="Notification settings"><Ionicons name="settings-outline" size={24} color={colors.text} /></Pressable></Animated.View></View>
+          </View>
+          <View style={styles.filters}>{FILTERS.map((filter) => <Pressable key={filter.key} onPress={() => setFilterMode(filter.key)} style={({ pressed }) => [styles.filterChip, filterMode === filter.key && styles.filterChipActive, pressed && styles.pressed]}><Text style={[styles.filterText, filterMode === filter.key && styles.filterTextActive]}>{filter.label}</Text></Pressable>)}</View>
+        </>}
+        ListEmptyComponent={<View style={styles.empty}><View style={styles.emptyOrb}><Ionicons name="notifications-outline" size={42} color={colors.accent} /></View><Text style={styles.emptyTitle}>{filterMode === 'all' ? 'Your social story starts here' : 'Nothing here yet'}</Text><Text style={styles.emptyText}>{filterMode === 'all' ? 'When someone follows you, likes a review, or leaves a comment, it will appear here.' : 'New activity matching this filter will appear here.'}</Text></View>}
+        renderItem={({ item, index }) => {
           const isNew = item.id === newNotificationId;
           const animatedStyle = isNew ? { opacity: arrivalProgress, transform: [{ translateY: arrivalProgress.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) }] } : undefined;
           const isFollowing = Boolean(item.actorId && followingQuery.data?.includes(item.actorId));
+          const actor = actorLabel(item);
+          const poster = posterUri(item.reviewPosterPath);
+          const showDay = index === 0 || dayGroup(filteredNotifications[index - 1].createdAt) !== dayGroup(item.createdAt);
           return <Animated.View style={animatedStyle}>
+            {showDay ? <Text style={styles.dayLabel}>{dayGroup(item.createdAt)}</Text> : null}
             <View style={[styles.row, !item.readAt && styles.unread]}>
-              <Pressable onPress={() => handleNotificationPress(item)} style={({ pressed }) => [styles.rowMain, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={`${COPY[item.kind]} notification`}>
-                <View style={styles.avatarPlaceholder}><Ionicons name={item.kind === 'follow' ? 'person-add-outline' : item.kind === 'like' ? 'heart-outline' : 'chatbubble-outline'} size={18} color={colors.accent} /></View>
-                <View style={styles.copy}><Text style={styles.text}>{COPY[item.kind]}.</Text><Text style={styles.date}>{new Date(item.createdAt).toLocaleDateString()}</Text></View>{!item.readAt ? <View style={styles.unreadDot} /> : <Ionicons name="chevron-forward" size={17} color={colors.textFaint} />}
+              <Pressable onPress={() => handleNotificationPress(item)} style={({ pressed }) => [styles.rowMain, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={`${actor} ${COPY[item.kind]}`}>
+                {item.actorAvatarUrl ? <Image source={{ uri: item.actorAvatarUrl }} style={styles.avatar} contentFit="cover" /> : <View style={styles.avatarPlaceholder}><Ionicons name={item.kind === 'follow' ? 'person-add-outline' : item.kind === 'like' ? 'heart' : 'chatbubble'} size={20} color={colors.text} /></View>}
+                <View style={styles.copy}><Text style={styles.message}><Text style={styles.actor}>{actor}</Text> {COPY[item.kind]}</Text><Text style={styles.detail} numberOfLines={2}>{item.kind === 'follow' ? `@${item.actorUsername ?? 'blinkr_user'}` : item.reviewTitle ?? 'Your review'}</Text><Text style={styles.time}>{relativeTime(item.createdAt)}</Text></View>
               </Pressable>
-              {item.kind === 'follow' && item.actorId ? <Pressable onPress={() => handleFollowBack(item.actorId)} disabled={isFollowing || followBackMutation.isPending} style={({ pressed }) => [styles.quickAction, isFollowing && styles.quickActionDone, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={isFollowing ? 'Following' : 'Follow back'}>{followBackMutation.isPending && !isFollowing ? <ActivityIndicator size="small" color={colors.bg} /> : <><Ionicons name={isFollowing ? 'checkmark' : 'person-add'} size={14} color={isFollowing ? colors.accent : colors.bg} /><Text style={[styles.quickActionText, isFollowing && styles.quickActionDoneText]}>{isFollowing ? 'Following' : 'Follow back'}</Text></>}</Pressable> : null}
-              {item.kind === 'comment' && item.actorId ? <Pressable onPress={() => handleNotificationPress(item)} style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel="Reply"><Ionicons name="chatbubble-ellipses" size={14} color={colors.bg} /><Text style={styles.quickActionText}>Reply</Text></Pressable> : null}
+              <View style={styles.trailing}>{item.kind === 'follow' && item.actorId ? <Pressable onPress={() => handleFollowBack(item.actorId)} disabled={isFollowing || followBackMutation.isPending} style={({ pressed }) => [styles.followButton, isFollowing && styles.followingButton, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={isFollowing ? 'Following' : 'Follow back'}>{followBackMutation.isPending && !isFollowing ? <ActivityIndicator size="small" color={colors.accent} /> : <Text style={styles.followButtonText}>{isFollowing ? 'Following' : 'Follow back'}</Text>}</Pressable> : poster ? <Image source={{ uri: poster }} style={styles.poster} contentFit="cover" /> : <View style={styles.posterPlaceholder}><Ionicons name={item.kind === 'like' ? 'heart-outline' : 'chatbubble-outline'} size={19} color={colors.textDim} /></View>}{!item.readAt ? <View style={styles.unreadDot} /> : null}</View>
             </View>
           </Animated.View>;
         }}
@@ -111,43 +167,45 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: spacing.lg, marginBottom: spacing.md },
-  headingBlock: { flex: 1 },
-  titleLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  title: { color: colors.text, fontSize: 26, fontWeight: '900', letterSpacing: -0.6 },
-  subtitle: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: 4 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginLeft: spacing.sm },
-  settingsButton: { width: 38, height: 38, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  markAllButton: { paddingVertical: 10, paddingHorizontal: 4 },
-  countBadge: { minWidth: 22, height: 22, paddingHorizontal: 6, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent },
-  countText: { color: colors.bg, fontSize: 11, fontWeight: '900' },
-  markAll: { color: colors.accent, fontSize: 11, fontWeight: '900' },
-  filters: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, marginBottom: spacing.md },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  filterChipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
-  filterText: { color: colors.textDim, fontSize: 12, fontWeight: '800' },
-  filterTextActive: { color: colors.bg },
+  safe: { flex: 1, backgroundColor: '#000000' },
   loader: { flex: 1 },
-  list: { padding: spacing.lg, gap: spacing.sm },
-  emptyList: { flexGrow: 1, justifyContent: 'center' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
-  rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md, minWidth: 0 },
-  quickAction: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 8, borderRadius: radius.sm, backgroundColor: colors.accent },
-  quickActionDone: { backgroundColor: 'rgba(53, 211, 153, 0.12)', borderWidth: 1, borderColor: 'rgba(53, 211, 153, 0.35)' },
-  quickActionText: { color: colors.bg, fontSize: 10, fontWeight: '900' },
-  quickActionDoneText: { color: colors.accent },
-  unread: { borderColor: colors.accent },
-  avatarPlaceholder: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border },
-  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent },
-  pressed: { opacity: 0.72, transform: [{ scale: 0.99 }] },
-  copy: { flex: 1 },
-  text: { color: colors.text, fontSize: fontSizes.md, fontWeight: '700' },
-  date: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: 3 },
-  empty: { alignItems: 'center', paddingHorizontal: spacing.xl, paddingVertical: spacing.xxl },
-  emptyGlow: { width: 132, height: 132, borderRadius: 66, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(53, 211, 153, 0.07)', marginBottom: spacing.lg },
-  emptyOrb: { width: 92, height: 92, borderRadius: 46, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: 'rgba(53, 211, 153, 0.28)', shadowColor: colors.accent, shadowOpacity: 0.22, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 5 },
-  emptyEyebrow: { color: colors.accent, fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
-  emptyTitle: { color: colors.text, fontSize: 23, fontWeight: '900', marginTop: spacing.sm, textAlign: 'center' },
-  emptyText: { color: colors.textDim, textAlign: 'center', marginTop: spacing.sm, lineHeight: 21, maxWidth: 320 },
+  list: { paddingHorizontal: 24, paddingBottom: 28 },
+  emptyList: { flexGrow: 1, paddingHorizontal: 24 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingTop: 8, paddingBottom: 22 },
+  headingBlock: { flex: 1 },
+  title: { color: '#F7F9FB', fontSize: 34, lineHeight: 40, fontWeight: '900', letterSpacing: -0.8 },
+  subtitle: { color: '#8D99A8', fontSize: 17, lineHeight: 22, marginTop: 3 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginLeft: 12 },
+  markAllButton: { paddingTop: 11, paddingBottom: 10 },
+  markAll: { color: colors.accent, fontSize: 16, fontWeight: '800' },
+  mutedAction: { opacity: 0.45 },
+  settingsButton: { width: 45, height: 45, alignItems: 'center', justifyContent: 'center' },
+  filters: { flexDirection: 'row', gap: 12, paddingBottom: 26 },
+  filterChip: { minHeight: 50, paddingHorizontal: 21, borderRadius: 26, backgroundColor: '#101720', borderWidth: 1, borderColor: '#1D2935', alignItems: 'center', justifyContent: 'center' },
+  filterChipActive: { backgroundColor: '#14D5AA', borderColor: '#14D5AA' },
+  filterText: { color: '#A8B1BE', fontSize: 16, fontWeight: '800' },
+  filterTextActive: { color: '#03110E' },
+  dayLabel: { color: '#F2F5F8', fontSize: 17, fontWeight: '800', marginBottom: 12, marginTop: 3 },
+  row: { minHeight: 126, flexDirection: 'row', alignItems: 'center', backgroundColor: '#0C1219', borderWidth: 1, borderColor: '#17232E', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 4 },
+  unread: { borderColor: '#1F806F' },
+  rowMain: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 16 },
+  avatar: { width: 62, height: 62, borderRadius: 31, backgroundColor: colors.surfaceHigh },
+  avatarPlaceholder: { width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center', backgroundColor: '#26303B', borderWidth: 1, borderColor: '#465464' },
+  copy: { flex: 1, minWidth: 0 },
+  message: { color: '#B5BFCC', fontSize: 17, lineHeight: 23 },
+  actor: { color: '#F7F9FB', fontWeight: '900' },
+  detail: { color: '#B5BFCC', fontSize: 17, lineHeight: 23, marginTop: 1 },
+  time: { color: '#8B96A4', fontSize: 15, marginTop: 3 },
+  trailing: { alignItems: 'flex-end', justifyContent: 'center', gap: 13, marginLeft: 8 },
+  poster: { width: 59, height: 82, borderRadius: 6, backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: '#2C3946' },
+  posterPlaceholder: { width: 59, height: 82, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111A24', borderWidth: 1, borderColor: '#2C3946' },
+  unreadDot: { width: 17, height: 17, borderRadius: 9, backgroundColor: colors.accent },
+  followButton: { minWidth: 134, minHeight: 51, paddingHorizontal: 14, borderRadius: 11, borderWidth: 1.5, borderColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  followingButton: { borderColor: '#44515E', backgroundColor: '#151D26' },
+  followButtonText: { color: colors.accent, fontSize: 15, fontWeight: '900' },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingBottom: 80 },
+  emptyOrb: { width: 108, height: 108, borderRadius: 54, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(20, 213, 170, 0.10)', borderWidth: 1, borderColor: 'rgba(20, 213, 170, 0.35)', marginBottom: 20 },
+  emptyTitle: { color: colors.text, fontSize: 23, fontWeight: '900', textAlign: 'center' },
+  emptyText: { color: colors.textDim, fontSize: 15, lineHeight: 22, textAlign: 'center', marginTop: 8, maxWidth: 320 },
+  pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
 });

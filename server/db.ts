@@ -238,7 +238,27 @@ export async function listReviewComments(reviewId: number) {
 export async function listNotifications(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt)).limit(100);
+  return db.select({
+    id: notifications.id,
+    userId: notifications.userId,
+    actorId: notifications.actorId,
+    kind: notifications.kind,
+    reviewId: notifications.reviewId,
+    readAt: notifications.readAt,
+    createdAt: notifications.createdAt,
+    actorName: users.name,
+    actorUsername: userData.username,
+    actorAvatarUrl: userData.avatarUrl,
+    reviewTitle: reviews.title,
+    reviewPosterPath: reviews.posterPath,
+    reviewRating: reviews.rating,
+  }).from(notifications)
+    .leftJoin(users, eq(users.id, notifications.actorId))
+    .leftJoin(userData, eq(userData.userId, notifications.actorId))
+    .leftJoin(reviews, eq(reviews.id, notifications.reviewId))
+    .where(eq(notifications.userId, userId))
+    .orderBy(desc(notifications.createdAt))
+    .limit(100);
 }
 
 export async function markNotificationRead(userId: number, notificationId: number) {

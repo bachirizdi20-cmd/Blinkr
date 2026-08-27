@@ -213,7 +213,7 @@ export default function HomeScreen() {
       >
         <View style={styles.header}>
           <View>
-            <Text style={styles.brand}>Reelog</Text>
+            <Text style={styles.brand}>Blinkr</Text>
             <Text style={styles.tagline}>Track every story you watch</Text>
           </View>
           <View style={styles.headerActions}>

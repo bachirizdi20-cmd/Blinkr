@@ -6,7 +6,6 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useFonts } from "expo-font";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import RootTabNavigator from "@/navigation/RootTabNavigator";
 import { LibraryProvider } from "@/context/LibraryContext";
@@ -17,35 +16,17 @@ import { useAuth } from "@/hooks/use-auth";
 import { AuthPanel } from "@/components/AuthPanel";
 import { colors, fontSizes, spacing } from "@/lib/theme";
 
-const FIRST_RUN_KEY = '@reelog/first-run-complete';
-
 function FirstLaunchGate() {
   const { user, loading, error, refresh } = useAuth();
-  const [checked, setChecked] = React.useState(false);
-  const [completed, setCompleted] = React.useState(false);
 
-  React.useEffect(() => {
-    AsyncStorage.getItem(FIRST_RUN_KEY).then((value) => {
-      setCompleted(value === "true");
-      setChecked(true);
-    }).catch(() => setChecked(true));
-  }, []);
-
-  React.useEffect(() => {
-    if (user && !completed) {
-      setCompleted(true);
-      AsyncStorage.setItem(FIRST_RUN_KEY, "true").catch(() => undefined);
-    }
-  }, [user, completed]);
-
-  if (!checked || loading) {
+  if (loading) {
     return <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={colors.accent} /></View>;
   }
 
-  if (!completed && !user) {
+  if (!user) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", padding: spacing.xl }}>
-        <Text style={{ color: colors.text, fontSize: 32, fontWeight: "900", letterSpacing: -1 }}>Welcome to Reelog</Text>
+        <Text style={{ color: colors.text, fontSize: 32, fontWeight: "900", letterSpacing: -1 }}>Welcome to Blinkr</Text>
         <Text style={{ color: colors.textDim, fontSize: fontSizes.md, textAlign: "center", lineHeight: 22, marginTop: spacing.sm, maxWidth: 360 }}>Sign in to save your watchlist, reviews, and social activity across devices.</Text>
         {error ? <Text style={{ color: colors.danger, fontSize: fontSizes.sm, textAlign: "center", marginTop: spacing.md }}>{error.message}</Text> : null}
         <AuthPanel onAuthenticated={refresh} />

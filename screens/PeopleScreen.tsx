@@ -34,7 +34,7 @@ export default function PeopleScreen() {
     return remoteUsers.data.map((item) => ({
       id: `remote-${item.id}`,
       username: item.username ?? `user${item.id}`,
-      displayName: item.name ?? item.username ?? 'Reelog user',
+      displayName: item.name ?? item.username ?? 'Blinkr user',
       bio: item.bio ?? '',
       avatarColor: colors.accent,
       favoriteGenre: '',
