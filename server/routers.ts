@@ -235,6 +235,7 @@ export const appRouter = router({
   }),
   social: router({
     users: protectedProcedure.input(z.object({ query: z.string().trim().max(80).default("") })).query(({ ctx, input }) => db.searchUsers(ctx.user.id, input.query)),
+    searchReviews: protectedProcedure.input(z.object({ query: z.string().trim().max(120).default("") })).query(({ ctx, input }) => db.searchReviews(ctx.user.id, input.query)),
     following: protectedProcedure.query(({ ctx }) => db.listFollowingIds(ctx.user.id)),
     feed: protectedProcedure.query(({ ctx }) => db.listSocialFeed(ctx.user.id)),
     toggleFollow: protectedProcedure.input(z.object({ userId: z.number().int().positive() })).mutation(({ ctx, input }) => db.toggleFollow(ctx.user.id, input.userId)),

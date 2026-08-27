@@ -171,6 +171,15 @@ export async function searchUsers(viewerId: number, query: string) {
   return rows.filter((row) => !needle || `${row.username ?? ""} ${row.name ?? ""}`.toLowerCase().includes(needle));
 }
 
+export async function searchReviews(viewerId: number, query: string) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({ review: reviews, username: userData.username, displayName: users.name, avatarUrl: userData.avatarUrl, isPrivate: userData.isPrivate }).from(reviews).innerJoin(users, eq(users.id, reviews.userId)).leftJoin(userData, eq(userData.userId, reviews.userId)).where(or(isNull(userData.isPrivate), eq(userData.isPrivate, false), eq(reviews.userId, viewerId))).orderBy(desc(reviews.updatedAt)).limit(100);
+  const needle = query.trim().toLowerCase();
+  if (!needle) return rows.slice(0, 30);
+  return rows.filter((row) => `${row.review.title} ${row.review.review} ${row.username ?? ""} ${row.displayName ?? ""}`.toLowerCase().includes(needle)).slice(0, 50);
+}
+
 export async function toggleFollow(followerId: number, followingId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
