@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -30,11 +31,42 @@ export default function SearchScreen() {
   const [mediaResults, setMediaResults] = useState<NormalizedItem[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [searchFocused, setSearchFocused] = useState(false);
   const trimmed = query.trim();
   const shouldSearch = trimmed.length >= 2;
   const peopleQuery = trpc.social.users.useQuery({ query: trimmed }, { enabled: Boolean(authUser) && shouldSearch, retry: 1 });
   const booksQuery = trpc.books.search.useQuery({ query: trimmed, page: 1, limit: 24 }, { enabled: shouldSearch, retry: 1 });
   const reviewsQuery = trpc.social.searchReviews.useQuery({ query: trimmed }, { enabled: Boolean(authUser) && shouldSearch, retry: 1 });
+  const recentStorageKey = authUser ? `@blinkr/recent-searches/${authUser.id}` : null;
+
+  useEffect(() => {
+    let active = true;
+    if (!recentStorageKey) { setRecentSearches([]); return; }
+    AsyncStorage.getItem(recentStorageKey).then((stored) => {
+      if (!active || !stored) return;
+      try { const parsed = JSON.parse(stored); if (Array.isArray(parsed)) setRecentSearches(parsed.filter((item): item is string => typeof item === 'string').slice(0, 8)); } catch { setRecentSearches([]); }
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [recentStorageKey]);
+
+  const persistRecentSearches = (next: string[]) => {
+    setRecentSearches(next);
+    if (recentStorageKey) void AsyncStorage.setItem(recentStorageKey, JSON.stringify(next));
+  };
+  const commitSearch = (value: string) => {
+    const normalized = value.trim().replace(/\s+/g, ' ');
+    if (!normalized || normalized.length < 2) return;
+    persistRecentSearches([normalized, ...recentSearches.filter((item) => item.toLowerCase() !== normalized.toLowerCase())].slice(0, 8));
+  };
+  const removeRecentSearch = (value: string) => persistRecentSearches(recentSearches.filter((item) => item !== value));
+  const clearRecentSearches = () => persistRecentSearches([]);
+
+  useEffect(() => {
+    if (!shouldSearch) return;
+    const timer = setTimeout(() => commitSearch(trimmed), 700);
+    return () => clearTimeout(timer);
+  }, [trimmed, shouldSearch]);
 
   useEffect(() => {
     let active = true;
@@ -61,7 +93,8 @@ export default function SearchScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <Text style={styles.header}>Search</Text>
-      <View style={styles.searchBar}><Ionicons name="search" size={19} color={colors.textFaint} /><TextInput style={styles.input} placeholder="Search people, reviews, movies, TV or books..." placeholderTextColor={colors.textFaint} value={query} onChangeText={setQuery} returnKeyType="search" autoCorrect={false} />{query ? <Pressable onPress={() => setQuery('')} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textFaint} /></Pressable> : null}</View>
+      <View style={styles.searchBar}><Ionicons name="search" size={19} color={colors.textFaint} /><TextInput style={styles.input} placeholder="Search people, reviews, movies, TV or books..." placeholderTextColor={colors.textFaint} value={query} onChangeText={setQuery} onFocus={() => setSearchFocused(true)} onSubmitEditing={() => { commitSearch(query); setTab('all'); }} returnKeyType="search" autoCorrect={false} />{query ? <Pressable onPress={() => setQuery('')} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textFaint} /></Pressable> : null}</View>
+      {searchFocused && !trimmed && recentSearches.length > 0 ? <View style={styles.recentPanel}><View style={styles.recentHeader}><Text style={styles.recentTitle}>Recent searches</Text><Pressable onPress={clearRecentSearches}><Text style={styles.clearRecent}>Clear all</Text></Pressable></View>{recentSearches.map((item) => <View key={item} style={styles.recentRow}><Pressable style={styles.recentSelect} onPress={() => { setQuery(item); setTab('all'); commitSearch(item); }}><Ionicons name="time-outline" size={16} color={colors.textFaint} /><Text style={styles.recentText} numberOfLines={1}>{item}</Text></Pressable><Pressable onPress={() => removeRecentSearch(item)} hitSlop={8} accessibilityLabel={`Remove ${item} from recent searches`}><Ionicons name="close" size={16} color={colors.textFaint} /></Pressable></View>)}</View> : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
         {tabs.map((item) => <Pressable key={item.key} onPress={() => setTab(item.key)} style={[styles.tab, tab === item.key && styles.tabActive]}><Text style={[styles.tabText, tab === item.key && styles.tabTextActive]}>{item.label}</Text></Pressable>)}
       </ScrollView>
@@ -82,7 +115,7 @@ function Section({ title, action, children }: { title: string; action: () => voi
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg }, header: { color: colors.text, fontSize: fontSizes.xxl, fontWeight: '900', paddingHorizontal: spacing.lg, marginBottom: spacing.md },
-  searchBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginHorizontal: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.pill, paddingHorizontal: spacing.md, height: 48, borderWidth: 1, borderColor: colors.border }, input: { flex: 1, color: colors.text, fontSize: fontSizes.md },
+  searchBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginHorizontal: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.pill, paddingHorizontal: spacing.md, height: 48, borderWidth: 1, borderColor: colors.border }, input: { flex: 1, color: colors.text, fontSize: fontSizes.md }, recentPanel: { marginHorizontal: spacing.lg, marginTop: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, recentHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: spacing.xs }, recentTitle: { color: colors.text, fontSize: 13, fontWeight: '900' }, clearRecent: { color: colors.accent, fontSize: 12, fontWeight: '800' }, recentRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 38, borderTopWidth: 1, borderTopColor: colors.border }, recentSelect: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 8 }, recentText: { flex: 1, color: colors.textDim, fontSize: 13 },
   tabs: { gap: spacing.xs, paddingHorizontal: spacing.lg, paddingVertical: spacing.md }, tab: { paddingHorizontal: 15, paddingVertical: 9, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }, tabActive: { backgroundColor: colors.accent, borderColor: colors.accent }, tabText: { color: colors.textDim, fontSize: 12, fontWeight: '800' }, tabTextActive: { color: colors.bg },
   content: { paddingHorizontal: spacing.lg, paddingBottom: 36 }, section: { marginBottom: spacing.lg }, sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }, sectionTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '900' }, seeAll: { color: colors.accent, fontSize: 12, fontWeight: '800' }, personRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }, bookRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border }, bookCover: { width: 46, height: 64, borderRadius: 5, backgroundColor: colors.surfaceHigh }, coverFallback: { alignItems: 'center', justifyContent: 'center' }, resultCopy: { flex: 1, minWidth: 0 }, resultTitle: { color: colors.text, fontSize: 14, fontWeight: '800' }, resultMeta: { color: colors.textDim, fontSize: 12, marginTop: 3 }, resultSub: { color: colors.textFaint, fontSize: 11, marginTop: 3 }, mediaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }, reviewRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }, reviewAuthor: { color: colors.text, fontSize: 13, fontWeight: '800' }, reviewMuted: { color: colors.textDim, fontWeight: '500' }, reviewText: { color: colors.textDim, fontSize: 12, lineHeight: 18, marginTop: 3 }, rating: { color: colors.gold, fontSize: 12, fontWeight: '800', marginTop: 3 }, center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm }, loadingText: { color: colors.textDim, fontSize: 12 },
 });
