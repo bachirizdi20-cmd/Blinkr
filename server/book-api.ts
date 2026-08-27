@@ -12,6 +12,8 @@ export type BookResult = {
   pageCount: number | null;
   subjects: string[];
   language: string | null;
+  ratingAverage: number | null;
+  ratingCount: number | null;
 };
 
 type OpenLibraryDoc = {
@@ -25,6 +27,8 @@ type OpenLibraryDoc = {
   number_of_pages_median?: number;
   subject?: string[];
   language?: string[];
+  ratings_average?: number;
+  ratings_count?: number;
 };
 
 type OpenLibraryResponse = { docs?: OpenLibraryDoc[]; numFound?: number };
@@ -55,20 +59,23 @@ function normalizeBook(doc: OpenLibraryDoc): BookResult | null {
     pageCount: doc.number_of_pages_median ?? null,
     subjects: (doc.subject ?? []).slice(0, 8),
     language: doc.language?.[0] ?? null,
+    ratingAverage: doc.ratings_average ?? null,
+    ratingCount: doc.ratings_count ?? null,
   };
 }
 
 type BookSearchResponse = { results: BookResult[]; total: number; page: number; hasMore: boolean };
 const searchCache = new Map<string, { expiresAt: number; value: BookSearchResponse }>();
 
-export async function searchBooks(query: string, page: number, limit: number): Promise<BookSearchResponse> {
+export async function searchBooks(query: string, page: number, limit: number, sort: 'relevance' | 'rating' = 'relevance'): Promise<BookSearchResponse> {
   const params = new URLSearchParams({
-    q: query.trim() || "the",
+    q: query.trim() || "title:*",
     page: String(page),
     limit: String(Math.min(limit, 40)),
-    fields: "key,title,author_name,publisher,first_publish_year,cover_i,isbn,subject,language",
+    fields: "key,title,author_name,publisher,first_publish_year,cover_i,isbn,number_of_pages_median,subject,language,ratings_count",
+    ...(sort === 'rating' ? { sort: 'rating' } : {}),
   });
-  const cacheKey = `${query.trim() || 'the'}:${page}:${limit}`;
+  const cacheKey = `${query.trim() || 'title:*'}:${page}:${limit}:${sort}`;
   const cached = searchCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 

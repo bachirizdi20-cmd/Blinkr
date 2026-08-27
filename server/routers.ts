@@ -310,6 +310,9 @@ export const appRouter = router({
     search: publicProcedure
       .input(z.object({ query: z.string().trim().max(120).default(""), page: z.number().int().min(1).max(10000).default(1), limit: z.number().int().min(1).max(40).default(24) }))
       .query(({ input }) => searchBooks(input.query, input.page, input.limit)),
+    topRated: publicProcedure
+      .input(z.object({ page: z.number().int().min(1).max(10000).default(1), limit: z.number().int().min(1).max(20).default(10) }))
+      .query(({ input }) => searchBooks("", input.page, input.limit, "rating")),
   }),
   tmdb: router({
     get: publicProcedure

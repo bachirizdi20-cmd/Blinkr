@@ -2,7 +2,7 @@ import { MediaType, ReviewMediaType } from '../types/tmdb';
 import { FeedDescriptor } from '../lib/tmdb';
 import { PeopleFilter } from '../types/social';
 
-export type BookNavigationData = { id: number; bookKey: string; title: string; authors: string[]; publisher: string | null; publishedYear: number | null; coverUrl: string | null; isbn10: string | null; isbn13: string | null; pageCount: number | null; subjects: string[]; language: string | null };
+export type BookNavigationData = { id: number; bookKey: string; title: string; authors: string[]; publisher: string | null; publishedYear: number | null; coverUrl: string | null; isbn10: string | null; isbn13: string | null; pageCount: number | null; subjects: string[]; language: string | null; ratingAverage: number | null; ratingCount: number | null };
 
 export type ContentStackParamList = {
   HomeMain: undefined;

@@ -32,7 +32,7 @@ describe('books.search', () => {
       isbn13: '9780261102217',
     });
     expect(result.hasMore).toBe(false);
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('q=the'), expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('q=title%3A*'), expect.objectContaining({
       headers: expect.objectContaining({ 'User-Agent': expect.stringContaining('Agon') }),
     }));
   });
