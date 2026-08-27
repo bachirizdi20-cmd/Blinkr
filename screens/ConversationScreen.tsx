@@ -54,6 +54,7 @@ export default function ConversationScreen() {
   const [gifOffset, setGifOffset] = useState(0);
   const [gifLoading, setGifLoading] = useState(false);
   const [gifError, setGifError] = useState<string | null>(null);
+  const [failedGif, setFailedGif] = useState<GiphyGif | null>(null);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [cardSearch, setCardSearch] = useState('');
   const cardSearchQuery = trpc.tmdb.get.useQuery({ path: '/search/multi', params: { query: cardSearch, include_adult: false } }, { enabled: cardPickerOpen && cardSearch.trim().length >= 2, retry: 1 });
@@ -137,11 +138,12 @@ export default function ConversationScreen() {
 
   const handleSelectGiphy = async (gif: GiphyGif) => {
     if (!authUser || sendAttachmentMutation.isPending) return;
+    setFailedGif(null);
     try {
       await sendAttachmentMutation.mutateAsync({ otherUserId: numericOtherUserId, externalUrl: gif.images.original.url, mediaType: 'gif', mimeType: 'image/gif', size: 0 });
       setGifPickerOpen(false);
     } catch {
-      Alert.alert('Could not send GIF', 'Please try again.');
+      setFailedGif(gif);
     }
   };
 
@@ -311,6 +313,7 @@ export default function ConversationScreen() {
             <View style={styles.modalHeader}><Text style={styles.modalTitle}>Find a GIF</Text><Pressable onPress={() => setGifPickerOpen(false)}><Ionicons name="close" size={22} color={colors.text} /></Pressable></View>
             <View style={styles.gifSearchRow}><TextInput autoFocus value={gifSearch} onChangeText={setGifSearch} onSubmitEditing={handleSearchGifs} placeholder="Search GIPHY..." placeholderTextColor={colors.textFaint} style={styles.gifSearchInput} returnKeyType="search" /><Pressable style={styles.gifSearchButton} onPress={handleSearchGifs}><Ionicons name="search" size={18} color="#04120C" /></Pressable></View>
             {gifError ? <View style={styles.retryRow}><Text style={styles.retryText}>Could not load GIFs.</Text><Pressable onPress={() => loadGifs(gifSearch, 0, true)}><Text style={styles.retryAction}>Retry</Text></Pressable></View> : null}
+            {failedGif ? <View style={styles.retryRow}><Text style={styles.retryText}>Could not send this GIF.</Text><Pressable onPress={() => handleSelectGiphy(failedGif)} disabled={sendAttachmentMutation.isPending}><Text style={styles.retryAction}>{sendAttachmentMutation.isPending ? 'Sending…' : 'Retry'}</Text></Pressable></View> : null}
             {gifResults.length === 0 && gifLoading ? <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.lg }} /> : <FlatList data={gifResults} numColumns={2} keyExtractor={(item) => item.id} columnWrapperStyle={styles.gifColumns} contentContainerStyle={styles.gifGrid} onEndReached={() => { if (!gifLoading && gifResults.length > 0) void loadGifs(gifSearch, gifOffset, false); }} onEndReachedThreshold={0.5} ListEmptyComponent={!gifLoading ? <EmptyState icon="images-outline" title="No GIFs found" message="Try another search." /> : null} renderItem={({ item }) => <Pressable style={styles.gifResult} onPress={() => handleSelectGiphy(item)} disabled={sendAttachmentMutation.isPending}><Image source={{ uri: item.images.fixed_width.url }} style={styles.gifThumb} resizeMode="cover" />{sendAttachmentMutation.isPending ? <View style={styles.gifSending}><ActivityIndicator color={colors.accent} /></View> : null}</Pressable>} ListFooterComponent={gifLoading && gifResults.length > 0 ? <ActivityIndicator color={colors.accent} style={{ paddingVertical: spacing.md }} /> : null} />}
             <Text style={styles.giphyAttribution}>Powered by GIPHY</Text>
           </View>

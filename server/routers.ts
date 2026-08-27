@@ -266,7 +266,8 @@ export const appRouter = router({
         if (input.mediaType !== 'gif') throw new TRPCError({ code: 'BAD_REQUEST', message: 'External URLs are only allowed for GIFs' });
         let hostname = '';
         try { hostname = new URL(input.externalUrl).hostname.toLowerCase(); } catch { throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid external media URL' }); }
-        if (!['media.giphy.com', 'i.giphy.com'].includes(hostname)) throw new TRPCError({ code: 'BAD_REQUEST', message: 'GIF URL must be hosted by GIPHY' });
+        const isGiphyHost = hostname === 'giphy.com' || hostname.endsWith('.giphy.com');
+        if (!isGiphyHost) throw new TRPCError({ code: 'BAD_REQUEST', message: 'GIF URL must be hosted by GIPHY' });
         return db.createChatMessage({ conversationId: conversation.id, senderId: ctx.user.id, text: null, mediaType: 'gif', mediaUrl: input.externalUrl, mediaKey: null, mediaMimeType: 'image/gif', mediaSize: null, replyToId: input.replyToId ?? null }, input.otherUserId);
       }
       const buffer = Buffer.from(input.base64!, 'base64');
