@@ -45,6 +45,7 @@ export default function ConversationScreen() {
   const [failedCard, setFailedCard] = useState<any>(null);
   const shareMediaMutation = trpc.social.shareMedia.useMutation({ onSuccess: () => { setFailedCard(null); messagesQuery.refetch(); setCardPickerOpen(false); setCardSearch(''); }, onError: (_error, variables) => setFailedCard(variables) });
   const [cardPickerOpen, setCardPickerOpen] = useState(false);
+  const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [cardSearch, setCardSearch] = useState('');
   const cardSearchQuery = trpc.tmdb.get.useQuery({ path: '/search/multi', params: { query: cardSearch, include_adult: false } }, { enabled: cardPickerOpen && cardSearch.trim().length >= 2, retry: 1 });
   const user = social.getUser(userId);
@@ -184,14 +185,8 @@ export default function ConversationScreen() {
 
         {pendingImage ? <View style={styles.previewBar}><Image source={{ uri: pendingImage.uri }} style={styles.previewImage} /><View style={styles.previewCopy}><Text style={styles.previewTitle}>Ready to send</Text><Text style={styles.previewMeta}>{pendingImage.width} × {pendingImage.height}</Text></View><Pressable onPress={() => setPendingImage(null)} style={styles.previewCancel}><Ionicons name="close" size={19} color={colors.textDim} /></Pressable><Pressable onPress={handleSendImage} style={styles.previewSend} disabled={sendImageMutation.isPending}><Ionicons name="send" size={16} color="#04120C" /></Pressable></View> : null}
         <View style={styles.inputBar}>
-          <Pressable style={({ pressed }) => [styles.attachBtn, pressed && styles.iconBtnPressed]} onPress={() => Alert.alert('Share something', undefined, [{ text: 'Share a movie card', onPress: () => setCardPickerOpen(true) }, { text: 'Send a photo', onPress: () => Alert.alert('Send photo', 'Choose a source', [{ text: 'Camera', onPress: () => handlePickImage(true) }, { text: 'Photo library', onPress: () => handlePickImage(false) }, { text: 'Cancel', style: 'cancel' }]) }, { text: 'Cancel', style: 'cancel' }])} accessibilityLabel="More message options">
-            <Ionicons name="add" size={21} color={colors.textDim} />
-          </Pressable>
-          <Pressable style={({ pressed }) => [styles.attachBtn, pressed && styles.iconBtnPressed]} onPress={() => setCardPickerOpen(true)} accessibilityLabel="Share movie card">
-            <Ionicons name="film-outline" size={19} color={colors.accent} />
-          </Pressable>
-          <Pressable style={({ pressed }) => [styles.attachBtn, pressed && styles.iconBtnPressed]} onPress={() => Alert.alert('Send photo', 'Choose a source', [{ text: 'Camera', onPress: () => handlePickImage(true) }, { text: 'Photo library', onPress: () => handlePickImage(false) }, { text: 'Cancel', style: 'cancel' }])} disabled={sendImageMutation.isPending} accessibilityLabel="Send photo">
-            {sendImageMutation.isPending ? <ActivityIndicator size="small" color={colors.accent} /> : <Ionicons name="image-outline" size={19} color={colors.textDim} />}
+          <Pressable style={({ pressed }) => [styles.attachBtn, pressed && styles.iconBtnPressed]} onPress={() => setAttachmentOpen(true)} accessibilityLabel="Open attachment menu">
+            <Ionicons name="add" size={24} color={colors.textDim} />
           </Pressable>
           <TextInput
             style={styles.input}
@@ -206,13 +201,34 @@ export default function ConversationScreen() {
           <Pressable style={({ pressed }) => [styles.emojiBtn, pressed && styles.iconBtnPressed]} onPress={() => setText((current) => `${current}${current ? ' ' : ''}😊`)} accessibilityLabel="Add emoji">
             <Ionicons name="happy-outline" size={20} color={colors.textDim} />
           </Pressable>
-          <Pressable style={({ pressed }) => [styles.sendBtn, !text.trim() && styles.sendBtnDisabled, pressed && text.trim() && styles.sendBtnPressed]} onPress={handleSend} disabled={!text.trim()} accessibilityLabel="Send message">
-            <Ionicons name="arrow-up" size={19} color={text.trim() ? '#04120C' : colors.textFaint} />
-          </Pressable>
+          {text.trim() ? <Pressable style={({ pressed }) => [styles.sendBtn, pressed && styles.sendBtnPressed]} onPress={handleSend} accessibilityLabel="Send message">
+            <Ionicons name="arrow-up" size={19} color="#04120C" />
+          </Pressable> : <Pressable style={({ pressed }) => [styles.voiceBtn, pressed && styles.sendBtnPressed]} onPress={() => Alert.alert('Voice message', 'Voice recording is not enabled yet. You can send a photo or movie card from the + menu.')} accessibilityLabel="Voice message">
+            <Ionicons name="mic" size={19} color={colors.bg} />
+          </Pressable>}
         </View>
       </KeyboardAvoidingView>
       <Modal visible={cardPickerOpen} animationType="slide" transparent onRequestClose={() => setCardPickerOpen(false)}>
         <View style={styles.modalBackdrop}><View style={styles.cardPicker}><View style={styles.modalHeader}><Text style={styles.modalTitle}>Share a film or series</Text><Pressable onPress={() => setCardPickerOpen(false)}><Ionicons name="close" size={22} color={colors.text} /></Pressable></View><TextInput autoFocus value={cardSearch} onChangeText={setCardSearch} placeholder="Search TMDB..." placeholderTextColor={colors.textFaint} style={styles.cardSearchInput} />{failedCard ? <View style={styles.retryRow}><Text style={styles.retryText}>Could not share the card.</Text><Pressable onPress={() => shareMediaMutation.mutate(failedCard)} disabled={shareMediaMutation.isPending}><Text style={styles.retryAction}>Retry</Text></Pressable></View> : null}{cardSearchQuery.isLoading ? <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.lg }} /> : <FlatList data={(((cardSearchQuery.data as any)?.results ?? [])).filter((r: any) => r.media_type === 'movie' || r.media_type === 'tv')} keyExtractor={(item: any) => `${item.media_type}-${item.id}`} contentContainerStyle={{ paddingBottom: spacing.lg }} ListEmptyComponent={cardSearch.length >= 2 ? <EmptyState icon="search-outline" title="No titles found" message="Try another title." /> : <EmptyState icon="film-outline" title="Search for a title" message="Find a movie or series to share." />} renderItem={({ item }: { item: any }) => <Pressable style={styles.cardResult} disabled={shareMediaMutation.isPending} onPress={() => shareMediaMutation.mutate({ otherUserId: numericOtherUserId, mediaType: item.media_type, mediaId: item.id, title: item.title, posterPath: item.posterPath, rating: item.voteAverage ?? 0, overview: item.overview ?? null })}><Image source={{ uri: item.posterPath ? `https://image.tmdb.org/t/p/w200${item.posterPath}` : undefined }} style={styles.resultPoster} /><View style={styles.resultCopy}><Text style={styles.resultTitle} numberOfLines={2}>{item.title}</Text><Text style={styles.resultMeta}>{item.media_type === 'tv' ? 'Series' : 'Film'} · ★ {(item.voteAverage ?? 0).toFixed(1)}</Text></View>{shareMediaMutation.isPending ? <ActivityIndicator color={colors.accent} /> : <Ionicons name="paper-plane-outline" size={18} color={colors.accent} />}</Pressable>} />}</View></View>
+      </Modal>
+      <Modal visible={attachmentOpen} transparent animationType="slide" onRequestClose={() => setAttachmentOpen(false)}>
+        <View style={styles.attachmentBackdrop}>
+          <Pressable style={styles.attachmentDismiss} onPress={() => setAttachmentOpen(false)} accessibilityLabel="Close attachment menu" />
+          <View style={styles.attachmentSheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Share something</Text>
+            <View style={styles.attachmentGrid}>
+              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); setCardPickerOpen(true); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(53, 211, 153, 0.16)' }]}><Ionicons name="film" size={22} color={colors.accent} /></View><Text style={styles.attachmentLabel}>Share a movie</Text></Pressable>
+              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Share a review', 'Open a movie from Create or Details to write and share a review.'); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(255, 195, 80, 0.16)' }]}><Ionicons name="star" size={22} color={colors.gold} /></View><Text style={styles.attachmentLabel}>Share a review</Text></Pressable>
+              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Share watchlist', 'Watchlist sharing will be available when a saved list is selected.'); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(80, 160, 255, 0.16)' }]}><Ionicons name="bookmark" size={22} color="#62B2FF" /></View><Text style={styles.attachmentLabel}>Share watchlist</Text></Pressable>
+              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Send photo', 'Choose a source', [{ text: 'Camera', onPress: () => handlePickImage(true) }, { text: 'Photo library', onPress: () => handlePickImage(false) }, { text: 'Cancel', style: 'cancel' }]); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(91, 178, 255, 0.16)' }]}><Ionicons name="image" size={22} color="#62B2FF" /></View><Text style={styles.attachmentLabel}>Send photo</Text></Pressable>
+              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Send GIF', 'GIF sharing is not enabled yet.'); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(146, 91, 255, 0.18)' }]}><Text style={styles.gifLabel}>GIF</Text></View><Text style={styles.attachmentLabel}>Send GIF</Text></Pressable>
+              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Voice message', 'Voice recording is not enabled yet.'); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(255, 126, 58, 0.16)' }]}><Ionicons name="mic" size={22} color="#FF8A4C" /></View><Text style={styles.attachmentLabel}>Voice message</Text></Pressable>
+              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Share list', 'List sharing will be available when a saved list is selected.'); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(53, 211, 153, 0.16)' }]}><Ionicons name="list" size={22} color={colors.accent} /></View><Text style={styles.attachmentLabel}>Share list</Text></Pressable>
+              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('More options', 'More sharing options will appear here.'); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(140, 151, 170, 0.2)' }]}><Ionicons name="ellipsis-horizontal" size={22} color={colors.textDim} /></View><Text style={styles.attachmentLabel}>More</Text></Pressable>
+            </View>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -300,6 +316,17 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   emojiBtn: { width: 34, height: 38, alignItems: 'center', justifyContent: 'center' },
+  voiceBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  attachmentBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.64)' },
+  attachmentDismiss: { flex: 1 },
+  attachmentSheet: { backgroundColor: colors.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.xl, borderTopWidth: 1, borderColor: colors.border },
+  sheetHandle: { width: 42, height: 4, borderRadius: 2, backgroundColor: colors.textFaint, alignSelf: 'center', marginBottom: spacing.md },
+  sheetTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '900', marginBottom: spacing.lg },
+  attachmentGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: spacing.lg },
+  attachmentItem: { width: '23%', alignItems: 'center', gap: spacing.xs },
+  attachmentIcon: { width: 52, height: 52, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  attachmentLabel: { color: colors.textDim, fontSize: 10, lineHeight: 13, textAlign: 'center' },
+  gifLabel: { color: '#C9A2FF', fontSize: 13, fontWeight: '900' },
   sendBtn: {
     width: 44,
     height: 44,
