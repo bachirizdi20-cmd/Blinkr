@@ -258,6 +258,15 @@ export const appRouter = router({
       if (!conversation) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Conversation unavailable' });
       return db.createChatMessage({ conversationId: conversation.id, senderId: ctx.user.id, text: null, sharedMediaType: input.mediaType, sharedMediaId: input.mediaId, sharedTitle: input.title, sharedPosterPath: input.posterPath ?? null, sharedRating: Math.round(input.rating * 10), sharedOverview: input.overview ?? null }, input.otherUserId);
     }),
+    sendAttachment: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive(), base64: z.string().min(1).max(14_000_000), mediaType: z.enum(['image', 'gif', 'audio']), mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'audio/m4a', 'audio/mp4', 'audio/webm', 'audio/mpeg']), size: z.number().int().positive().max(10_000_000), replyToId: z.number().int().positive().optional() })).mutation(async ({ ctx, input }) => {
+      const conversation = await db.getOrCreateConversation(ctx.user.id, input.otherUserId);
+      if (!conversation) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Conversation unavailable' });
+      const buffer = Buffer.from(input.base64, 'base64');
+      if (buffer.length > 10_000_000) throw new TRPCError({ code: 'PAYLOAD_TOO_LARGE', message: 'Attachment is too large' });
+      const extension = input.mediaType === 'audio' ? 'm4a' : input.mediaType === 'gif' ? 'gif' : input.mimeType.split('/')[1] ?? 'jpg';
+      const uploaded = await storagePut(`chat/${ctx.user.id}/${Date.now()}.${extension}`, buffer, input.mimeType);
+      return db.createChatMessage({ conversationId: conversation.id, senderId: ctx.user.id, text: null, mediaType: input.mediaType, mediaUrl: uploaded.url, mediaKey: uploaded.key, mediaMimeType: input.mimeType, mediaSize: input.size, replyToId: input.replyToId ?? null }, input.otherUserId);
+    }),
     sendImage: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive(), base64: z.string().min(1).max(10_000_000), mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']), size: z.number().int().positive().max(8_000_000), replyToId: z.number().int().positive().optional() })).mutation(async ({ ctx, input }) => {
       const conversation = await db.getOrCreateConversation(ctx.user.id, input.otherUserId);
       if (!conversation) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Conversation unavailable' });

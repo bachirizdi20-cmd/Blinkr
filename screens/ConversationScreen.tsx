@@ -26,6 +26,7 @@ import { formatMessageTime } from '../lib/format';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import { createAudioPlayer, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
 import { trpc } from '../lib/trpc';
 import { useAuth } from '../hooks/use-auth';
 
@@ -42,6 +43,7 @@ export default function ConversationScreen() {
   const messagesQuery = trpc.social.messages.useQuery({ otherUserId: numericOtherUserId }, { enabled: Boolean(authUser), retry: 1 });
   const sendMessageMutation = trpc.social.sendMessage.useMutation({ onSuccess: () => messagesQuery.refetch() });
   const sendImageMutation = trpc.social.sendImage.useMutation({ onSuccess: () => messagesQuery.refetch() });
+  const sendAttachmentMutation = trpc.social.sendAttachment.useMutation({ onSuccess: () => messagesQuery.refetch() });
   const [failedCard, setFailedCard] = useState<any>(null);
   const shareMediaMutation = trpc.social.shareMedia.useMutation({ onSuccess: () => { setFailedCard(null); messagesQuery.refetch(); setCardPickerOpen(false); setCardSearch(''); }, onError: (_error, variables) => setFailedCard(variables) });
   const [cardPickerOpen, setCardPickerOpen] = useState(false);
@@ -54,6 +56,9 @@ export default function ConversationScreen() {
   const [text, setText] = useState('');
   const [pendingImage, setPendingImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const listRef = useRef<FlatList>(null);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(audioRecorder, 250);
+  const audioPlayerRef = useRef<any>(null);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -93,6 +98,48 @@ export default function ConversationScreen() {
       if (!authUser) { Alert.alert('Sign in required', 'Sign in to send photos.'); return; }
       setPendingImage(asset);
     } catch { Alert.alert('Could not select image', 'Please try again.'); }
+  };
+
+  const handlePickGif = async () => {
+    if (!authUser) { Alert.alert('Sign in required', 'Sign in to send GIFs.'); return; }
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 1 });
+      if (result.canceled || !result.assets[0]) return;
+      const asset = result.assets[0];
+      const mimeType = asset.mimeType ?? (asset.fileName?.toLowerCase().endsWith('.gif') ? 'image/gif' : '');
+      if (mimeType !== 'image/gif') { Alert.alert('GIF required', 'Choose an animated GIF file from your library.'); return; }
+      if (asset.fileSize && asset.fileSize > 10_000_000) { Alert.alert('GIF too large', 'Choose a GIF smaller than 10 MB.'); return; }
+      const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
+      await sendAttachmentMutation.mutateAsync({ otherUserId: numericOtherUserId, base64, mediaType: 'gif', mimeType: 'image/gif', size: asset.fileSize ?? base64.length });
+    } catch { Alert.alert('Could not send GIF', 'Please try again.'); }
+  };
+
+  const handleRecordToggle = async () => {
+    if (!authUser) { Alert.alert('Sign in required', 'Sign in to send voice messages.'); return; }
+    try {
+      if (recorderState.isRecording) {
+        await audioRecorder.stop();
+        const uri = audioRecorder.uri;
+        if (!uri) return;
+        const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+        await sendAttachmentMutation.mutateAsync({ otherUserId: numericOtherUserId, base64, mediaType: 'audio', mimeType: 'audio/m4a', size: base64.length });
+        return;
+      }
+      const permission = await requestRecordingPermissionsAsync();
+      if (!permission.granted) { Alert.alert('Microphone permission needed', 'Allow microphone access to record a voice message.'); return; }
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+    } catch { Alert.alert('Could not record voice message', 'Please check microphone permission and try again.'); }
+  };
+
+  const handlePlayAudio = (url: string) => {
+    try {
+      audioPlayerRef.current?.remove?.();
+      const player = createAudioPlayer(url);
+      audioPlayerRef.current = player;
+      player.play();
+    } catch { Alert.alert('Could not play audio', 'Please try again.'); }
   };
 
   const handleSendImage = async () => {
@@ -162,7 +209,9 @@ export default function ConversationScreen() {
                 <View style={[styles.bubbleRow, mine ? styles.bubbleRowMine : styles.bubbleRowTheirs]}>
                   <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
                     {!!(item as any).sharedMediaId && <Pressable style={styles.mediaCard} onPress={() => navigation.navigate('Detail', { mediaType: (item as any).sharedMediaType, id: Number((item as any).sharedMediaId) })}><Image source={{ uri: (item as any).sharedPosterPath ? `https://image.tmdb.org/t/p/w300${(item as any).sharedPosterPath}` : undefined }} style={styles.cardPoster} resizeMode="cover" /><View style={styles.cardCopy}><Text style={styles.cardLabel}>Shared from TMDB</Text><Text style={styles.cardTitle} numberOfLines={2}>{(item as any).sharedTitle}</Text><Text style={styles.cardRating}>★ {(((item as any).sharedRating ?? 0) / 10).toFixed(1)}</Text></View></Pressable>}
-                    {!!(item as any).mediaUrl && <Image source={{ uri: (item as any).mediaUrl }} style={styles.messageImage} resizeMode="cover" />}
+                    {!!(item as any).mediaUrl && (item as any).mediaType === 'audio' ? <Pressable style={styles.audioMessage} onPress={() => handlePlayAudio((item as any).mediaUrl)}><Ionicons name="play" size={18} color={mine ? '#04120C' : colors.accent} /><View style={styles.audioWave}><View style={styles.audioLine} /><View style={[styles.audioLine, styles.audioLineLong]} /><View style={styles.audioLine} /></View><Text style={[styles.audioLabel, mine && styles.bubbleTextMine]}>Voice message</Text></Pressable> : null}
+                    {!!(item as any).mediaUrl && (item as any).mediaType === 'gif' ? <Image source={{ uri: (item as any).mediaUrl }} style={styles.messageGif} resizeMode="cover" /> : null}
+                    {!!(item as any).mediaUrl && (item as any).mediaType !== 'audio' && (item as any).mediaType !== 'gif' ? <Image source={{ uri: (item as any).mediaUrl }} style={styles.messageImage} resizeMode="cover" /> : null}
                     {!!item.text && <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.text}</Text>}
                   </View>
                   <Text style={[styles.bubbleTime, mine ? styles.bubbleTimeMine : styles.bubbleTimeTheirs]}>
@@ -203,7 +252,7 @@ export default function ConversationScreen() {
           </Pressable>
           {text.trim() ? <Pressable style={({ pressed }) => [styles.sendBtn, pressed && styles.sendBtnPressed]} onPress={handleSend} accessibilityLabel="Send message">
             <Ionicons name="arrow-up" size={19} color="#04120C" />
-          </Pressable> : <Pressable style={({ pressed }) => [styles.voiceBtn, pressed && styles.sendBtnPressed]} onPress={() => Alert.alert('Voice message', 'Voice recording is not enabled yet. You can send a photo or movie card from the + menu.')} accessibilityLabel="Voice message">
+          </Pressable> : <Pressable style={({ pressed }) => [styles.voiceBtn, pressed && styles.sendBtnPressed]} onPress={handleRecordToggle} accessibilityLabel={recorderState.isRecording ? 'Stop recording' : 'Voice message'}>
             <Ionicons name="mic" size={19} color={colors.bg} />
           </Pressable>}
         </View>
@@ -222,8 +271,8 @@ export default function ConversationScreen() {
               <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Share a review', 'Open a movie from Create or Details to write and share a review.'); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(255, 195, 80, 0.16)' }]}><Ionicons name="star" size={22} color={colors.gold} /></View><Text style={styles.attachmentLabel}>Share a review</Text></Pressable>
               <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Share watchlist', 'Watchlist sharing will be available when a saved list is selected.'); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(80, 160, 255, 0.16)' }]}><Ionicons name="bookmark" size={22} color="#62B2FF" /></View><Text style={styles.attachmentLabel}>Share watchlist</Text></Pressable>
               <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Send photo', 'Choose a source', [{ text: 'Camera', onPress: () => handlePickImage(true) }, { text: 'Photo library', onPress: () => handlePickImage(false) }, { text: 'Cancel', style: 'cancel' }]); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(91, 178, 255, 0.16)' }]}><Ionicons name="image" size={22} color="#62B2FF" /></View><Text style={styles.attachmentLabel}>Send photo</Text></Pressable>
-              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Send GIF', 'GIF sharing is not enabled yet.'); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(146, 91, 255, 0.18)' }]}><Text style={styles.gifLabel}>GIF</Text></View><Text style={styles.attachmentLabel}>Send GIF</Text></Pressable>
-              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Voice message', 'Voice recording is not enabled yet.'); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(255, 126, 58, 0.16)' }]}><Ionicons name="mic" size={22} color="#FF8A4C" /></View><Text style={styles.attachmentLabel}>Voice message</Text></Pressable>
+              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); handlePickGif(); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(146, 91, 255, 0.18)' }]}><Text style={styles.gifLabel}>GIF</Text></View><Text style={styles.attachmentLabel}>Send GIF</Text></Pressable>
+              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); handleRecordToggle(); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(255, 126, 58, 0.16)' }]}><Ionicons name="mic" size={22} color="#FF8A4C" /></View><Text style={styles.attachmentLabel}>{recorderState.isRecording ? 'Stop recording' : 'Voice message'}</Text></Pressable>
               <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Share list', 'List sharing will be available when a saved list is selected.'); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(53, 211, 153, 0.16)' }]}><Ionicons name="list" size={22} color={colors.accent} /></View><Text style={styles.attachmentLabel}>Share list</Text></Pressable>
               <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('More options', 'More sharing options will appear here.'); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(140, 151, 170, 0.2)' }]}><Ionicons name="ellipsis-horizontal" size={22} color={colors.textDim} /></View><Text style={styles.attachmentLabel}>More</Text></Pressable>
             </View>
@@ -303,6 +352,12 @@ const styles = StyleSheet.create({
   cardTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '800', lineHeight: 18 },
   cardRating: { color: colors.accent, fontSize: 12, fontWeight: '800', marginTop: 7 },
   messageImage: { width: 190, height: 190, borderRadius: radius.md, marginBottom: spacing.xs },
+  messageGif: { width: 210, height: 160, borderRadius: radius.md, marginBottom: spacing.xs },
+  audioMessage: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minWidth: 190 },
+  audioWave: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 3, height: 24 },
+  audioLine: { width: 3, height: 10, borderRadius: 2, backgroundColor: colors.accent },
+  audioLineLong: { height: 19 },
+  audioLabel: { color: colors.textDim, fontSize: 11, fontWeight: '700' },
   input: {
     flex: 1,
     backgroundColor: colors.surface,
