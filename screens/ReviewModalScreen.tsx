@@ -21,12 +21,11 @@ import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { trpc } from '../lib/trpc';
 
 type RouteT = RouteProp<ContentStackParamList, 'ReviewModal'>;
-type MediaTab = 'movie' | 'tv' | 'book';
+type MediaTab = 'movie' | 'tv';
 
 const tabs: { key: MediaTab; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
   { key: 'movie', label: 'Movie', icon: 'film' },
   { key: 'tv', label: 'TV Show', icon: 'tv-outline' },
-  { key: 'book', label: 'Book', icon: 'book-outline' },
 ];
 
 export default function ReviewModalScreen() {
@@ -48,8 +47,8 @@ export default function ReviewModalScreen() {
   const saveReviewMutation = trpc.reviews.save.useMutation();
   const deleteReviewMutation = trpc.reviews.delete.useMutation();
 
-  const imageUri = posterPath ? (mediaType === 'book' || posterPath.startsWith('http') ? posterPath : `https://image.tmdb.org/t/p/w342${posterPath}`) : undefined;
-  const mediaLabel = mediaType === 'book' ? 'Book' : mediaType === 'tv' ? 'TV Show' : 'Movie';
+  const imageUri = posterPath ? (posterPath.startsWith('http') ? posterPath : `https://image.tmdb.org/t/p/w342${posterPath}`) : undefined;
+  const mediaLabel = mediaType === 'tv' ? 'TV Show' : 'Movie';
 
   const handleSave = async () => {
     const trimmedReview = review.trim();
@@ -65,11 +64,9 @@ export default function ReviewModalScreen() {
     setSaving(true);
     try {
       await saveReviewMutation.mutateAsync({ mediaType, mediaId, title, posterPath: posterPath ?? null, rating, review: trimmedReview, spoiler, watchedDate: watchedDate?.toISOString() ?? null });
-      if (mediaType !== 'book') {
-        const payload = { mediaType, mediaId, title, posterPath, genreIds, watchedDate: date, rating: rating > 0 ? rating : undefined, review: trimmedReview || undefined, rewatch, spoiler };
-        if (existing) lib.updateDiaryEntry(existing.id, payload);
-        else lib.addDiaryEntry(payload);
-      }
+      const payload = { mediaType, mediaId, title, posterPath, genreIds, watchedDate: date, rating: rating > 0 ? rating : undefined, review: trimmedReview || undefined, rewatch, spoiler };
+      if (existing) lib.updateDiaryEntry(existing.id, payload);
+      else lib.addDiaryEntry(payload);
       navigation.goBack();
     } catch (error) {
       Alert.alert('Could not post review', error instanceof Error ? error.message : 'Please try again.');
@@ -105,7 +102,7 @@ export default function ReviewModalScreen() {
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
           <View style={styles.topBar}>
             <Pressable onPress={() => navigation.goBack()} style={styles.closeButton} hitSlop={8} accessibilityLabel="Close review"><Ionicons name="close" size={30} color={colors.text} /></Pressable>
-            <Pressable onPress={() => navigation.goBack()} style={styles.searchBar} accessibilityRole="button" accessibilityLabel="Search another title"><Ionicons name="search" size={21} color={colors.textDim} /><Text style={styles.searchText}>Search for movies, TV shows or books...</Text><Ionicons name="scan-outline" size={21} color={colors.accent} /></Pressable>
+            <Pressable onPress={() => navigation.goBack()} style={styles.searchBar} accessibilityRole="button" accessibilityLabel="Search another title"><Ionicons name="search" size={21} color={colors.textDim} /><Text style={styles.searchText}>Search for movies or TV shows...</Text><Ionicons name="scan-outline" size={21} color={colors.accent} /></Pressable>
           </View>
 
           <Text style={styles.heading}>Create review</Text>

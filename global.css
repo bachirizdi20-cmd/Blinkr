@@ -1,3 +1,11 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Keep focused text fields aligned with Blinkr's turquoise visual language. */
+input:focus,
+textarea:focus,
+[contenteditable="true"]:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}

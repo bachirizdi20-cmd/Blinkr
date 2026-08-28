@@ -19,7 +19,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import SectionRow from '../components/SectionRow';
 import ApiErrorState from '../components/ApiErrorState';
-import { BookNavigationData, ContentStackParamList } from '../navigation/types';
+import { ContentStackParamList } from '../navigation/types';
 import {
   fetchTrendingAll,
   fetchMovieList,
@@ -56,7 +56,6 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const { movieGenres } = useMetadata();
   const notificationsQuery = trpc.social.notifications.useQuery(undefined, { enabled: Boolean(user) });
-  const topBooksQuery = trpc.books.topRated.useQuery({ page: 1, limit: 10 }, { retry: 1, staleTime: 60_000 });
   const unreadNotifications = (notificationsQuery.data ?? []).filter((item) => !item.readAt).length;
   const [category, setCategory] = useState<Category>('all');
   const [refreshing, setRefreshing] = useState(false);
@@ -278,7 +277,6 @@ export default function HomeScreen() {
         )}
 
         <SocialReviewFeed onOpenDetail={(review) => navigation.navigate('Detail', { mediaType: review.mediaType, id: review.mediaId })} />
-        <TopRatedBooksSection books={topBooksQuery.data?.results ?? []} loading={topBooksQuery.isLoading} error={topBooksQuery.isError} onRetry={() => topBooksQuery.refetch()} onOpenBook={(book) => navigation.navigate('BookDetail', { book })} />
 
         {error ? (
           <ApiErrorState message={error} onRetry={load} />
@@ -301,14 +299,6 @@ export default function HomeScreen() {
   );
 }
 
-function TopRatedBooksSection({ books, loading, error, onRetry, onOpenBook }: { books: BookNavigationData[]; loading: boolean; error: boolean; onRetry: () => void; onOpenBook: (book: BookNavigationData) => void }) {
-  return (
-    <View style={styles.booksSection}>
-      <View style={styles.booksSectionHeader}><View><Text style={styles.booksSectionTitle}>Top Rated Books</Text><Text style={styles.booksSectionSubtitle}>Stories readers keep coming back to</Text></View><Ionicons name="book-outline" size={20} color={colors.accent} /></View>
-      {loading ? <View style={styles.booksLoading}><Text style={styles.booksLoadingText}>Loading books...</Text></View> : error ? <ApiErrorState message="Could not load top rated books." onRetry={onRetry} /> : books.length === 0 ? <Text style={styles.booksEmpty}>No rated books available right now.</Text> : <FlatList horizontal data={books} keyExtractor={(book) => book.bookKey} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.booksList} renderItem={({ item }) => <Pressable onPress={() => onOpenBook(item)} style={({ pressed }) => [styles.homeBookCard, pressed && styles.homeBookPressed]} accessibilityRole="button" accessibilityLabel={`Open ${item.title}`}><Image source={{ uri: item.coverUrl ?? undefined }} style={styles.homeBookCover} contentFit="cover" /><Text style={styles.homeBookTitle} numberOfLines={2}>{item.title}</Text><Text style={styles.homeBookAuthor} numberOfLines={1}>{item.authors?.[0] ?? 'Unknown author'}</Text><View style={styles.homeBookRating}><Ionicons name="star" size={11} color={colors.gold} /><Text style={styles.homeBookRatingText}>{item.ratingAverage?.toFixed(1) ?? 'Top rated'}{item.ratingCount ? ` · ${item.ratingCount}` : ''}</Text></View></Pressable>} />}
-    </View>
-  );
-}
 
 function SocialReviewFeed({ onOpenDetail }: { onOpenDetail: (review: SocialReview) => void }) {
   const { reviews, users, isFollowing, toggleReviewLike, addReviewComment } = useSocial();
@@ -393,6 +383,8 @@ function SocialReviewFeed({ onOpenDetail }: { onOpenDetail: (review: SocialRevie
                     onChangeText={setCommentText}
                     placeholder="Write a comment..."
                     placeholderTextColor={colors.textFaint}
+                    selectionColor={colors.accent}
+                    cursorColor={colors.accent}
                     style={styles.commentInput}
                     returnKeyType="send"
                     onSubmitEditing={() => submitComment(review.id)}
@@ -496,21 +488,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   genreChipText: { color: colors.text, fontSize: fontSizes.xs, fontWeight: '600' },
-  booksSection: { marginTop: spacing.lg },
-  booksSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
-  booksSectionTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '900' },
-  booksSectionSubtitle: { color: colors.textDim, fontSize: 11, marginTop: 3 },
-  booksList: { paddingHorizontal: spacing.lg, gap: spacing.sm },
-  homeBookCard: { width: 118, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.xs },
-  homeBookPressed: { opacity: 0.76, transform: [{ scale: 0.98 }] },
-  homeBookCover: { width: '100%', height: 162, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh },
-  homeBookTitle: { color: colors.text, fontSize: 12, lineHeight: 15, fontWeight: '800', marginTop: spacing.xs },
-  homeBookAuthor: { color: colors.textDim, fontSize: 10, marginTop: 3 },
-  homeBookRating: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 5 },
-  homeBookRatingText: { color: colors.gold, fontSize: 11, fontWeight: '900' },
-  booksLoading: { height: 210, alignItems: 'center', justifyContent: 'center' },
-  booksLoadingText: { color: colors.textDim, fontSize: fontSizes.sm },
-  booksEmpty: { color: colors.textDim, paddingHorizontal: spacing.lg, paddingVertical: spacing.lg },
   socialSection: { paddingHorizontal: spacing.lg, marginBottom: spacing.lg },
   socialSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
   socialTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800' },
