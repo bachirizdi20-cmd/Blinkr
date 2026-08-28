@@ -8,6 +8,8 @@ import UserAvatar from '../components/UserAvatar';
 import EmptyState from '../components/EmptyState';
 import { ContentStackParamList } from '../navigation/types';
 import { useSocial } from '../context/SocialContext';
+import { useAuth } from '../hooks/use-auth';
+import { trpc } from '../lib/trpc';
 import { MockUser } from '../types/social';
 import { formatRelativeTime } from '../lib/format';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
@@ -17,16 +19,40 @@ type Nav = NativeStackNavigationProp<ContentStackParamList>;
 export default function ChatsScreen() {
   const navigation = useNavigation<Nav>();
   const social = useSocial();
+  const { user: authUser } = useAuth();
+  const remoteUsersQuery = trpc.social.users.useQuery({ query: '' }, { enabled: Boolean(authUser), retry: 1 });
   const [query, setQuery] = useState('');
 
+  const remoteContacts = useMemo<MockUser[]>(
+    () => (remoteUsersQuery.data ?? []).map((item) => ({
+      id: `remote-${item.id}`,
+      username: item.username ?? `user${item.id}`,
+      displayName: item.name ?? item.username ?? 'Blinkr user',
+      bio: item.bio ?? '',
+      avatarColor: colors.accent,
+      favoriteGenre: '',
+      followsYou: false,
+    })),
+    [remoteUsersQuery.data]
+  );
+
+  const allContacts = useMemo(() => {
+    const seen = new Set<string>();
+    return [...remoteContacts, ...social.users].filter((contact) => {
+      if (seen.has(contact.id)) return false;
+      seen.add(contact.id);
+      return true;
+    });
+  }, [remoteContacts, social.users]);
+
   const newFollowers = useMemo(
-    () => social.users.filter((u) => u.followsYou && !social.isFollowing(u.id)),
-    [social.users, social.followingIds]
+    () => allContacts.filter((u) => !u.id.startsWith('remote-') && u.followsYou && !social.isFollowing(u.id)),
+    [allContacts, social.followingIds]
   );
 
   const contacts = useMemo(
-    () => social.users.filter((u) => social.isFollowing(u.id) || u.followsYou),
-    [social.users, social.followingIds]
+    () => allContacts.filter((u) => u.id.startsWith('remote-') || social.isFollowing(u.id) || u.followsYou),
+    [allContacts, social.followingIds]
   );
 
   const conversationRows = useMemo(() => {

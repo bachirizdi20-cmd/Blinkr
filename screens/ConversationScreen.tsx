@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -22,9 +22,10 @@ import UserAvatar from '../components/UserAvatar';
 import EmptyState from '../components/EmptyState';
 import { ContentStackParamList } from '../navigation/types';
 import { useSocial } from '../context/SocialContext';
-import { ChatMessage } from '../types/social';
+import { ChatMessage, MockUser } from '../types/social';
 import { formatMessageTime } from '../lib/format';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
+import { getApiBaseUrl } from '../constants/oauth';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { createAudioPlayer, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
@@ -34,14 +35,38 @@ import { useAuth } from '../hooks/use-auth';
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type RouteT = RouteProp<ContentStackParamList, 'Conversation'>;
 
+async function readUriAsBase64(uri: string): Promise<string> {
+  if (Platform.OS !== 'web') {
+    return FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+  }
+  const response = await fetch(uri);
+  if (!response.ok) throw new Error(`Could not read attachment (${response.status})`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)));
+  }
+  return btoa(binary);
+}
+
+function resolveMediaUrl(url: string): string {
+  if (/^https?:\/\//i.test(url)) return url;
+  const base = getApiBaseUrl();
+  return base ? `${base}${url.startsWith('/') ? url : `/${url}`}` : url;
+}
+
 export default function ConversationScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<RouteT>();
   const { userId } = route.params;
-  const numericOtherUserId = Number(String(userId).replace(/^remote-/, ''));
+  const parsedOtherUserId = Number(String(userId).replace(/^remote-/, ''));
+  const numericOtherUserId = Number.isInteger(parsedOtherUserId) && parsedOtherUserId > 0 ? parsedOtherUserId : 0;
+  const isRemoteConversation = numericOtherUserId > 0 && String(userId).startsWith('remote-');
   const social = useSocial();
   const { user: authUser } = useAuth();
-  const messagesQuery = trpc.social.messages.useQuery({ otherUserId: numericOtherUserId }, { enabled: Boolean(authUser), retry: 1 });
+  const remoteUsersQuery = trpc.social.users.useQuery({ query: '' }, { enabled: Boolean(authUser && isRemoteConversation), retry: 1 });
+  const messagesQuery = trpc.social.messages.useQuery({ otherUserId: numericOtherUserId }, { enabled: Boolean(authUser && isRemoteConversation), retry: 1 });
   const sendMessageMutation = trpc.social.sendMessage.useMutation({ onSuccess: () => messagesQuery.refetch() });
   const sendImageMutation = trpc.social.sendImage.useMutation({ onSuccess: () => messagesQuery.refetch() });
   const sendAttachmentMutation = trpc.social.sendAttachment.useMutation({ onSuccess: () => messagesQuery.refetch() });
@@ -58,7 +83,20 @@ export default function ConversationScreen() {
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [cardSearch, setCardSearch] = useState('');
   const cardSearchQuery = trpc.tmdb.get.useQuery({ path: '/search/multi', params: { query: cardSearch, include_adult: false } }, { enabled: cardPickerOpen && cardSearch.trim().length >= 2, retry: 1 });
-  const user = social.getUser(userId);
+  const remoteUser = useMemo<MockUser | undefined>(() => {
+    const item = (remoteUsersQuery.data ?? []).find((candidate) => candidate.id === numericOtherUserId);
+    if (!item) return undefined;
+    return {
+      id: `remote-${item.id}`,
+      username: item.username ?? `user${item.id}`,
+      displayName: item.name ?? item.username ?? 'Blinkr user',
+      bio: item.bio ?? '',
+      avatarColor: colors.accent,
+      favoriteGenre: '',
+      followsYou: false,
+    };
+  }, [remoteUsersQuery.data, numericOtherUserId]);
+  const user = social.getUser(userId) ?? remoteUser;
   const convo = social.getConversation(userId);
   const isTyping = !!social.typingUserIds[userId];
   const [text, setText] = useState('');
@@ -85,7 +123,7 @@ export default function ConversationScreen() {
   const handleSend = async () => {
     if (!text.trim() || sendMessageMutation.isPending) return;
     try {
-      if (authUser) await sendMessageMutation.mutateAsync({ otherUserId: numericOtherUserId, text: text.trim() });
+      if (authUser && isRemoteConversation) await sendMessageMutation.mutateAsync({ otherUserId: numericOtherUserId, text: text.trim() });
       else social.sendMessage(userId, text);
       setText('');
     } catch { Alert.alert('Could not send message', 'Please try again.'); }
@@ -137,7 +175,11 @@ export default function ConversationScreen() {
   };
 
   const handleSelectGiphy = async (gif: GiphyGif) => {
-    if (!authUser || sendAttachmentMutation.isPending) return;
+    if (!authUser || !isRemoteConversation) {
+      Alert.alert('Choose a real Blinkr user', 'Open this conversation from Discover People to send GIFs.');
+      return;
+    }
+    if (sendAttachmentMutation.isPending) return;
     setFailedGif(null);
     try {
       await sendAttachmentMutation.mutateAsync({ otherUserId: numericOtherUserId, externalUrl: gif.images.original.url, mediaType: 'gif', mimeType: 'image/gif', size: 0 });
@@ -149,6 +191,7 @@ export default function ConversationScreen() {
 
   const handlePickLocalGif = async () => {
     if (!authUser) { Alert.alert('Sign in required', 'Sign in to send GIFs.'); return; }
+    if (!isRemoteConversation) { Alert.alert('Choose a real Blinkr user', 'Open this conversation from Discover People to send GIFs.'); return; }
     try {
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 1 });
       if (result.canceled || !result.assets[0]) return;
@@ -156,20 +199,22 @@ export default function ConversationScreen() {
       const mimeType = asset.mimeType ?? (asset.fileName?.toLowerCase().endsWith('.gif') ? 'image/gif' : '');
       if (mimeType !== 'image/gif') { Alert.alert('GIF required', 'Choose an animated GIF file from your library.'); return; }
       if (asset.fileSize && asset.fileSize > 10_000_000) { Alert.alert('GIF too large', 'Choose a GIF smaller than 10 MB.'); return; }
-      const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
+      const base64 = await readUriAsBase64(asset.uri);
       await sendAttachmentMutation.mutateAsync({ otherUserId: numericOtherUserId, base64, mediaType: 'gif', mimeType: 'image/gif', size: asset.fileSize ?? base64.length });
     } catch { Alert.alert('Could not send GIF', 'Please try again.'); }
   };
 
   const handleRecordToggle = async () => {
     if (!authUser) { Alert.alert('Sign in required', 'Sign in to send voice messages.'); return; }
+    if (!isRemoteConversation) { Alert.alert('Choose a real Blinkr user', 'Open this conversation from Discover People to send voice messages.'); return; }
     try {
       if (recorderState.isRecording) {
         await audioRecorder.stop();
         const uri = audioRecorder.uri;
         if (!uri) return;
-        const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-        await sendAttachmentMutation.mutateAsync({ otherUserId: numericOtherUserId, base64, mediaType: 'audio', mimeType: 'audio/m4a', size: base64.length });
+        const base64 = await readUriAsBase64(uri);
+        const mimeType = Platform.OS === 'web' ? 'audio/webm' : 'audio/m4a';
+        await sendAttachmentMutation.mutateAsync({ otherUserId: numericOtherUserId, base64, mediaType: 'audio', mimeType, size: base64.length });
         return;
       }
       const permission = await requestRecordingPermissionsAsync();
@@ -183,7 +228,7 @@ export default function ConversationScreen() {
   const handlePlayAudio = (url: string) => {
     try {
       audioPlayerRef.current?.remove?.();
-      const player = createAudioPlayer(url);
+      const player = createAudioPlayer(resolveMediaUrl(url));
       audioPlayerRef.current = player;
       player.play();
     } catch { Alert.alert('Could not play audio', 'Please try again.'); }
@@ -256,9 +301,9 @@ export default function ConversationScreen() {
                 <View style={[styles.bubbleRow, mine ? styles.bubbleRowMine : styles.bubbleRowTheirs]}>
                   <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
                     {!!(item as any).sharedMediaId && <Pressable style={styles.mediaCard} onPress={() => navigation.navigate('Detail', { mediaType: (item as any).sharedMediaType, id: Number((item as any).sharedMediaId) })}><Image source={{ uri: (item as any).sharedPosterPath ? `https://image.tmdb.org/t/p/w300${(item as any).sharedPosterPath}` : undefined }} style={styles.cardPoster} resizeMode="cover" /><View style={styles.cardCopy}><Text style={styles.cardLabel}>Shared from TMDB</Text><Text style={styles.cardTitle} numberOfLines={2}>{(item as any).sharedTitle}</Text><Text style={styles.cardRating}>★ {(((item as any).sharedRating ?? 0) / 10).toFixed(1)}</Text></View></Pressable>}
-                    {!!(item as any).mediaUrl && (item as any).mediaType === 'audio' ? <Pressable style={styles.audioMessage} onPress={() => handlePlayAudio((item as any).mediaUrl)}><Ionicons name="play" size={18} color={mine ? '#04120C' : colors.accent} /><View style={styles.audioWave}><View style={styles.audioLine} /><View style={[styles.audioLine, styles.audioLineLong]} /><View style={styles.audioLine} /></View><Text style={[styles.audioLabel, mine && styles.bubbleTextMine]}>Voice message</Text></Pressable> : null}
-                    {!!(item as any).mediaUrl && (item as any).mediaType === 'gif' ? <Image source={{ uri: (item as any).mediaUrl }} style={styles.messageGif} resizeMode="cover" /> : null}
-                    {!!(item as any).mediaUrl && (item as any).mediaType !== 'audio' && (item as any).mediaType !== 'gif' ? <Image source={{ uri: (item as any).mediaUrl }} style={styles.messageImage} resizeMode="cover" /> : null}
+                    {!!(item as any).mediaUrl && (item as any).mediaType === 'audio' ? <Pressable style={styles.audioMessage} onPress={() => handlePlayAudio(resolveMediaUrl((item as any).mediaUrl))}><Ionicons name="play" size={18} color={mine ? '#04120C' : colors.accent} /><View style={styles.audioWave}><View style={styles.audioLine} /><View style={[styles.audioLine, styles.audioLineLong]} /><View style={styles.audioLine} /></View><Text style={[styles.audioLabel, mine && styles.bubbleTextMine]}>Voice message</Text></Pressable> : null}
+                    {!!(item as any).mediaUrl && (item as any).mediaType === 'gif' ? <Image source={{ uri: resolveMediaUrl((item as any).mediaUrl) }} style={styles.messageGif} resizeMode="cover" /> : null}
+                    {!!(item as any).mediaUrl && (item as any).mediaType !== 'audio' && (item as any).mediaType !== 'gif' ? <Image source={{ uri: resolveMediaUrl((item as any).mediaUrl) }} style={styles.messageImage} resizeMode="cover" /> : null}
                     {!!item.text && <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.text}</Text>}
                   </View>
                   <Text style={[styles.bubbleTime, mine ? styles.bubbleTimeMine : styles.bubbleTimeTheirs]}>
