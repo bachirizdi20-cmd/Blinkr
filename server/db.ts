@@ -4,6 +4,7 @@ import { drizzle } from "drizzle-orm/mysql2";
 import { InsertMediaStatus, InsertReview, InsertUser, InsertUserData, MediaStatus, Review, authTokens, blocks, follows, notifications, reports, reviewComments, reviewLikes, mediaStatuses, reviews, UserData, userData, users, conversations, chatMessages, InsertChatMessage } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { randomBytes, createHash } from "node:crypto";
+import { storageDelete, storageKeyFromUrl } from "./storage";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -163,12 +164,21 @@ export async function createEmailUser(input: {
   return getUserByOpenId(openId);
 }
 
+async function isBlockedEitherWay(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, a: number, b: number) {
+  const rows = await db.select({ id: blocks.id }).from(blocks).where(or(and(eq(blocks.userId, a), eq(blocks.blockedUserId, b)), and(eq(blocks.userId, b), eq(blocks.blockedUserId, a))));
+  return rows.length > 0;
+}
+
 export async function searchUsers(viewerId: number, query: string) {
   const db = await getDb();
   if (!db) return [];
   const rows = await db.select({ id: users.id, name: users.name, username: userData.username, bio: userData.bio, avatarUrl: userData.avatarUrl, isPrivate: userData.isPrivate }).from(users).leftJoin(userData, eq(userData.userId, users.id)).where(not(eq(users.id, viewerId))).limit(50);
+  const blockedRows = await db.select({ userId: blocks.userId, blockedUserId: blocks.blockedUserId }).from(blocks).where(or(eq(blocks.userId, viewerId), eq(blocks.blockedUserId, viewerId)));
+  const blockedIds = new Set(blockedRows.map((row) => (row.userId === viewerId ? row.blockedUserId : row.userId)));
   const needle = query.trim().toLowerCase();
-  return rows.filter((row) => !needle || `${row.username ?? ""} ${row.name ?? ""}`.toLowerCase().includes(needle));
+  return rows
+    .filter((row) => !blockedIds.has(row.id))
+    .filter((row) => !needle || `${row.username ?? ""} ${row.name ?? ""}`.toLowerCase().includes(needle));
 }
 
 export async function searchReviews(viewerId: number, query: string) {
@@ -184,6 +194,7 @@ export async function toggleFollow(followerId: number, followingId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   if (followerId === followingId) throw new Error("Cannot follow yourself");
+  if (await isBlockedEitherWay(db, followerId, followingId)) throw new Error("Unavailable");
   const existing = await db.select().from(follows).where(and(eq(follows.followerId, followerId), eq(follows.followingId, followingId))).limit(1);
   if (existing[0]) {
     await db.delete(follows).where(eq(follows.id, existing[0].id));
@@ -192,6 +203,60 @@ export async function toggleFollow(followerId: number, followingId: number) {
   await db.insert(follows).values({ followerId, followingId });
   await db.insert(notifications).values({ userId: followingId, actorId: followerId, kind: "follow" });
   return { following: true } as const;
+}
+
+export function redactPrivateProfile<
+  T extends { isPrivate: boolean | null; bio: string | null },
+>(
+  profile: T,
+  options: {
+    isFollowing: boolean;
+    isSelf: boolean;
+    followerCount: number;
+    followingCount: number;
+    followsYou: boolean;
+  },
+) {
+  const locked = Boolean(profile.isPrivate) && !options.isFollowing && !options.isSelf;
+  return {
+    ...profile,
+    bio: locked ? null : profile.bio,
+    followerCount: locked ? null : options.followerCount,
+    followingCount: locked ? null : options.followingCount,
+    isFollowing: options.isFollowing,
+    followsYou: options.followsYou,
+    locked,
+  };
+}
+
+export async function getUserProfile(viewerId: number, targetUserId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  if (viewerId !== targetUserId && (await isBlockedEitherWay(db, viewerId, targetUserId))) {
+    return null;
+  }
+
+  const rows = await db.select({ id: users.id, name: users.name, username: userData.username, bio: userData.bio, avatarUrl: userData.avatarUrl, isPrivate: userData.isPrivate }).from(users).leftJoin(userData, eq(userData.userId, users.id)).where(eq(users.id, targetUserId)).limit(1);
+  const profile = rows[0];
+  if (!profile) return null;
+
+  const [followerRows, followingRows, viewerFollowsRow, targetFollowsViewerRow] = await Promise.all([
+    db.select({ id: follows.id }).from(follows).where(eq(follows.followingId, targetUserId)),
+    db.select({ id: follows.id }).from(follows).where(eq(follows.followerId, targetUserId)),
+    db.select().from(follows).where(and(eq(follows.followerId, viewerId), eq(follows.followingId, targetUserId))).limit(1),
+    db.select().from(follows).where(and(eq(follows.followerId, targetUserId), eq(follows.followingId, viewerId))).limit(1),
+  ]);
+
+  const isFollowing = viewerFollowsRow.length > 0;
+  const isSelf = viewerId === targetUserId;
+  return redactPrivateProfile(profile, {
+    isFollowing,
+    isSelf,
+    followerCount: followerRows.length,
+    followingCount: followingRows.length,
+    followsYou: targetFollowsViewerRow.length > 0,
+  });
 }
 
 export async function listFollowingIds(userId: number) {
@@ -210,7 +275,28 @@ export async function listSocialFeed(userId: number) {
   const blockedIds = blocked.map((row) => row.blockedUserId);
   const allowedIds = followingIds.filter((id) => !blockedIds.includes(id));
   if (!allowedIds.length) return [];
-  return db.select({ review: reviews, username: userData.username, displayName: users.name, avatarUrl: userData.avatarUrl }).from(reviews).innerJoin(users, eq(users.id, reviews.userId)).leftJoin(userData, eq(userData.userId, reviews.userId)).where(and(inArray(reviews.userId, allowedIds), or(isNull(userData.isPrivate), eq(userData.isPrivate, false)))).orderBy(desc(reviews.updatedAt)).limit(50);
+  const rows = await db.select({ review: reviews, username: userData.username, displayName: users.name, avatarUrl: userData.avatarUrl }).from(reviews).innerJoin(users, eq(users.id, reviews.userId)).leftJoin(userData, eq(userData.userId, reviews.userId)).where(and(inArray(reviews.userId, allowedIds), or(isNull(userData.isPrivate), eq(userData.isPrivate, false)))).orderBy(desc(reviews.updatedAt)).limit(50);
+  if (!rows.length) return [];
+
+  const reviewIds = rows.map((row) => row.review.id);
+  const [likeRows, commentRows, myLikeRows] = await Promise.all([
+    db.select({ reviewId: reviewLikes.reviewId }).from(reviewLikes).where(inArray(reviewLikes.reviewId, reviewIds)),
+    db.select({ reviewId: reviewComments.reviewId }).from(reviewComments).where(inArray(reviewComments.reviewId, reviewIds)),
+    db.select({ reviewId: reviewLikes.reviewId }).from(reviewLikes).where(and(inArray(reviewLikes.reviewId, reviewIds), eq(reviewLikes.userId, userId))),
+  ]);
+
+  const likeCounts = new Map<number, number>();
+  for (const row of likeRows) likeCounts.set(row.reviewId, (likeCounts.get(row.reviewId) ?? 0) + 1);
+  const commentCounts = new Map<number, number>();
+  for (const row of commentRows) commentCounts.set(row.reviewId, (commentCounts.get(row.reviewId) ?? 0) + 1);
+  const likedByMe = new Set(myLikeRows.map((row) => row.reviewId));
+
+  return rows.map((row) => ({
+    ...row,
+    likeCount: likeCounts.get(row.review.id) ?? 0,
+    commentCount: commentCounts.get(row.review.id) ?? 0,
+    likedByMe: likedByMe.has(row.review.id),
+  }));
 }
 
 export async function toggleReviewLike(userId: number, reviewId: number) {
@@ -390,6 +476,35 @@ export async function deleteMediaStatus(userId: number, mediaType: string, media
 export async function deleteUserAccount(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+
+  // Best-effort: remove the user's avatar from storage before wiping their data.
+  const profile = await db.select({ avatarUrl: userData.avatarUrl }).from(userData).where(eq(userData.userId, userId)).limit(1);
+  const avatarKey = storageKeyFromUrl(profile[0]?.avatarUrl ?? null);
+  if (avatarKey) {
+    try {
+      await storageDelete(avatarKey);
+    } catch (error) {
+      console.error("[Account] Failed to delete avatar during account deletion:", error);
+    }
+  }
+
+  // Conversations this user is part of, so we can also drop their messages.
+  const myConversations = await db.select({ id: conversations.id }).from(conversations).where(or(eq(conversations.participantAId, userId), eq(conversations.participantBId, userId)));
+  const conversationIds = myConversations.map((row) => row.id);
+
+  if (conversationIds.length) {
+    await db.delete(chatMessages).where(inArray(chatMessages.conversationId, conversationIds));
+    await db.delete(conversations).where(inArray(conversations.id, conversationIds));
+  }
+
+  await db.delete(reviewLikes).where(eq(reviewLikes.userId, userId));
+  await db.delete(reviewComments).where(eq(reviewComments.userId, userId));
+  await db.delete(notifications).where(or(eq(notifications.userId, userId), eq(notifications.actorId, userId)));
+  await db.delete(blocks).where(or(eq(blocks.userId, userId), eq(blocks.blockedUserId, userId)));
+  await db.delete(reports).where(eq(reports.reporterId, userId));
+  await db.delete(follows).where(or(eq(follows.followerId, userId), eq(follows.followingId, userId)));
+  await db.delete(authTokens).where(eq(authTokens.userId, userId));
+
   await db.delete(reviews).where(eq(reviews.userId, userId));
   await db.delete(mediaStatuses).where(eq(mediaStatuses.userId, userId));
   await db.delete(userData).where(eq(userData.userId, userId));
@@ -405,6 +520,7 @@ export async function getOrCreateConversation(userId: number, otherUserId: numbe
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   if (userId === otherUserId) throw new Error("Cannot create a conversation with yourself");
+  if (await isBlockedEitherWay(db, userId, otherUserId)) throw new Error("Unavailable");
   const pair = orderedPair(userId, otherUserId);
   const existing = await db.select().from(conversations).where(and(eq(conversations.participantAId, pair.participantAId), eq(conversations.participantBId, pair.participantBId))).limit(1);
   if (existing[0]) return existing[0];

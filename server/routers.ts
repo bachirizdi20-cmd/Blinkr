@@ -8,7 +8,7 @@ import * as db from "./db";
 import { ENV } from "./_core/env";
 import { sdk } from "./_core/sdk";
 import { hashPassword, normalizeEmail, verifyPassword } from "./password";
-import { storagePut } from "./storage";
+import { storagePut, storageDelete, storageKeyFromUrl } from "./storage";
 import { assertLoginAllowed, clearLoginFailures, recordLoginFailure } from "./rate-limit";
 import { createAuthToken, consumeAuthToken, markEmailVerified, updateUserPassword } from "./db";
 import { sendAuthEmail } from "./email";
@@ -183,7 +183,21 @@ export const appRouter = router({
         const [, contentType, encoded] = match;
         const data = Buffer.from(encoded, "base64");
         if (data.length > 5 * 1024 * 1024) throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "Image must be smaller than 5 MB" });
+
+        // Remove the previous avatar (if any) so old files don't pile up in storage.
+        const previous = await db.getUserData(ctx.user.id);
+        const previousKey = storageKeyFromUrl(previous?.avatarUrl ?? null);
+
         const stored = await storagePut(`avatars/user-${ctx.user.id}`, data, contentType);
+
+        if (previousKey && previousKey !== stored.key) {
+          try {
+            await storageDelete(previousKey);
+          } catch (error) {
+            console.error("[Avatar] Failed to delete previous avatar:", error);
+          }
+        }
+
         return stored;
       }),
     updateProfile: protectedProcedure
@@ -234,6 +248,7 @@ export const appRouter = router({
   }),
   social: router({
     users: protectedProcedure.input(z.object({ query: z.string().trim().max(80).default("") })).query(({ ctx, input }) => db.searchUsers(ctx.user.id, input.query)),
+    profile: protectedProcedure.input(z.object({ userId: z.number().int().positive() })).query(({ ctx, input }) => db.getUserProfile(ctx.user.id, input.userId)),
     searchReviews: protectedProcedure.input(z.object({ query: z.string().trim().max(120).default("") })).query(({ ctx, input }) => db.searchReviews(ctx.user.id, input.query)),
     following: protectedProcedure.query(({ ctx }) => db.listFollowingIds(ctx.user.id)),
     feed: protectedProcedure.query(({ ctx }) => db.listSocialFeed(ctx.user.id)),

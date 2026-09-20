@@ -30,10 +30,8 @@ import {
 } from '../lib/tmdb';
 import { NormalizedItem } from '../types/tmdb';
 import { useMetadata } from '../context/MetadataContext';
-import { useSocial } from '../context/SocialContext';
 import { useAuth } from '../hooks/use-auth';
 import { trpc } from '../lib/trpc';
-import { SocialReview } from '../types/social';
 import { colors, fontSizes, spacing, radius } from '../lib/theme';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
@@ -276,7 +274,7 @@ export default function HomeScreen() {
           </ScrollView>
         )}
 
-        <SocialReviewFeed onOpenDetail={(review) => navigation.navigate('Detail', { mediaType: review.mediaType, id: review.mediaId })} />
+        <SocialReviewFeed onOpenDetail={(review) => navigation.navigate('Detail', { mediaType: review.mediaType, id: review.mediaId })} enabled={Boolean(user)} />
 
         {error ? (
           <ApiErrorState message={error} onRetry={load} />
@@ -300,22 +298,21 @@ export default function HomeScreen() {
 }
 
 
-function SocialReviewFeed({ onOpenDetail }: { onOpenDetail: (review: SocialReview) => void }) {
-  const { reviews, users, isFollowing, toggleReviewLike, addReviewComment } = useSocial();
-  const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
-  const [commentText, setCommentText] = useState('');
-  const [showAllReviews, setShowAllReviews] = useState(false);
-  const allFollowedReviews = reviews
-    .filter((review) => isFollowing(review.userId))
-    .sort((a, b) => b.createdAt - a.createdAt);
-  const followedReviews = showAllReviews ? allFollowedReviews : allFollowedReviews.slice(0, 3);
+type FeedRow = {
+  review: { id: number; userId: number; mediaType: 'movie' | 'tv'; mediaId: number; title: string; posterPath: string | null; rating: number; review: string; createdAt: string | Date };
+  username: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  likeCount: number;
+  commentCount: number;
+  likedByMe: boolean;
+};
 
-  const submitComment = (reviewId: string) => {
-    if (!commentText.trim()) return;
-    addReviewComment(reviewId, commentText);
-    setCommentText('');
-    setActiveCommentId(null);
-  };
+function SocialReviewFeed({ onOpenDetail, enabled }: { onOpenDetail: (review: { mediaType: 'movie' | 'tv'; mediaId: number }) => void; enabled: boolean }) {
+  const [showAllReviews, setShowAllReviews] = useState(false);
+  const feedQuery = trpc.social.feed.useQuery(undefined, { enabled });
+  const rows = (feedQuery.data ?? []) as FeedRow[];
+  const visibleRows = showAllReviews ? rows : rows.slice(0, 3);
 
   return (
     <View style={styles.socialSection}>
@@ -324,81 +321,124 @@ function SocialReviewFeed({ onOpenDetail }: { onOpenDetail: (review: SocialRevie
           <Text style={styles.socialTitle}>From people you follow</Text>
           <Text style={styles.socialSubtitle}>Fresh thoughts from your circle</Text>
         </View>
-        {allFollowedReviews.length > 3 ? (
+        {rows.length > 3 ? (
           <Pressable style={styles.socialMoreButton} onPress={() => setShowAllReviews((current) => !current)} accessibilityRole="button">
             <Text style={styles.socialMoreText}>{showAllReviews ? 'Show less' : 'View more'}</Text>
             <Ionicons name={showAllReviews ? 'chevron-up' : 'chevron-down'} size={15} color={colors.accent} />
           </Pressable>
         ) : <Ionicons name="people-outline" size={19} color={colors.accent} />}
       </View>
-      {followedReviews.length === 0 ? (
+      {feedQuery.isError ? (
+        <ApiErrorState message="Couldn't load your feed." onRetry={() => feedQuery.refetch()} />
+      ) : rows.length === 0 ? (
         <View style={styles.socialEmpty}>
           <Ionicons name="chatbubble-ellipses-outline" size={24} color={colors.textFaint} />
           <Text style={styles.socialEmptyTitle}>No reviews from your circle yet</Text>
           <Text style={styles.socialEmptyText}>Follow more people to see their latest thoughts here.</Text>
         </View>
       ) : (
-        followedReviews.map((review, index) => {
-          const user = users.find((item) => item.id === review.userId);
-          const poster = posterUrl(review.posterPath, 'w342');
-          return (
-            <Animated.View
-              key={review.id}
-              style={styles.socialCard}
-              entering={index >= 3 ? FadeInDown.duration(240).withInitialValues({ opacity: 0, transform: [{ translateY: 14 }] }) : undefined}
-              exiting={index >= 3 ? FadeOutUp.duration(180) : undefined}
-            >
-              <View style={styles.socialCardHeader}>
-                <View style={[styles.socialAvatar, { backgroundColor: user?.avatarColor ?? colors.accent }]}>
-                  <Text style={styles.socialAvatarText}>{user?.displayName?.slice(0, 1) ?? '?'}</Text>
-                </View>
-                <View style={styles.socialAuthorBlock}>
-                  <Text style={styles.socialAuthor}>{user?.displayName ?? 'A friend'}</Text>
-                  <Text style={styles.socialHandle}>@{user?.username ?? 'friend'} · {formatSocialTime(review.createdAt)}</Text>
-                </View>
-                <View style={styles.socialRating}><Ionicons name="star" size={13} color={colors.gold} /><Text style={styles.socialRatingText}>{review.rating}/10</Text></View>
-              </View>
-              <Pressable style={styles.socialMediaRow} onPress={() => onOpenDetail(review)}>
-                {poster ? <Image source={{ uri: poster }} style={styles.socialPoster} contentFit="cover" /> : <View style={[styles.socialPoster, styles.socialPosterFallback]}><Ionicons name="film-outline" size={20} color={colors.textFaint} /></View>}
-                <View style={styles.socialMediaInfo}><Text style={styles.socialMediaTitle} numberOfLines={2}>{review.title}</Text><Text style={styles.socialMediaHint}>Tap to open details</Text></View>
-              </Pressable>
-              <Text style={styles.socialReviewText}>{review.text}</Text>
-              <View style={styles.socialActions}>
-                <Pressable style={styles.socialAction} onPress={() => toggleReviewLike(review.id)} accessibilityLabel={review.likedByMe ? 'Unlike review' : 'Like review'}>
-                  <Ionicons name={review.likedByMe ? 'heart' : 'heart-outline'} size={20} color={review.likedByMe ? colors.danger : colors.textDim} />
-                  <Text style={[styles.socialActionText, review.likedByMe && { color: colors.danger }]}>{review.likes}</Text>
-                </Pressable>
-                <Pressable style={styles.socialAction} onPress={() => setActiveCommentId(activeCommentId === review.id ? null : review.id)} accessibilityLabel="Comment on review">
-                  <Ionicons name="chatbubble-outline" size={19} color={colors.textDim} />
-                  <Text style={styles.socialActionText}>{review.comments.length}</Text>
-                </Pressable>
-              </View>
-              {review.comments.slice(-2).map((comment) => (
-                <View key={comment.id} style={styles.commentRow}><Text style={styles.commentAuthor}>{comment.authorName}</Text><Text style={styles.commentBody}>{comment.text}</Text></View>
-              ))}
-              {activeCommentId === review.id && (
-                <View style={styles.commentComposer}>
-                  <TextInput
-                    value={commentText}
-                    onChangeText={setCommentText}
-                    placeholder="Write a comment..."
-                    placeholderTextColor={colors.textFaint}
-                    selectionColor={colors.accent}
-                    cursorColor={colors.accent}
-                    style={styles.commentInput}
-                    returnKeyType="send"
-                    onSubmitEditing={() => submitComment(review.id)}
-                  />
-                  <Pressable style={styles.commentSend} onPress={() => submitComment(review.id)} accessibilityLabel="Post comment">
-                    <Ionicons name="arrow-up" size={16} color={colors.bg} />
-                  </Pressable>
-                </View>
-              )}
-            </Animated.View>
-          );
-        })
+        visibleRows.map((row, index) => (
+          <FeedReviewCard
+            key={row.review.id}
+            row={row}
+            index={index}
+            onOpenDetail={onOpenDetail}
+            onChanged={() => feedQuery.refetch()}
+          />
+        ))
       )}
     </View>
+  );
+}
+
+function FeedReviewCard({
+  row,
+  index,
+  onOpenDetail,
+  onChanged,
+}: {
+  row: FeedRow;
+  index: number;
+  onOpenDetail: (review: { mediaType: 'movie' | 'tv'; mediaId: number }) => void;
+  onChanged: () => void;
+}) {
+  const { review, username, displayName, avatarUrl, likeCount, commentCount, likedByMe } = row;
+  const [commentOpen, setCommentOpen] = useState(false);
+  const [commentText, setCommentText] = useState('');
+  const commentsQuery = trpc.social.comments.useQuery({ reviewId: review.id }, { enabled: commentOpen });
+  const toggleLikeMutation = trpc.social.toggleLike.useMutation({ onSuccess: onChanged });
+  const addCommentMutation = trpc.social.addComment.useMutation({
+    onSuccess: () => { setCommentText(''); commentsQuery.refetch(); onChanged(); },
+  });
+
+  const submitComment = () => {
+    if (!commentText.trim()) return;
+    addCommentMutation.mutate({ reviewId: review.id, text: commentText.trim() });
+  };
+
+  const poster = posterUrl(review.posterPath, 'w342');
+  const createdAtMs = new Date(review.createdAt).getTime();
+
+  return (
+    <Animated.View
+      style={styles.socialCard}
+      entering={index >= 3 ? FadeInDown.duration(240).withInitialValues({ opacity: 0, transform: [{ translateY: 14 }] }) : undefined}
+      exiting={index >= 3 ? FadeOutUp.duration(180) : undefined}
+    >
+      <View style={styles.socialCardHeader}>
+        <View style={[styles.socialAvatar, { backgroundColor: colors.accent }]}>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
+          ) : (
+            <Text style={styles.socialAvatarText}>{(displayName ?? username ?? '?').slice(0, 1)}</Text>
+          )}
+        </View>
+        <View style={styles.socialAuthorBlock}>
+          <Text style={styles.socialAuthor}>{displayName ?? username ?? 'A friend'}</Text>
+          <Text style={styles.socialHandle}>@{username ?? 'friend'} · {formatSocialTime(createdAtMs)}</Text>
+        </View>
+        <View style={styles.socialRating}><Ionicons name="star" size={13} color={colors.gold} /><Text style={styles.socialRatingText}>{review.rating}/10</Text></View>
+      </View>
+      <Pressable style={styles.socialMediaRow} onPress={() => onOpenDetail({ mediaType: review.mediaType, mediaId: review.mediaId })}>
+        {poster ? <Image source={{ uri: poster }} style={styles.socialPoster} contentFit="cover" /> : <View style={[styles.socialPoster, styles.socialPosterFallback]}><Ionicons name="film-outline" size={20} color={colors.textFaint} /></View>}
+        <View style={styles.socialMediaInfo}><Text style={styles.socialMediaTitle} numberOfLines={2}>{review.title}</Text><Text style={styles.socialMediaHint}>Tap to open details</Text></View>
+      </Pressable>
+      <Text style={styles.socialReviewText}>{review.review}</Text>
+      <View style={styles.socialActions}>
+        <Pressable style={styles.socialAction} onPress={() => toggleLikeMutation.mutate({ reviewId: review.id })} accessibilityLabel={likedByMe ? 'Unlike review' : 'Like review'}>
+          <Ionicons name={likedByMe ? 'heart' : 'heart-outline'} size={20} color={likedByMe ? colors.danger : colors.textDim} />
+          <Text style={[styles.socialActionText, likedByMe && { color: colors.danger }]}>{likeCount}</Text>
+        </Pressable>
+        <Pressable style={styles.socialAction} onPress={() => setCommentOpen((current) => !current)} accessibilityLabel="Comment on review">
+          <Ionicons name="chatbubble-outline" size={19} color={colors.textDim} />
+          <Text style={styles.socialActionText}>{commentCount}</Text>
+        </Pressable>
+      </View>
+      {commentOpen && (commentsQuery.data ?? []).slice(0, 2).map((item) => (
+        <View key={item.comment.id} style={styles.commentRow}>
+          <Text style={styles.commentAuthor}>{item.name ?? item.username ?? 'Someone'}</Text>
+          <Text style={styles.commentBody}>{item.comment.text}</Text>
+        </View>
+      ))}
+      {commentOpen && (
+        <View style={styles.commentComposer}>
+          <TextInput
+            value={commentText}
+            onChangeText={setCommentText}
+            placeholder="Write a comment..."
+            placeholderTextColor={colors.textFaint}
+            selectionColor={colors.accent}
+            cursorColor={colors.accent}
+            style={styles.commentInput}
+            returnKeyType="send"
+            onSubmitEditing={submitComment}
+          />
+          <Pressable style={styles.commentSend} onPress={submitComment} accessibilityLabel="Post comment">
+            <Ionicons name="arrow-up" size={16} color={colors.bg} />
+          </Pressable>
+        </View>
+      )}
+    </Animated.View>
   );
 }
 

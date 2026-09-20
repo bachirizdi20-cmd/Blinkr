@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
 import { colors } from '../lib/theme';
 
 interface Props {
@@ -7,9 +8,10 @@ interface Props {
   color: string;
   size?: number;
   ring?: boolean;
+  imageUrl?: string;
 }
 
-export default function UserAvatar({ name, color, size = 48, ring = false }: Props) {
+export default function UserAvatar({ name, color, size = 48, ring = false, imageUrl }: Props) {
   const initials = name
     .split(' ')
     .map((p) => p[0])
@@ -28,10 +30,15 @@ export default function UserAvatar({ name, color, size = 48, ring = false }: Pro
           backgroundColor: color,
           borderWidth: ring ? 2 : 0,
           borderColor: colors.accent,
+          overflow: 'hidden',
         },
       ]}
     >
-      <Text style={[styles.text, { fontSize: size * 0.36 }]}>{initials}</Text>
+      {imageUrl ? (
+        <Image source={{ uri: imageUrl }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
+      ) : (
+        <Text style={[styles.text, { fontSize: size * 0.36 }]}>{initials}</Text>
+      )}
     </View>
   );
 }
