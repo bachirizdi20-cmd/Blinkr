@@ -25,11 +25,18 @@ function FirstLaunchGate() {
 
   if (!user) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", padding: spacing.xl }}>
-        <Text style={{ color: colors.text, fontSize: 32, fontWeight: "900", letterSpacing: -1 }}>Welcome to Blinkr</Text>
-        <Text style={{ color: colors.textDim, fontSize: fontSizes.md, textAlign: "center", lineHeight: 22, marginTop: spacing.sm, maxWidth: 360 }}>Sign in to save your watchlist, reviews, and social activity across devices.</Text>
-        {error ? <Text style={{ color: colors.danger, fontSize: fontSizes.sm, textAlign: "center", marginTop: spacing.md }}>{error.message}</Text> : null}
-        <AuthPanel onAuthenticated={refresh} />
+      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", padding: spacing.lg }}>
+        <View style={{ width: "100%", maxWidth: 410, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.border, borderRadius: 18, paddingHorizontal: spacing.xl, paddingVertical: spacing.xxl }}>
+          <View style={{ alignItems: "center", marginBottom: spacing.lg }}>
+            <View style={{ width: 62, height: 62, borderRadius: 18, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center", marginBottom: spacing.md }}>
+              <Text style={{ color: colors.bg, fontSize: 34, fontWeight: "900", letterSpacing: -2 }}>B</Text>
+            </View>
+            <Text style={{ color: colors.text, fontSize: 30, fontWeight: "900", letterSpacing: -1 }}>Blinkr</Text>
+            <Text style={{ color: colors.textDim, fontSize: fontSizes.sm, textAlign: "center", lineHeight: 20, marginTop: spacing.xs, maxWidth: 300 }}>Discover what to watch. Share what you love.</Text>
+          </View>
+          {error ? <Text style={{ color: colors.danger, fontSize: fontSizes.sm, textAlign: "center", marginBottom: spacing.md }}>{error.message}</Text> : null}
+          <AuthPanel onAuthenticated={refresh} />
+        </View>
         <Text style={{ color: colors.textFaint, fontSize: 12, marginTop: spacing.md }}>Secure authentication • Your data stays private</Text>
       </View>
     );

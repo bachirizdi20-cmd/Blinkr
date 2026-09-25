@@ -96,6 +96,8 @@ export function AuthPanel({ onAuthenticated }: Props) {
 
   return (
     <View style={styles.container}>
+      <Text style={styles.modeTitle}>{mode === "register" ? "Create an account" : isForgot ? "Reset your password" : "Sign in"}</Text>
+      <Text style={styles.modeSubtitle}>{isForgot ? "Enter your email and we’ll send you a secure reset link." : mode === "register" ? "Join Blinkr and keep your movie world in one place." : "Sign in to continue to your Blinkr account."}</Text>
       {mode === "register" ? <>
         <Text style={styles.label}>Name</Text>
         <TextInput value={name} onChangeText={(value) => { setName(value); setFieldErrors((current) => ({ ...current, name: undefined })); }} placeholder="Your name" placeholderTextColor={colors.textFaint} autoCapitalize="words" style={inputStyle("name")} editable={!busy} />
@@ -140,10 +142,12 @@ export function AuthPanel({ onAuthenticated }: Props) {
 
 const styles = {
   container: { width: "100%" as const, maxWidth: 380 },
+  modeTitle: { color: colors.text, fontSize: fontSizes.xl, fontWeight: "900" as const, textAlign: "center" as const, marginBottom: 3 },
+  modeSubtitle: { color: colors.textDim, fontSize: fontSizes.sm, lineHeight: 19, textAlign: "center" as const, marginBottom: spacing.sm },
   label: { color: colors.textDim, fontSize: 12, fontWeight: "800" as const, marginTop: spacing.sm + 2, marginBottom: 2 },
-  input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, color: colors.text, paddingHorizontal: spacing.md, paddingVertical: 13, fontSize: fontSizes.md },
+  input: { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.borderLight, borderRadius: 9, color: colors.text, paddingHorizontal: spacing.md, paddingVertical: 13, fontSize: fontSizes.md },
   inputInvalid: { borderColor: colors.danger, borderWidth: 1.5 },
-  passwordRow: { flexDirection: "row" as const, alignItems: "center" as const, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md },
+  passwordRow: { flexDirection: "row" as const, alignItems: "center" as const, backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.borderLight, borderRadius: 9 },
   passwordInput: { flex: 1, color: colors.text, paddingHorizontal: spacing.md, paddingVertical: 13, fontSize: fontSizes.md },
   eyeButton: { minWidth: 48, alignItems: "center" as const, justifyContent: "center" as const, alignSelf: "stretch" as const },
   fieldError: { color: colors.danger, fontSize: 12, lineHeight: 17, marginTop: 4 },
@@ -151,14 +155,14 @@ const styles = {
   errorText: { flex: 1, color: colors.danger, fontSize: fontSizes.sm, lineHeight: 20 },
   noticeBox: { flexDirection: "row" as const, alignItems: "flex-start" as const, gap: 8, backgroundColor: "rgba(53, 211, 153, 0.10)", borderWidth: 1, borderColor: "rgba(53, 211, 153, 0.30)", borderRadius: radius.md, padding: spacing.sm, marginTop: spacing.md },
   noticeText: { flex: 1, color: colors.accent, fontSize: fontSizes.sm, lineHeight: 20 },
-  primary: { marginTop: spacing.md, backgroundColor: colors.accent, borderRadius: radius.pill, paddingVertical: 14, alignItems: "center" as const, justifyContent: "center" as const, minHeight: 48 },
+  primary: { marginTop: spacing.lg, backgroundColor: colors.accent, borderRadius: 9, paddingVertical: 14, alignItems: "center" as const, justifyContent: "center" as const, minHeight: 48 },
   primaryText: { color: colors.bg, fontSize: fontSizes.md, fontWeight: "900" as const },
   switch: { alignItems: "center" as const, paddingVertical: spacing.md },
   switchText: { color: colors.accent, fontSize: fontSizes.sm, fontWeight: "700" as const },
   divider: { flexDirection: "row" as const, alignItems: "center" as const, gap: spacing.sm, marginVertical: spacing.sm },
   line: { flex: 1, height: 1, backgroundColor: colors.border },
   or: { color: colors.textFaint, fontSize: 11, fontWeight: "800" as const },
-  oauth: { minHeight: 46, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: spacing.sm },
+  oauth: { minHeight: 46, borderRadius: 9, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderLight, flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: spacing.sm },
   oauthText: { color: colors.text, fontSize: fontSizes.sm, fontWeight: "800" as const },
   pressed: { opacity: 0.82 },
   disabled: { opacity: 0.65 },
