@@ -69,6 +69,17 @@ export const follows = mysqlTable("follows", {
   pairIdx: uniqueIndex("follows_pair_idx").on(table.followerId, table.followingId),
 }));
 
+export const followRequests = mysqlTable("follow_requests", {
+  id: int("id").autoincrement().primaryKey(),
+  requesterId: int("requesterId").notNull(),
+  targetId: int("targetId").notNull(),
+  status: mysqlEnum("status", ["pending", "accepted", "rejected"]).notNull().default("pending"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  pairIdx: uniqueIndex("follow_requests_pair_idx").on(table.requesterId, table.targetId),
+}));
+
 export const reviewLikes = mysqlTable("review_likes", {
   id: int("id").autoincrement().primaryKey(),
   reviewId: int("reviewId").notNull(),

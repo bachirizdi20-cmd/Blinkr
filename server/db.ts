@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, desc, isNull, gt, or, not, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertMediaStatus, InsertReview, InsertUser, InsertUserData, MediaStatus, Review, authTokens, blocks, follows, notifications, reports, reviewComments, reviewLikes, mediaStatuses, reviews, UserData, userData, users, conversations, chatMessages, InsertChatMessage } from "../drizzle/schema";
+import { InsertMediaStatus, InsertReview, InsertUser, InsertUserData, MediaStatus, Review, authTokens, blocks, follows, followRequests, notifications, reports, reviewComments, reviewLikes, mediaStatuses, reviews, UserData, userData, users, conversations, chatMessages, InsertChatMessage } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { randomBytes, createHash } from "node:crypto";
 import { storageDelete, storageKeyFromUrl } from "./storage";
@@ -175,19 +175,25 @@ export async function searchUsers(viewerId: number, query: string) {
   const rows = await db.select({ id: users.id, name: users.name, username: userData.username, bio: userData.bio, avatarUrl: userData.avatarUrl, isPrivate: userData.isPrivate }).from(users).leftJoin(userData, eq(userData.userId, users.id)).where(not(eq(users.id, viewerId))).limit(50);
   const blockedRows = await db.select({ userId: blocks.userId, blockedUserId: blocks.blockedUserId }).from(blocks).where(or(eq(blocks.userId, viewerId), eq(blocks.blockedUserId, viewerId)));
   const blockedIds = new Set(blockedRows.map((row) => (row.userId === viewerId ? row.blockedUserId : row.userId)));
+  const followingRows = await db.select({ followingId: follows.followingId }).from(follows).where(eq(follows.followerId, viewerId));
+  const followingIds = new Set(followingRows.map((row) => row.followingId));
   const needle = query.trim().toLowerCase();
   return rows
     .filter((row) => !blockedIds.has(row.id))
-    .filter((row) => !needle || `${row.username ?? ""} ${row.name ?? ""}`.toLowerCase().includes(needle));
+    .filter((row) => !needle || `${row.username ?? ""} ${row.name ?? ""}`.toLowerCase().includes(needle))
+    .map((row) => row.isPrivate && !followingIds.has(row.id) ? { ...row, bio: null, avatarUrl: null } : row);
 }
 
 export async function searchReviews(viewerId: number, query: string) {
   const db = await getDb();
   if (!db) return [];
   const rows = await db.select({ review: reviews, username: userData.username, displayName: users.name, avatarUrl: userData.avatarUrl, isPrivate: userData.isPrivate }).from(reviews).innerJoin(users, eq(users.id, reviews.userId)).leftJoin(userData, eq(userData.userId, reviews.userId)).where(or(isNull(userData.isPrivate), eq(userData.isPrivate, false), eq(reviews.userId, viewerId))).orderBy(desc(reviews.updatedAt)).limit(100);
+  const blockedRows = await db.select({ userId: blocks.userId, blockedUserId: blocks.blockedUserId }).from(blocks).where(or(eq(blocks.userId, viewerId), eq(blocks.blockedUserId, viewerId)));
+  const blockedIds = new Set(blockedRows.map((row) => (row.userId === viewerId ? row.blockedUserId : row.userId)));
   const needle = query.trim().toLowerCase();
-  if (!needle) return rows.slice(0, 30);
-  return rows.filter((row) => `${row.review.title} ${row.review.review} ${row.username ?? ""} ${row.displayName ?? ""}`.toLowerCase().includes(needle)).slice(0, 50);
+  const visibleRows = rows.filter((row) => !blockedIds.has(row.review.userId));
+  if (!needle) return visibleRows.slice(0, 30);
+  return visibleRows.filter((row) => `${row.review.title} ${row.review.review} ${row.username ?? ""} ${row.displayName ?? ""}`.toLowerCase().includes(needle)).slice(0, 50);
 }
 
 export async function toggleFollow(followerId: number, followingId: number) {
@@ -198,11 +204,19 @@ export async function toggleFollow(followerId: number, followingId: number) {
   const existing = await db.select().from(follows).where(and(eq(follows.followerId, followerId), eq(follows.followingId, followingId))).limit(1);
   if (existing[0]) {
     await db.delete(follows).where(eq(follows.id, existing[0].id));
-    return { following: false } as const;
+    return { following: false, requested: false } as const;
+  }
+  const target = await db.select({ isPrivate: userData.isPrivate }).from(userData).where(eq(userData.userId, followingId)).limit(1);
+  if (target[0]?.isPrivate) {
+    const request = await db.select().from(followRequests).where(and(eq(followRequests.requesterId, followerId), eq(followRequests.targetId, followingId))).limit(1);
+    if (request[0]?.status === "pending") return { following: false, requested: true } as const;
+    await db.insert(followRequests).values({ requesterId: followerId, targetId: followingId, status: "pending" }).onDuplicateKeyUpdate({ set: { status: "pending" } });
+    await db.insert(notifications).values({ userId: followingId, actorId: followerId, kind: "follow" });
+    return { following: false, requested: true } as const;
   }
   await db.insert(follows).values({ followerId, followingId });
   await db.insert(notifications).values({ userId: followingId, actorId: followerId, kind: "follow" });
-  return { following: true } as const;
+  return { following: true, requested: false } as const;
 }
 
 export function redactPrivateProfile<
@@ -215,6 +229,7 @@ export function redactPrivateProfile<
     followerCount: number;
     followingCount: number;
     followsYou: boolean;
+    followRequested?: boolean;
   },
 ) {
   const locked = Boolean(profile.isPrivate) && !options.isFollowing && !options.isSelf;
@@ -225,6 +240,7 @@ export function redactPrivateProfile<
     followingCount: locked ? null : options.followingCount,
     isFollowing: options.isFollowing,
     followsYou: options.followsYou,
+    followRequested: options.followRequested ?? false,
     locked,
   };
 }
@@ -241,11 +257,12 @@ export async function getUserProfile(viewerId: number, targetUserId: number) {
   const profile = rows[0];
   if (!profile) return null;
 
-  const [followerRows, followingRows, viewerFollowsRow, targetFollowsViewerRow] = await Promise.all([
+  const [followerRows, followingRows, viewerFollowsRow, targetFollowsViewerRow, requestRows] = await Promise.all([
     db.select({ id: follows.id }).from(follows).where(eq(follows.followingId, targetUserId)),
     db.select({ id: follows.id }).from(follows).where(eq(follows.followerId, targetUserId)),
     db.select().from(follows).where(and(eq(follows.followerId, viewerId), eq(follows.followingId, targetUserId))).limit(1),
     db.select().from(follows).where(and(eq(follows.followerId, targetUserId), eq(follows.followingId, viewerId))).limit(1),
+    db.select({ id: followRequests.id }).from(followRequests).where(and(eq(followRequests.requesterId, viewerId), eq(followRequests.targetId, targetUserId), eq(followRequests.status, "pending"))).limit(1),
   ]);
 
   const isFollowing = viewerFollowsRow.length > 0;
@@ -256,6 +273,7 @@ export async function getUserProfile(viewerId: number, targetUserId: number) {
     followerCount: followerRows.length,
     followingCount: followingRows.length,
     followsYou: targetFollowsViewerRow.length > 0,
+    followRequested: requestRows.length > 0,
   });
 }
 
@@ -271,8 +289,8 @@ export async function listSocialFeed(userId: number) {
   if (!db) return [];
   const followingIds = await listFollowingIds(userId);
   if (!followingIds.length) return [];
-  const blocked = await db.select({ blockedUserId: blocks.blockedUserId }).from(blocks).where(eq(blocks.userId, userId));
-  const blockedIds = blocked.map((row) => row.blockedUserId);
+  const blocked = await db.select({ userId: blocks.userId, blockedUserId: blocks.blockedUserId }).from(blocks).where(or(eq(blocks.userId, userId), eq(blocks.blockedUserId, userId)));
+  const blockedIds = blocked.map((row) => row.userId === userId ? row.blockedUserId : row.userId);
   const allowedIds = followingIds.filter((id) => !blockedIds.includes(id));
   if (!allowedIds.length) return [];
   const rows = await db.select({ review: reviews, username: userData.username, displayName: users.name, avatarUrl: userData.avatarUrl }).from(reviews).innerJoin(users, eq(users.id, reviews.userId)).leftJoin(userData, eq(userData.userId, reviews.userId)).where(and(inArray(reviews.userId, allowedIds), or(isNull(userData.isPrivate), eq(userData.isPrivate, false)))).orderBy(desc(reviews.updatedAt)).limit(50);
@@ -304,6 +322,7 @@ export async function toggleReviewLike(userId: number, reviewId: number) {
   if (!db) throw new Error("Database not available");
   const review = (await db.select().from(reviews).where(eq(reviews.id, reviewId)).limit(1))[0];
   if (!review) throw new Error("Review not found");
+  if (!(await canViewReview(db, userId, review))) throw new Error("Review unavailable");
   const existing = await db.select().from(reviewLikes).where(and(eq(reviewLikes.reviewId, reviewId), eq(reviewLikes.userId, userId))).limit(1);
   if (existing[0]) {
     await db.delete(reviewLikes).where(eq(reviewLikes.id, existing[0].id));
@@ -319,14 +338,17 @@ export async function addReviewComment(userId: number, reviewId: number, text: s
   if (!db) throw new Error("Database not available");
   const review = (await db.select().from(reviews).where(eq(reviews.id, reviewId)).limit(1))[0];
   if (!review) throw new Error("Review not found");
+  if (!(await canViewReview(db, userId, review))) throw new Error("Review unavailable");
   await db.insert(reviewComments).values({ reviewId, userId, text });
   if (review.userId !== userId) await db.insert(notifications).values({ userId: review.userId, actorId: userId, kind: "comment", reviewId });
   return { success: true } as const;
 }
 
-export async function listReviewComments(reviewId: number) {
+export async function listReviewComments(viewerId: number, reviewId: number) {
   const db = await getDb();
   if (!db) return [];
+  const review = (await db.select().from(reviews).where(eq(reviews.id, reviewId)).limit(1))[0];
+  if (!review || !(await canViewReview(db, viewerId, review))) return [];
   return db.select({ comment: reviewComments, name: users.name, username: userData.username }).from(reviewComments).innerJoin(users, eq(users.id, reviewComments.userId)).leftJoin(userData, eq(userData.userId, reviewComments.userId)).where(eq(reviewComments.reviewId, reviewId)).orderBy(desc(reviewComments.createdAt)).limit(100);
 }
 
@@ -371,8 +393,47 @@ export async function markNotificationsRead(userId: number) {
 export async function addBlock(userId: number, blockedUserId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  if (userId === blockedUserId) throw new Error("Cannot block yourself");
   await db.insert(blocks).values({ userId, blockedUserId }).onDuplicateKeyUpdate({ set: { blockedUserId } });
   await db.delete(follows).where(or(and(eq(follows.followerId, userId), eq(follows.followingId, blockedUserId)), and(eq(follows.followerId, blockedUserId), eq(follows.followingId, userId))));
+  return { success: true } as const;
+}
+
+export async function removeBlock(userId: number, blockedUserId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(blocks).where(and(eq(blocks.userId, userId), eq(blocks.blockedUserId, blockedUserId)));
+  return { success: true } as const;
+}
+
+export async function listFollowRequests(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ request: followRequests, name: users.name, username: userData.username, avatarUrl: userData.avatarUrl })
+    .from(followRequests)
+    .innerJoin(users, eq(users.id, followRequests.requesterId))
+    .leftJoin(userData, eq(userData.userId, followRequests.requesterId))
+    .where(and(eq(followRequests.targetId, userId), eq(followRequests.status, "pending")))
+    .orderBy(desc(followRequests.createdAt));
+}
+
+export async function respondToFollowRequest(userId: number, requesterId: number, accept: boolean) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const request = (await db.select().from(followRequests).where(and(eq(followRequests.requesterId, requesterId), eq(followRequests.targetId, userId), eq(followRequests.status, "pending"))).limit(1))[0];
+  if (!request) throw new Error("Follow request not found");
+  if (accept) {
+    await db.insert(follows).values({ followerId: requesterId, followingId: userId }).onDuplicateKeyUpdate({ set: { followingId: userId } });
+    await db.insert(notifications).values({ userId: requesterId, actorId: userId, kind: "follow" });
+  }
+  await db.update(followRequests).set({ status: accept ? "accepted" : "rejected" }).where(eq(followRequests.id, request.id));
+  return { accepted: accept } as const;
+}
+
+export async function cancelFollowRequest(requesterId: number, targetId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(followRequests).where(and(eq(followRequests.requesterId, requesterId), eq(followRequests.targetId, targetId), eq(followRequests.status, "pending")));
   return { success: true } as const;
 }
 
@@ -381,6 +442,15 @@ export async function createReport(input: { reporterId: number; targetType: stri
   if (!db) throw new Error("Database not available");
   await db.insert(reports).values(input);
   return { success: true } as const;
+}
+
+async function canViewReview(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, viewerId: number, review: Review) {
+  if (viewerId === review.userId) return true;
+  if (await isBlockedEitherWay(db, viewerId, review.userId)) return false;
+  const ownerData = await db.select({ isPrivate: userData.isPrivate }).from(userData).where(eq(userData.userId, review.userId)).limit(1);
+  if (!ownerData[0]?.isPrivate) return true;
+  const follow = await db.select({ id: follows.id }).from(follows).where(and(eq(follows.followerId, viewerId), eq(follows.followingId, review.userId))).limit(1);
+  return Boolean(follow[0]);
 }
 
 export async function getUserData(userId: number): Promise<UserData | undefined> {
@@ -544,12 +614,34 @@ export async function listChatMessages(userId: number, otherUserId: number) {
   return db.select().from(chatMessages).where(and(eq(chatMessages.conversationId, conversation.id), isNull(chatMessages.deletedAt))).orderBy(desc(chatMessages.createdAt)).limit(100);
 }
 
+export async function listConversations(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select().from(conversations)
+    .where(or(eq(conversations.participantAId, userId), eq(conversations.participantBId, userId)))
+    .orderBy(desc(conversations.updatedAt));
+  const result = [];
+  for (const conversation of rows) {
+    const otherUserId = conversation.participantAId === userId ? conversation.participantBId : conversation.participantAId;
+    if (await isBlockedEitherWay(db, userId, otherUserId)) continue;
+    const [person, lastRows, unreadRows] = await Promise.all([
+      db.select({ id: users.id, name: users.name, username: userData.username, bio: userData.bio, avatarUrl: userData.avatarUrl }).from(users).leftJoin(userData, eq(userData.userId, users.id)).where(eq(users.id, otherUserId)).limit(1),
+      db.select().from(chatMessages).where(and(eq(chatMessages.conversationId, conversation.id), isNull(chatMessages.deletedAt))).orderBy(desc(chatMessages.createdAt)).limit(1),
+      db.select({ id: chatMessages.id }).from(chatMessages).where(and(eq(chatMessages.conversationId, conversation.id), eq(chatMessages.senderId, otherUserId), isNull(chatMessages.readAt), isNull(chatMessages.deletedAt))),
+    ]);
+    if (!person[0]) continue;
+    result.push({ conversationId: conversation.id, otherUserId, otherUser: person[0], lastMessage: lastRows[0] ?? null, unreadCount: unreadRows.length, updatedAt: conversation.updatedAt });
+  }
+  return result;
+}
+
 export async function createChatMessage(input: Omit<InsertChatMessage, "id" | "createdAt">, recipientId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const allowed = await userCanAccessConversation(input.senderId, input.conversationId);
   if (!allowed) throw new Error("Conversation access denied");
   await db.insert(chatMessages).values(input);
+  await db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, input.conversationId));
   const message = await db.select().from(chatMessages).where(and(eq(chatMessages.conversationId, input.conversationId), eq(chatMessages.senderId, input.senderId))).orderBy(desc(chatMessages.createdAt)).limit(1);
   await db.insert(notifications).values({ userId: recipientId, actorId: input.senderId, kind: "comment" });
   return message[0];
@@ -559,4 +651,15 @@ export async function deleteChatMessage(userId: number, messageId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(chatMessages).set({ deletedAt: new Date() }).where(and(eq(chatMessages.id, messageId), eq(chatMessages.senderId, userId)));
+}
+
+export async function deleteConversation(userId: number, otherUserId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const pair = orderedPair(userId, otherUserId);
+  const conversation = (await db.select().from(conversations).where(and(eq(conversations.participantAId, pair.participantAId), eq(conversations.participantBId, pair.participantBId))).limit(1))[0];
+  if (!conversation) return { success: true } as const;
+  await db.delete(chatMessages).where(eq(chatMessages.conversationId, conversation.id));
+  await db.delete(conversations).where(eq(conversations.id, conversation.id));
+  return { success: true } as const;
 }

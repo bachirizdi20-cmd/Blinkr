@@ -251,17 +251,22 @@ export const appRouter = router({
     profile: protectedProcedure.input(z.object({ userId: z.number().int().positive() })).query(({ ctx, input }) => db.getUserProfile(ctx.user.id, input.userId)),
     searchReviews: protectedProcedure.input(z.object({ query: z.string().trim().max(120).default("") })).query(({ ctx, input }) => db.searchReviews(ctx.user.id, input.query)),
     following: protectedProcedure.query(({ ctx }) => db.listFollowingIds(ctx.user.id)),
+    followRequests: protectedProcedure.query(({ ctx }) => db.listFollowRequests(ctx.user.id)),
+    respondToFollowRequest: protectedProcedure.input(z.object({ requesterId: z.number().int().positive(), accept: z.boolean() })).mutation(({ ctx, input }) => db.respondToFollowRequest(ctx.user.id, input.requesterId, input.accept)),
+    cancelFollowRequest: protectedProcedure.input(z.object({ targetId: z.number().int().positive() })).mutation(({ ctx, input }) => db.cancelFollowRequest(ctx.user.id, input.targetId)),
     feed: protectedProcedure.query(({ ctx }) => db.listSocialFeed(ctx.user.id)),
     toggleFollow: protectedProcedure.input(z.object({ userId: z.number().int().positive() })).mutation(({ ctx, input }) => db.toggleFollow(ctx.user.id, input.userId)),
     notifications: protectedProcedure.query(({ ctx }) => db.listNotifications(ctx.user.id)),
     markNotificationRead: protectedProcedure.input(z.object({ notificationId: z.number().int().positive() })).mutation(async ({ ctx, input }) => { await db.markNotificationRead(ctx.user.id, input.notificationId); return { success: true } as const; }),
     markNotificationsRead: protectedProcedure.mutation(async ({ ctx }) => { await db.markNotificationsRead(ctx.user.id); return { success: true } as const; }),
     block: protectedProcedure.input(z.object({ userId: z.number().int().positive() })).mutation(({ ctx, input }) => db.addBlock(ctx.user.id, input.userId)),
+    unblock: protectedProcedure.input(z.object({ userId: z.number().int().positive() })).mutation(({ ctx, input }) => db.removeBlock(ctx.user.id, input.userId)),
     report: protectedProcedure.input(z.object({ targetType: z.enum(["review", "comment", "user"]), targetId: z.number().int().positive(), reason: z.enum(["spam", "harassment", "spoiler", "other"]), details: z.string().trim().max(1000).optional() })).mutation(({ ctx, input }) => db.createReport({ reporterId: ctx.user.id, ...input })),
     toggleLike: protectedProcedure.input(z.object({ reviewId: z.number().int().positive() })).mutation(({ ctx, input }) => db.toggleReviewLike(ctx.user.id, input.reviewId)),
-    comments: protectedProcedure.input(z.object({ reviewId: z.number().int().positive() })).query(({ input }) => db.listReviewComments(input.reviewId)),
+    comments: protectedProcedure.input(z.object({ reviewId: z.number().int().positive() })).query(({ ctx, input }) => db.listReviewComments(ctx.user.id, input.reviewId)),
     addComment: protectedProcedure.input(z.object({ reviewId: z.number().int().positive(), text: z.string().trim().min(1).max(1000) })).mutation(({ ctx, input }) => db.addReviewComment(ctx.user.id, input.reviewId, input.text)),
     conversation: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive() })).query(({ ctx, input }) => db.getOrCreateConversation(ctx.user.id, input.otherUserId)),
+    conversations: protectedProcedure.query(({ ctx }) => db.listConversations(ctx.user.id)),
     messages: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive() })).query(({ ctx, input }) => db.listChatMessages(ctx.user.id, input.otherUserId)),
     sendMessage: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive(), text: z.string().trim().min(1).max(4000), replyToId: z.number().int().positive().optional() })).mutation(async ({ ctx, input }) => {
       const conversation = await db.getOrCreateConversation(ctx.user.id, input.otherUserId);
@@ -269,6 +274,7 @@ export const appRouter = router({
       return db.createChatMessage({ conversationId: conversation.id, senderId: ctx.user.id, text: input.text, replyToId: input.replyToId ?? null }, input.otherUserId);
     }),
     deleteMessage: protectedProcedure.input(z.object({ messageId: z.number().int().positive() })).mutation(({ ctx, input }) => db.deleteChatMessage(ctx.user.id, input.messageId)),
+    deleteConversation: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive() })).mutation(({ ctx, input }) => db.deleteConversation(ctx.user.id, input.otherUserId)),
     shareMedia: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive(), mediaType: z.enum(['movie', 'tv']), mediaId: z.number().int().positive(), title: z.string().trim().min(1).max(255), posterPath: z.string().max(255).nullable().optional(), rating: z.number().min(0).max(10), overview: z.string().max(1200).nullable().optional() })).mutation(async ({ ctx, input }) => {
       const conversation = await db.getOrCreateConversation(ctx.user.id, input.otherUserId);
       if (!conversation) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Conversation unavailable' });

@@ -8,7 +8,6 @@ import UserAvatar from '../components/UserAvatar';
 import EmptyState from '../components/EmptyState';
 import ApiErrorState from '../components/ApiErrorState';
 import { ContentStackParamList } from '../navigation/types';
-import { useSocial } from '../context/SocialContext';
 import { trpc } from '../lib/trpc';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 
@@ -25,12 +24,17 @@ export default function UserProfileScreen() {
   if (isRemote && numericId) {
     return <RemoteUserProfile userId={numericId} onBack={() => navigation.goBack()} onMessage={() => navigation.navigate('Conversation', { userId: paramId })} />;
   }
-  return <LocalUserProfile localId={paramId} onBack={() => navigation.goBack()} onMessage={() => navigation.navigate('Conversation', { userId: paramId })} />;
+  return (
+    <SafeAreaView style={styles.safe}>
+      <EmptyState icon="alert-circle-outline" title="User not found" message="This profile is no longer available." />
+    </SafeAreaView>
+  );
 }
 
 function RemoteUserProfile({ userId, onBack, onMessage }: { userId: number; onBack: () => void; onMessage: () => void }) {
   const profileQuery = trpc.social.profile.useQuery({ userId });
   const followMutation = trpc.social.toggleFollow.useMutation({ onSuccess: () => profileQuery.refetch() });
+  const cancelRequestMutation = trpc.social.cancelFollowRequest.useMutation({ onSuccess: () => profileQuery.refetch() });
   const blockMutation = trpc.social.block.useMutation({ onSuccess: () => { Alert.alert('User blocked', "You won't see each other's content anymore."); onBack(); } });
   const reportMutation = trpc.social.report.useMutation({ onSuccess: () => Alert.alert('Report sent', "Thanks — our team will review it.") });
   const [menuOpen, setMenuOpen] = useState(false);
@@ -138,88 +142,13 @@ function RemoteUserProfile({ userId, onBack, onMessage }: { userId: number; onBa
 
         <View style={styles.actionsRow}>
           <Pressable
-            style={[styles.actionBtn, profile.isFollowing ? styles.followingBtn : styles.followBtn]}
-            disabled={followMutation.isPending}
-            onPress={() => followMutation.mutate({ userId })}
+            style={[styles.actionBtn, (profile.isFollowing || profile.followRequested) ? styles.followingBtn : styles.followBtn]}
+            disabled={followMutation.isPending || cancelRequestMutation.isPending}
+            onPress={() => profile.followRequested ? cancelRequestMutation.mutate({ targetId: userId }) : followMutation.mutate({ userId })}
           >
-            <Ionicons name={profile.isFollowing ? 'checkmark' : 'person-add'} size={16} color={profile.isFollowing ? colors.text : '#04120C'} />
-            <Text style={[styles.actionBtnText, profile.isFollowing ? styles.followingBtnText : styles.followBtnText]}>
-              {profile.isFollowing ? 'Following' : 'Follow'}
-            </Text>
-          </Pressable>
-          <Pressable style={[styles.actionBtn, styles.messageBtn]} onPress={onMessage}>
-            <Ionicons name="chatbubble-outline" size={16} color={colors.text} />
-            <Text style={[styles.actionBtnText, { color: colors.text }]}>Message</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-function LocalUserProfile({ localId, onBack, onMessage }: { localId: string; onBack: () => void; onMessage: () => void }) {
-  const social = useSocial();
-  const user = social.getUser(localId);
-
-  if (!user) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <EmptyState icon="alert-circle-outline" title="User not found" />
-      </SafeAreaView>
-    );
-  }
-
-  const following = social.isFollowing(user.id);
-  const followers = social.followerCountFor(user.id) + (user.followsYou ? 1 : 0);
-  const followingCount = social.followingCountFor(user.id);
-
-  return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <Pressable onPress={onBack} hitSlop={8}>
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Profile</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        <UserAvatar name={user.displayName} color={user.avatarColor} size={100} />
-        <View style={styles.nameBlock}>
-          <Text style={styles.name}>{user.displayName}</Text>
-          {user.followsYou && (
-            <View style={styles.followsYouTag}>
-              <Text style={styles.followsYouText}>Follows you</Text>
-            </View>
-          )}
-        </View>
-        <Text style={styles.username}>@{user.username}</Text>
-        <Text style={styles.bio}>{user.bio}</Text>
-
-        <View style={styles.genreTag}>
-          <Ionicons name="film-outline" size={13} color={colors.accent} />
-          <Text style={styles.genreText}>Loves {user.favoriteGenre}</Text>
-        </View>
-
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{followers.toLocaleString()}</Text>
-            <Text style={styles.statLabel}>Followers</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{followingCount.toLocaleString()}</Text>
-            <Text style={styles.statLabel}>Following</Text>
-          </View>
-        </View>
-
-        <View style={styles.actionsRow}>
-          <Pressable
-            style={[styles.actionBtn, following ? styles.followingBtn : styles.followBtn]}
-            onPress={() => social.toggleFollow(user.id)}
-          >
-            <Ionicons name={following ? 'checkmark' : 'person-add'} size={16} color={following ? colors.text : '#04120C'} />
-            <Text style={[styles.actionBtnText, following ? styles.followingBtnText : styles.followBtnText]}>
-              {following ? 'Following' : 'Follow'}
+            <Ionicons name={profile.isFollowing || profile.followRequested ? 'checkmark' : 'person-add'} size={16} color={profile.isFollowing || profile.followRequested ? colors.text : '#04120C'} />
+            <Text style={[styles.actionBtnText, (profile.isFollowing || profile.followRequested) ? styles.followingBtnText : styles.followBtnText]}>
+              {profile.isFollowing ? 'Following' : profile.followRequested ? 'Requested' : 'Follow'}
             </Text>
           </Pressable>
           <Pressable style={[styles.actionBtn, styles.messageBtn]} onPress={onMessage}>

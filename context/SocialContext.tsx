@@ -17,36 +17,6 @@ export const MOCK_USERS: MockUser[] = [
   { id: 'u12', username: 'indie_iris', displayName: 'Iris', bio: 'A24 and indie darlings. Slow cinema enthusiast.', avatarColor: '#FFC94D', favoriteGenre: 'Indie', followsYou: false },
 ];
 
-const DEFAULT_FOLLOWING = ['u1', 'u2', 'u3', 'u5', 'u8', 'u10'];
-
-const REPLY_LINES = [
-  "Okay I NEED to watch that now.",
-  "Adding it to my watchlist right now 👀",
-  "Wait, what did you rate it?",
-  "No spoilers please, I'm only halfway through 😭",
-  "That's such an underrated pick.",
-  "I was up till 2am finishing that last night.",
-  "10/10, one of my favorites this year.",
-  "The ending completely wrecked me.",
-  "Have you seen the sequel yet?",
-  "I keep meaning to log that in my diary.",
-  "Honestly the cinematography alone is worth it.",
-  "That's going straight into my next list.",
-  "Ugh I've been putting that off, might binge it this weekend.",
-  "The soundtrack for that one is incredible btw.",
-  "Lowkey think it's better than everyone says.",
-];
-
-function pickReply() {
-  return REPLY_LINES[Math.floor(Math.random() * REPLY_LINES.length)];
-}
-
-function hashCount(id: string, min: number, max: number) {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 100000;
-  return min + (h % (max - min));
-}
-
 function uid() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
 }
@@ -121,11 +91,11 @@ const KEYS = {
 
 export function SocialProvider({ children }: { children: React.ReactNode }) {
   const [loaded, setLoaded] = useState(false);
-  const [followingIds, setFollowingIds] = useState<Record<string, boolean>>(
-    Object.fromEntries(DEFAULT_FOLLOWING.map((id) => [id, true]))
-  );
-  const [conversations, setConversations] = useState<Record<string, Conversation>>(SEED_CONVERSATIONS);
-  const [reviews, setReviews] = useState<SocialReview[]>(SEED_REVIEWS);
+  // Production accounts must never receive demo users, seed reviews, or fake conversations.
+  // Real social data is read and written through the protected tRPC procedures.
+  const [followingIds, setFollowingIds] = useState<Record<string, boolean>>({});
+  const [conversations, setConversations] = useState<Record<string, Conversation>>({});
+  const [reviews, setReviews] = useState<SocialReview[]>([]);
   const [typingUserIds, setTypingUserIds] = useState<Record<string, boolean>>({});
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>[]>>({});
 
@@ -137,9 +107,8 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(KEYS.conversations),
           AsyncStorage.getItem(KEYS.reviews),
         ]);
-        if (f) setFollowingIds(JSON.parse(f));
-        if (c) setConversations(JSON.parse(c));
-        if (r) setReviews(JSON.parse(r));
+        // Remove legacy demo/local social state instead of importing it into production.
+        if (f || c || r) await AsyncStorage.multiRemove([KEYS.following, KEYS.conversations, KEYS.reviews]);
       } catch (err) {
         console.warn('Failed to load social data', err);
       } finally {
@@ -163,7 +132,7 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
     if (loaded) AsyncStorage.setItem(KEYS.reviews, JSON.stringify(reviews));
   }, [reviews, loaded]);
 
-  const getUser = useCallback((userId: string) => MOCK_USERS.find((u) => u.id === userId), []);
+  const getUser = useCallback((_userId: string) => undefined, []);
 
   const isFollowing = useCallback((userId: string) => !!followingIds[userId], [followingIds]);
 
@@ -206,27 +175,8 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
       return { ...prev, [userId]: { ...existing, messages: [...existing.messages, myMessage], unread: 0 } };
     });
 
-    const typingDelay = 700 + Math.random() * 600;
-    const replyDelay = typingDelay + 900 + Math.random() * 1400;
-
-    const t1 = setTimeout(() => {
-      setTypingUserIds((prev) => ({ ...prev, [userId]: true }));
-    }, typingDelay);
-
-    const t2 = setTimeout(() => {
-      setTypingUserIds((prev) => {
-        const next = { ...prev };
-        delete next[userId];
-        return next;
-      });
-      const reply: ChatMessage = { id: uid(), sender: userId, text: pickReply(), createdAt: Date.now() };
-      setConversations((prev) => {
-        const existing = prev[userId] ?? { userId, messages: [], unread: 0 };
-        return { ...prev, [userId]: { ...existing, messages: [...existing.messages, reply], unread: 0 } };
-      });
-    }, replyDelay);
-
-    timers.current[userId] = [...(timers.current[userId] ?? []), t1, t2];
+    // This legacy local sender is retained only for backwards-compatible UI state.
+    // It intentionally does not fabricate a reply; real conversations use tRPC.
   }, []);
 
   const toggleReviewLike = useCallback((reviewId: string) => {
@@ -240,8 +190,8 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
     setReviews((prev) => prev.map((review) => review.id === reviewId ? { ...review, comments: [...review.comments, comment] } : review));
   }, []);
 
-  const followerCountFor = useCallback((userId: string) => hashCount(userId, 120, 4200), []);
-  const followingCountFor = useCallback((userId: string) => hashCount(userId + 'f', 40, 900), []);
+  const followerCountFor = useCallback((_userId: string) => 0, []);
+  const followingCountFor = useCallback((_userId: string) => 0, []);
 
   const totalUnread = useMemo(
     () => Object.values(conversations).reduce((sum, c) => sum + c.unread, 0),
@@ -249,11 +199,11 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
   );
 
   const myFollowingCount = useMemo(() => Object.keys(followingIds).length, [followingIds]);
-  const myFollowerCount = useMemo(() => MOCK_USERS.filter((u) => u.followsYou).length, []);
+  const myFollowerCount = useMemo(() => 0, []);
 
   const value: SocialContextValue = {
     loaded,
-    users: MOCK_USERS,
+    users: [],
     followingIds,
     conversations,
     typingUserIds,

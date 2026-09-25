@@ -80,6 +80,8 @@ export default function NotificationsScreen() {
   const markOneRead = trpc.social.markNotificationRead.useMutation({ onSuccess: () => query.refetch() });
   const followingQuery = trpc.social.following.useQuery(undefined, { enabled: Boolean(user) });
   const followBackMutation = trpc.social.toggleFollow.useMutation({ onSuccess: () => followingQuery.refetch() });
+  const followRequestsQuery = trpc.social.followRequests.useQuery(undefined, { enabled: Boolean(user) });
+  const respondRequestMutation = trpc.social.respondToFollowRequest.useMutation({ onSuccess: () => followRequestsQuery.refetch() });
   const unreadCount = query.data?.filter((item) => !item.readAt).length ?? 0;
   const previousCount = useRef<number | null>(null);
   const [newNotificationId, setNewNotificationId] = useState<number | null>(null);
@@ -140,6 +142,7 @@ export default function NotificationsScreen() {
             <View style={styles.headingBlock}><Text style={styles.title}>Notifications</Text><Text style={styles.subtitle}>Stay updated with your movie circle</Text></View>
             <View style={styles.headerActions}><Pressable onPress={() => markRead.mutate()} disabled={markRead.isPending || unreadCount === 0} style={({ pressed }) => [styles.markAllButton, (pressed || unreadCount === 0) && styles.mutedAction]}><Text style={styles.markAll}>{markRead.isPending ? 'Updating…' : 'Mark all as read'}</Text></Pressable><Animated.View style={{ transform: [{ scale: bellProgress }] }}><Pressable onPress={showSettings} style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]} accessibilityLabel="Notification settings"><Ionicons name="settings-outline" size={24} color={colors.text} /></Pressable></Animated.View></View>
           </View>
+          {(followRequestsQuery.data?.length ?? 0) > 0 ? <View style={styles.requestsSection}><Text style={styles.requestsTitle}>Follow requests</Text>{followRequestsQuery.data?.map(({ request, name, username, avatarUrl }) => <View key={request.id} style={styles.requestRow}>{avatarUrl ? <Image source={{ uri: avatarUrl }} style={styles.requestAvatar} contentFit="cover" /> : <View style={styles.requestAvatarPlaceholder}><Ionicons name="person-outline" size={18} color={colors.textDim} /></View>}<View style={styles.requestCopy}><Text style={styles.requestName}>{name ?? username ?? 'Blinkr user'}</Text><Text style={styles.requestHandle}>@{username ?? 'blinkr_user'} wants to follow you</Text></View><View style={styles.requestActions}><Pressable style={styles.acceptButton} disabled={respondRequestMutation.isPending} onPress={() => respondRequestMutation.mutate({ requesterId: request.requesterId, accept: true })}><Text style={styles.acceptText}>Accept</Text></Pressable><Pressable style={styles.rejectButton} disabled={respondRequestMutation.isPending} onPress={() => respondRequestMutation.mutate({ requesterId: request.requesterId, accept: false })}><Text style={styles.rejectText}>Decline</Text></Pressable></View></View>)}</View> : null}
           <View style={styles.filters}>{FILTERS.map((filter) => <Pressable key={filter.key} onPress={() => setFilterMode(filter.key)} style={({ pressed }) => [styles.filterChip, filterMode === filter.key && styles.filterChipActive, pressed && styles.pressed]}><Text style={[styles.filterText, filterMode === filter.key && styles.filterTextActive]}>{filter.label}</Text></Pressable>)}</View>
         </>}
         ListEmptyComponent={<View style={styles.empty}><View style={styles.emptyOrb}><Ionicons name="notifications-outline" size={42} color={colors.accent} /></View><Text style={styles.emptyTitle}>{filterMode === 'all' ? 'Your social story starts here' : 'Nothing here yet'}</Text><Text style={styles.emptyText}>{filterMode === 'all' ? 'When someone follows you, likes a review, or leaves a comment, it will appear here.' : 'New activity matching this filter will appear here.'}</Text></View>}
@@ -181,6 +184,19 @@ const styles = StyleSheet.create({
   mutedAction: { opacity: 0.45 },
   settingsButton: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
   filters: { flexDirection: 'row', gap: 8, paddingBottom: 16 },
+  requestsSection: { backgroundColor: '#0C1219', borderWidth: 1, borderColor: '#1F806F', borderRadius: 16, padding: 12, marginBottom: 14 },
+  requestsTitle: { color: '#F7F9FB', fontSize: 15, fontWeight: '900', marginBottom: 10 },
+  requestRow: { flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 7 },
+  requestAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surfaceHigh },
+  requestAvatarPlaceholder: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: '#26303B' },
+  requestCopy: { flex: 1, minWidth: 0 },
+  requestName: { color: colors.text, fontSize: 13, fontWeight: '800' },
+  requestHandle: { color: colors.textDim, fontSize: 11, marginTop: 2 },
+  requestActions: { flexDirection: 'row', gap: 5 },
+  acceptButton: { backgroundColor: colors.accent, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 7 },
+  acceptText: { color: '#03110E', fontSize: 11, fontWeight: '900' },
+  rejectButton: { borderWidth: 1, borderColor: '#44515E', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6 },
+  rejectText: { color: colors.textDim, fontSize: 11, fontWeight: '800' },
   filterChip: { minHeight: 40, paddingHorizontal: 15, borderRadius: 22, backgroundColor: '#101720', borderWidth: 1, borderColor: '#1D2935', alignItems: 'center', justifyContent: 'center' },
   filterChipActive: { backgroundColor: '#14D5AA', borderColor: '#14D5AA' },
   filterText: { color: '#A8B1BE', fontSize: 14, fontWeight: '800' },

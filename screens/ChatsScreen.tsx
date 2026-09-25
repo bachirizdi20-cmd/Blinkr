@@ -7,7 +7,6 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import UserAvatar from '../components/UserAvatar';
 import EmptyState from '../components/EmptyState';
 import { ContentStackParamList } from '../navigation/types';
-import { useSocial } from '../context/SocialContext';
 import { useAuth } from '../hooks/use-auth';
 import { trpc } from '../lib/trpc';
 import { MockUser } from '../types/social';
@@ -18,9 +17,9 @@ type Nav = NativeStackNavigationProp<ContentStackParamList>;
 
 export default function ChatsScreen() {
   const navigation = useNavigation<Nav>();
-  const social = useSocial();
   const { user: authUser } = useAuth();
   const remoteUsersQuery = trpc.social.users.useQuery({ query: '' }, { enabled: Boolean(authUser), retry: 1 });
+  const conversationsQuery = trpc.social.conversations.useQuery(undefined, { enabled: Boolean(authUser), retry: 1, refetchInterval: 5000 });
   const [query, setQuery] = useState('');
 
   const remoteContacts = useMemo<MockUser[]>(
@@ -36,40 +35,35 @@ export default function ChatsScreen() {
     [remoteUsersQuery.data]
   );
 
-  const allContacts = useMemo(() => {
-    const seen = new Set<string>();
-    return [...remoteContacts, ...social.users].filter((contact) => {
-      if (seen.has(contact.id)) return false;
-      seen.add(contact.id);
-      return true;
-    });
-  }, [remoteContacts, social.users]);
+  const allContacts = remoteContacts;
 
-  const newFollowers = useMemo(
-    () => allContacts.filter((u) => !u.id.startsWith('remote-') && u.followsYou && !social.isFollowing(u.id)),
-    [allContacts, social.followingIds]
+  const newFollowers = useMemo<MockUser[]>(() => [], []);
+
+  const contacts = allContacts;
+
+  const conversationRows = useMemo<Array<{ user: MockUser; convo: { unread: number }; lastMessage: { sender: string; text?: string; createdAt: number } }>>(
+    () => (conversationsQuery.data ?? []).map((item) => ({
+      user: {
+        id: `remote-${item.otherUserId}`,
+        username: item.otherUser.username ?? `user${item.otherUserId}`,
+        displayName: item.otherUser.name ?? item.otherUser.username ?? 'Blinkr user',
+        bio: item.otherUser.bio ?? '',
+        avatarColor: colors.accent,
+        favoriteGenre: '',
+        followsYou: false,
+      },
+      convo: { unread: item.unreadCount },
+      lastMessage: {
+        sender: item.lastMessage?.senderId === Number(authUser?.id) ? 'me' : 'them',
+        text: item.lastMessage?.text ?? (item.lastMessage?.mediaType ? `Sent ${item.lastMessage.mediaType}` : ''),
+        createdAt: item.lastMessage ? new Date(item.lastMessage.createdAt).getTime() : new Date(item.updatedAt).getTime(),
+      },
+    })),
+    [conversationsQuery.data, authUser?.id]
   );
 
-  const contacts = useMemo(
-    () => allContacts.filter((u) => u.id.startsWith('remote-') || social.isFollowing(u.id) || u.followsYou),
-    [allContacts, social.followingIds]
-  );
-
-  const conversationRows = useMemo(() => {
-    return contacts
-      .map((user) => {
-        const convo = social.getConversation(user.id);
-        const lastMessage = convo.messages[convo.messages.length - 1];
-        return { user, convo, lastMessage };
-      })
-      .filter((row) => row.lastMessage)
-      .sort((a, b) => (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0));
-  }, [contacts, social.conversations]);
-
-  const startableContacts = useMemo(
-    () => contacts.filter((u) => social.getConversation(u.id).messages.length === 0),
-    [contacts, social.conversations]
-  );
+  const conversationIds = useMemo(() => new Set(conversationRows.map((row) => row.user.id)), [conversationRows]);
+  const startableContacts = contacts.filter((contact) => !conversationIds.has(contact.id));
 
   const q = query.trim().toLowerCase();
   const filteredRows = q
@@ -170,7 +164,7 @@ export default function ChatsScreen() {
           ) : null
         }
         renderItem={({ item }) => {
-          const isTyping = !!social.typingUserIds[item.user.id];
+          const isTyping = false;
           const preview = isTyping ? 'typing…' : `${item.lastMessage?.sender === 'me' ? 'You: ' : ''}${item.lastMessage?.text ?? ''}`;
           return (
             <Pressable style={styles.chatRow} onPress={() => openConversation(item.user)}>

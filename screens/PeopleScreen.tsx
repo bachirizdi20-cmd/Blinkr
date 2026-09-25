@@ -30,8 +30,7 @@ export default function PeopleScreen() {
   const shareMedia = route.params?.shareMedia;
 
   const people = useMemo(() => {
-    if (!remoteUsers.data?.length) return social.users;
-    return remoteUsers.data.map((item) => ({
+    return (remoteUsers.data ?? []).map((item) => ({
       id: `remote-${item.id}`,
       username: item.username ?? `user${item.id}`,
       displayName: item.name ?? item.username ?? 'Blinkr user',
@@ -40,7 +39,7 @@ export default function PeopleScreen() {
       favoriteGenre: '',
       followsYou: false,
     }));
-  }, [remoteUsers.data, social.users]);
+  }, [remoteUsers.data]);
 
   const remoteFollowingIds = useMemo(() => new Set((remoteFollowing.data ?? []).map((id) => `remote-${id}`)), [remoteFollowing.data]);
 

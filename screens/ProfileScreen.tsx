@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Share, Switch, View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -24,8 +24,6 @@ type Nav = NativeStackNavigationProp<ContentStackParamList>;
 export default function ProfileScreen() {
   const navigation = useNavigation<Nav>();
   const { user, loading: authLoading, error: authError, logout, refresh } = useAuth();
-  const syncedRef = useRef(false);
-  const syncMutation = trpc.account.sync.useMutation();
   const privacyMutation = trpc.account.updatePrivacy.useMutation();
   const deleteMutation = trpc.account.delete.useMutation();
   const requestVerification = trpc.auth.requestVerification.useMutation();
@@ -35,15 +33,6 @@ export default function ProfileScreen() {
   const lib = useLibrary();
   const social = useSocial();
   const { profile, stats, diary, lists, likes } = lib;
-
-  useEffect(() => {
-    if (!user || !lib.loaded || !social.loaded || syncedRef.current) return;
-    syncedRef.current = true;
-    syncMutation.mutate({
-      libraryJson: JSON.stringify({ watchlist: lib.watchlist, diary: lib.diary, lists: lib.lists, likes: lib.likes }),
-      socialJson: JSON.stringify({ followingIds: social.followingIds, reviews: social.reviews, conversations: social.conversations }),
-    });
-  }, [user, lib.loaded, social.loaded]);
 
   if (authLoading) {
     return (

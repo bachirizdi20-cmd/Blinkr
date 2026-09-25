@@ -21,7 +21,6 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import UserAvatar from '../components/UserAvatar';
 import EmptyState from '../components/EmptyState';
 import { ContentStackParamList } from '../navigation/types';
-import { useSocial } from '../context/SocialContext';
 import { ChatMessage, MockUser } from '../types/social';
 import { formatMessageTime } from '../lib/format';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
@@ -63,13 +62,13 @@ export default function ConversationScreen() {
   const parsedOtherUserId = Number(String(userId).replace(/^remote-/, ''));
   const numericOtherUserId = Number.isInteger(parsedOtherUserId) && parsedOtherUserId > 0 ? parsedOtherUserId : 0;
   const isRemoteConversation = numericOtherUserId > 0 && String(userId).startsWith('remote-');
-  const social = useSocial();
   const { user: authUser } = useAuth();
   const remoteUsersQuery = trpc.social.users.useQuery({ query: '' }, { enabled: Boolean(authUser && isRemoteConversation), retry: 1 });
-  const messagesQuery = trpc.social.messages.useQuery({ otherUserId: numericOtherUserId }, { enabled: Boolean(authUser && isRemoteConversation), retry: 1 });
+  const messagesQuery = trpc.social.messages.useQuery({ otherUserId: numericOtherUserId }, { enabled: Boolean(authUser && isRemoteConversation), retry: 1, refetchInterval: 3000 });
   const sendMessageMutation = trpc.social.sendMessage.useMutation({ onSuccess: () => messagesQuery.refetch() });
   const sendImageMutation = trpc.social.sendImage.useMutation({ onSuccess: () => messagesQuery.refetch() });
   const sendAttachmentMutation = trpc.social.sendAttachment.useMutation({ onSuccess: () => messagesQuery.refetch() });
+  const deleteConversationMutation = trpc.social.deleteConversation.useMutation({ onSuccess: () => navigation.goBack() });
   const [failedCard, setFailedCard] = useState<any>(null);
   const shareMediaMutation = trpc.social.shareMedia.useMutation({ onSuccess: () => { setFailedCard(null); messagesQuery.refetch(); setCardPickerOpen(false); setCardSearch(''); }, onError: (_error, variables) => setFailedCard(variables) });
   const [cardPickerOpen, setCardPickerOpen] = useState(false);
@@ -96,9 +95,8 @@ export default function ConversationScreen() {
       followsYou: false,
     };
   }, [remoteUsersQuery.data, numericOtherUserId]);
-  const user = social.getUser(userId) ?? remoteUser;
-  const convo = social.getConversation(userId);
-  const isTyping = !!social.typingUserIds[userId];
+  const user = remoteUser;
+  const isTyping = false;
   const [text, setText] = useState('');
   const [pendingImage, setPendingImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const listRef = useRef<FlatList>(null);
@@ -108,8 +106,8 @@ export default function ConversationScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
-      social.markRead(userId);
-    }, [userId])
+      if (isRemoteConversation) void messagesQuery.refetch();
+    }, [isRemoteConversation, messagesQuery.refetch])
   );
 
   if (!user) {
@@ -123,8 +121,8 @@ export default function ConversationScreen() {
   const handleSend = async () => {
     if (!text.trim() || sendMessageMutation.isPending) return;
     try {
-      if (authUser && isRemoteConversation) await sendMessageMutation.mutateAsync({ otherUserId: numericOtherUserId, text: text.trim() });
-      else social.sendMessage(userId, text);
+      if (!authUser || !isRemoteConversation) return;
+      await sendMessageMutation.mutateAsync({ otherUserId: numericOtherUserId, text: text.trim() });
       setText('');
     } catch { Alert.alert('Could not send message', 'Please try again.'); }
   };
@@ -250,15 +248,14 @@ export default function ConversationScreen() {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
-          social.deleteConversation(userId);
-          navigation.goBack();
+          deleteConversationMutation.mutate({ otherUserId: numericOtherUserId });
         },
       },
     ]);
   };
 
   const remoteMessages = (messagesQuery.data ?? []).map((item: any) => ({ ...item, id: String(item.id), sender: item.senderId === Number(authUser?.id) ? 'me' : 'them', createdAt: new Date(item.createdAt), text: item.text ?? '' }));
-  const data = remoteMessages.length ? remoteMessages : [...convo.messages].reverse();
+  const data = remoteMessages;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -307,7 +304,7 @@ export default function ConversationScreen() {
                     {!!item.text && <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.text}</Text>}
                   </View>
                   <Text style={[styles.bubbleTime, mine ? styles.bubbleTimeMine : styles.bubbleTimeTheirs]}>
-                    {formatMessageTime(item.createdAt)}
+                    {formatMessageTime(item.createdAt)}{mine ? `  ${((item as any).readAt ? '✓✓' : '✓')}` : ''}
                   </Text>
                 </View>
               );
