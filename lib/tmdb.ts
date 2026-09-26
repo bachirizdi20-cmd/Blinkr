@@ -8,6 +8,7 @@ import {
   MediaType,
 } from '../types/tmdb';
 import { createTRPCClient } from '@/lib/trpc';
+import { resolveMediaUrl } from './media-url';
 
 const tmdbClient = createTRPCClient();
 export const IMG_BASE = 'https://image.tmdb.org/t/p/';
@@ -19,7 +20,11 @@ export const backdropUrl = (path: string | null, size: 'w780' | 'w1280' | 'origi
   path ? `${IMG_BASE}${size}${path}` : null;
 
 export const profileUrl = (path: string | null, size: 'w185' = 'w185') =>
-  path ? `${IMG_BASE}${size}${path}` : null;
+  path
+    ? (/^https?:\/\//i.test(path) || /^\/manus-storage\//i.test(path)
+      ? resolveMediaUrl(path) ?? null
+      : `${IMG_BASE}${size}${path}`)
+    : null;
 
 async function tmdbGet<T = any>(path: string, params: Record<string, string | number | boolean> = {}): Promise<T> {
   return (await tmdbClient.tmdb.get.query({ path, params })) as T;

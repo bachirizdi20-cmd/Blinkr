@@ -9,7 +9,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useLibrary, AVATAR_COLORS } from '../context/LibraryContext';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { trpc } from '../lib/trpc';
-import { getApiBaseUrl } from '../constants/oauth';
+import { isStoredMediaUrl, resolveMediaUrl } from '../lib/media-url';
 
 async function imageToDataUri(uri: string, mime: string) {
   if (Platform.OS !== 'web') {
@@ -60,10 +60,11 @@ export default function EditProfileScreen() {
     setSaving(true);
     try {
       let cloudAvatarUri = avatarUri;
-      if (avatarUri && !/^https?:\/\//i.test(avatarUri) && !avatarUri.startsWith('/manus-storage/')) {
+      if (avatarUri && !isStoredMediaUrl(avatarUri)) {
         const dataUri = await imageToDataUri(avatarUri, avatarMime);
         const uploaded = await uploadAvatarMutation.mutateAsync({ dataUri });
-        cloudAvatarUri = uploaded.url.startsWith('/') ? `${getApiBaseUrl()}${uploaded.url}` : uploaded.url;
+        // Keep the canonical storage path; every client resolves it against its API base URL.
+        cloudAvatarUri = uploaded.url;
       }
       const nextProfile = { username: username.trim() || 'cinephile', bio: cleanBio, avatarColor, avatarUri: cloudAvatarUri };
       lib.updateProfile(nextProfile);
@@ -93,7 +94,7 @@ export default function EditProfileScreen() {
         <View style={styles.content}>
           <View style={styles.avatarPreview}>
             <Pressable onPress={pickAvatar} style={styles.avatarButton} accessibilityLabel="Change profile photo">
-              {avatarUri ? <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" /> : (
+              {resolveMediaUrl(avatarUri) ? <Image source={{ uri: resolveMediaUrl(avatarUri) }} style={styles.avatar} contentFit="cover" /> : (
                 <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
                   <Text style={styles.avatarText}>{(username.slice(0, 2) || 'ME').toUpperCase()}</Text>
                 </View>

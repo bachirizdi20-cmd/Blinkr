@@ -17,6 +17,7 @@ import { useAuth } from '../hooks/use-auth';
 import { AuthPanel } from '../components/AuthPanel';
 import { trpc } from '../lib/trpc';
 import { ProfileSkeleton, ReviewsSkeleton } from '../components/Skeleton';
+import { resolveMediaUrl } from '../lib/media-url';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 
@@ -108,7 +109,7 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.profileHero}>
-          {profile.avatarUri ? <Image source={{ uri: profile.avatarUri }} style={styles.avatar} contentFit="cover" /> : <View style={[styles.avatar, { backgroundColor: profile.avatarColor }]}><Text style={styles.avatarText}>{initials}</Text></View>}
+          {resolveMediaUrl(profile.avatarUri) ? <Image source={{ uri: resolveMediaUrl(profile.avatarUri) }} style={styles.avatar} contentFit="cover" /> : <View style={[styles.avatar, { backgroundColor: profile.avatarColor }]}><Text style={styles.avatarText}>{initials}</Text></View>}
           <View style={styles.profileInfo}>
             <Text style={styles.username}>{user.name || profile.username}</Text>
             <Text style={styles.handle}>@{profile.username || 'member'}</Text>

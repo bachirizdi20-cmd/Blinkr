@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { colors } from '../lib/theme';
+import { resolveMediaUrl } from '../lib/media-url';
 
 interface Props {
   name: string;
@@ -34,8 +35,8 @@ export default function UserAvatar({ name, color, size = 48, ring = false, image
         },
       ]}
     >
-      {imageUrl ? (
-        <Image source={{ uri: imageUrl }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
+      {resolveMediaUrl(imageUrl) ? (
+        <Image source={{ uri: resolveMediaUrl(imageUrl) }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
       ) : (
         <Text style={[styles.text, { fontSize: size * 0.36 }]}>{initials}</Text>
       )}

@@ -33,6 +33,7 @@ import { useMetadata } from '../context/MetadataContext';
 import { useAuth } from '../hooks/use-auth';
 import { trpc } from '../lib/trpc';
 import { colors, fontSizes, spacing, radius } from '../lib/theme';
+import { resolveMediaUrl } from '../lib/media-url';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type Category = 'all' | 'movie' | 'tv' | 'anime';
@@ -387,8 +388,8 @@ function FeedReviewCard({
     >
       <View style={styles.socialCardHeader}>
         <View style={[styles.socialAvatar, { backgroundColor: colors.accent }]}>
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
+          {resolveMediaUrl(avatarUrl) ? (
+            <Image source={{ uri: resolveMediaUrl(avatarUrl) }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
           ) : (
             <Text style={styles.socialAvatarText}>{(displayName ?? username ?? '?').slice(0, 1)}</Text>
           )}
