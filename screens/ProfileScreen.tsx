@@ -11,7 +11,6 @@ import EmptyState from '../components/EmptyState';
 import PosterCard from '../components/PosterCard';
 import { ContentStackParamList } from '../navigation/types';
 import { useLibrary } from '../context/LibraryContext';
-import { useSocial } from '../context/SocialContext';
 import { posterUrl } from '../lib/tmdb';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { useAuth } from '../hooks/use-auth';
@@ -31,7 +30,6 @@ export default function ProfileScreen() {
   const remoteReviewsQuery = trpc.reviews.mine.useQuery(undefined, { enabled: !!user, retry: false });
   const remoteLibraryQuery = trpc.library.mine.useQuery(undefined, { enabled: !!user, retry: false });
   const lib = useLibrary();
-  const social = useSocial();
   const { profile, stats, diary, lists, likes } = lib;
 
   if (authLoading) {
@@ -57,7 +55,7 @@ export default function ProfileScreen() {
     );
   }
 
-  if (!lib.loaded || !social.loaded || accountQuery.isLoading) {
+  if (!lib.loaded || accountQuery.isLoading) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <ScrollView showsVerticalScrollIndicator={false}><ProfileSkeleton /><View style={styles.skeletonReviews}><Text style={styles.skeletonTitle}>Your latest reviews</Text><ReviewsSkeleton /></View></ScrollView>
@@ -127,8 +125,8 @@ export default function ProfileScreen() {
           <StatCard label="Films" value={stats.filmsWatched + stats.showsWatched} />
           <StatCard label="This year" value={stats.thisYear} />
           <StatCard label="Lists" value={lists.length} />
-          <Pressable style={styles.statCard} onPress={() => navigation.navigate('People', { initialFilter: 'following' })}><Text style={styles.statValue}>{social.myFollowingCount}</Text><Text style={styles.statLabel}>Following</Text></Pressable>
-          <Pressable style={styles.statCard} onPress={() => navigation.navigate('People', { initialFilter: 'followers' })}><Text style={styles.statValue}>{social.myFollowerCount}</Text><Text style={styles.statLabel}>Followers</Text></Pressable>
+          <Pressable style={styles.statCard} onPress={() => navigation.navigate('People', { initialFilter: 'following' })}><Text style={styles.statValue}>{accountQuery.data?.socialStats.followingCount ?? 0}</Text><Text style={styles.statLabel}>Following</Text></Pressable>
+          <Pressable style={styles.statCard} onPress={() => navigation.navigate('People', { initialFilter: 'followers' })}><Text style={styles.statValue}>{accountQuery.data?.socialStats.followerCount ?? 0}</Text><Text style={styles.statLabel}>Followers</Text></Pressable>
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.profileTabs}>

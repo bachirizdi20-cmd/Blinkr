@@ -7,11 +7,19 @@ type ApiResponse<T> = {
   error?: string;
 };
 
+function getBrowserCsrfToken() {
+  if (typeof document === "undefined") return undefined;
+  const cookie = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith("blinkr_csrf="));
+  return cookie ? decodeURIComponent(cookie.slice("blinkr_csrf=".length)) : undefined;
+}
+
 export async function apiCall<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...((options.headers as Record<string, string>) || {}),
   };
+  const csrf = getBrowserCsrfToken();
+  if (csrf && (options.method ?? "GET").toUpperCase() !== "GET") headers["X-CSRF-Token"] = csrf;
 
   // Determine the auth method:
   // - Native platform: use stored session token as Bearer auth

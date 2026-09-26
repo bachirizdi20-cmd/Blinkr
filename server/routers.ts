@@ -174,7 +174,7 @@ export const appRouter = router({
     }),
   }),
   account: router({
-    me: protectedProcedure.query(async ({ ctx }) => ({ user: ctx.user, data: await db.getUserData(ctx.user.id) })),
+    me: protectedProcedure.query(async ({ ctx }) => ({ user: ctx.user, data: await db.getUserData(ctx.user.id), socialStats: await db.getUserSocialStats(ctx.user.id) })),
     uploadAvatar: protectedProcedure
       .input(z.object({ dataUri: z.string().max(7_000_000) }))
       .mutation(async ({ ctx, input }) => {
@@ -251,6 +251,7 @@ export const appRouter = router({
     profile: protectedProcedure.input(z.object({ userId: z.number().int().positive() })).query(({ ctx, input }) => db.getUserProfile(ctx.user.id, input.userId)),
     searchReviews: protectedProcedure.input(z.object({ query: z.string().trim().max(120).default("") })).query(({ ctx, input }) => db.searchReviews(ctx.user.id, input.query)),
     following: protectedProcedure.query(({ ctx }) => db.listFollowingIds(ctx.user.id)),
+    followers: protectedProcedure.query(({ ctx }) => db.listFollowerIds(ctx.user.id)),
     followRequests: protectedProcedure.query(({ ctx }) => db.listFollowRequests(ctx.user.id)),
     respondToFollowRequest: protectedProcedure.input(z.object({ requesterId: z.number().int().positive(), accept: z.boolean() })).mutation(({ ctx, input }) => db.respondToFollowRequest(ctx.user.id, input.requesterId, input.accept)),
     cancelFollowRequest: protectedProcedure.input(z.object({ targetId: z.number().int().positive() })).mutation(({ ctx, input }) => db.cancelFollowRequest(ctx.user.id, input.targetId)),

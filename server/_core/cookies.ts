@@ -58,3 +58,11 @@ export function getSessionCookieOptions(
     secure: isSecureRequest(req),
   };
 }
+
+export function getCsrfCookieOptions(req: Request): Pick<CookieOptions, "domain" | "httpOnly" | "path" | "sameSite" | "secure"> {
+  return {
+    ...getSessionCookieOptions(req),
+    httpOnly: false,
+    sameSite: "lax",
+  };
+}

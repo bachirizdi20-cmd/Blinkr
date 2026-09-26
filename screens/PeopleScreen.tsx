@@ -7,7 +7,6 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import UserAvatar from '../components/UserAvatar';
 import EmptyState from '../components/EmptyState';
 import { ContentStackParamList } from '../navigation/types';
-import { useSocial } from '../context/SocialContext';
 import { useAuth } from '../hooks/use-auth';
 import { trpc } from '../lib/trpc';
 import { PeopleFilter } from '../types/social';
@@ -19,12 +18,12 @@ type RouteT = RouteProp<ContentStackParamList, 'People'>;
 export default function PeopleScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<RouteT>();
-  const social = useSocial();
   const { user } = useAuth();
   const [filter, setFilter] = useState<PeopleFilter>(route.params?.initialFilter ?? 'all');
   const [query, setQuery] = useState('');
   const remoteUsers = trpc.social.users.useQuery({ query }, { enabled: Boolean(user) });
   const remoteFollowing = trpc.social.following.useQuery(undefined, { enabled: Boolean(user) });
+  const remoteFollowers = trpc.social.followers.useQuery(undefined, { enabled: Boolean(user) });
   const followMutation = trpc.social.toggleFollow.useMutation({ onSuccess: () => remoteFollowing.refetch() });
   const shareMutation = trpc.social.shareMedia.useMutation({ onSuccess: () => navigation.goBack() });
   const shareMedia = route.params?.shareMedia;
@@ -45,12 +44,12 @@ export default function PeopleScreen() {
 
   const filtered = useMemo(() => {
     let list = people;
-    if (filter === 'following') list = list.filter((u) => u.id.startsWith('remote-') ? remoteFollowingIds.has(u.id) : social.isFollowing(u.id));
-    if (filter === 'followers') list = list.filter((u) => u.followsYou);
+    if (filter === 'following') list = list.filter((u) => remoteFollowingIds.has(u.id));
+    if (filter === 'followers') list = list.filter((u) => (remoteFollowers.data ?? []).includes(Number(u.id.replace('remote-', ''))));
     const q = query.trim().toLowerCase();
     if (q) list = list.filter((u) => u.displayName.toLowerCase().includes(q) || u.username.toLowerCase().includes(q));
     return list;
-  }, [people, social.followingIds, remoteFollowingIds, filter, query]);
+  }, [people, remoteFollowing.data, remoteFollowers.data, remoteFollowingIds, filter, query]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -91,7 +90,7 @@ export default function PeopleScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => {
-            const following = item.id.startsWith('remote-') ? remoteFollowingIds.has(item.id) : social.isFollowing(item.id);
+            const following = remoteFollowingIds.has(item.id);
             return (
               <Pressable style={styles.row} onPress={() => navigation.navigate('UserProfile', { userId: item.id })}>
                 <UserAvatar name={item.displayName} color={item.avatarColor} size={50} />
@@ -109,7 +108,7 @@ export default function PeopleScreen() {
                 </View>
                 <Pressable
                   style={[styles.followBtn, following && styles.followingBtn]}
-                  onPress={() => item.id.startsWith('remote-') ? followMutation.mutate({ userId: Number(item.id.replace('remote-', '')) }) : social.toggleFollow(item.id)}
+                  onPress={() => followMutation.mutate({ userId: Number(item.id.replace('remote-', '')) })}
                 >
                   <Text style={[styles.followBtnText, following && styles.followingBtnText]}>
                     {following ? 'Following' : 'Follow'}

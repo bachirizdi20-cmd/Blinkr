@@ -284,6 +284,23 @@ export async function listFollowingIds(userId: number) {
   return rows.map((row) => row.followingId);
 }
 
+export async function listFollowerIds(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({ followerId: follows.followerId }).from(follows).where(eq(follows.followingId, userId));
+  return rows.map((row) => row.followerId);
+}
+
+export async function getUserSocialStats(userId: number) {
+  const db = await getDb();
+  if (!db) return { followerCount: 0, followingCount: 0 };
+  const [followers, following] = await Promise.all([
+    db.select({ id: follows.id }).from(follows).where(eq(follows.followingId, userId)),
+    db.select({ id: follows.id }).from(follows).where(eq(follows.followerId, userId)),
+  ]);
+  return { followerCount: followers.length, followingCount: following.length };
+}
+
 export async function listSocialFeed(userId: number) {
   const db = await getDb();
   if (!db) return [];
