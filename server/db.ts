@@ -378,6 +378,7 @@ export async function listNotifications(userId: number) {
     actorId: notifications.actorId,
     kind: notifications.kind,
     reviewId: notifications.reviewId,
+    conversationId: notifications.conversationId,
     readAt: notifications.readAt,
     createdAt: notifications.createdAt,
     actorName: users.name,
@@ -660,7 +661,7 @@ export async function createChatMessage(input: Omit<InsertChatMessage, "id" | "c
   await db.insert(chatMessages).values(input);
   await db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, input.conversationId));
   const message = await db.select().from(chatMessages).where(and(eq(chatMessages.conversationId, input.conversationId), eq(chatMessages.senderId, input.senderId))).orderBy(desc(chatMessages.createdAt)).limit(1);
-  await db.insert(notifications).values({ userId: recipientId, actorId: input.senderId, kind: "comment" });
+  await db.insert(notifications).values({ userId: recipientId, actorId: input.senderId, kind: "message", conversationId: input.conversationId });
   return message[0];
 }
 

@@ -102,8 +102,9 @@ export const notifications = mysqlTable("notifications", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
   actorId: int("actorId"),
-  kind: mysqlEnum("kind", ["follow", "like", "comment"]).notNull(),
+  kind: mysqlEnum("kind", ["follow", "like", "comment", "message"]).notNull(),
   reviewId: int("reviewId"),
+  conversationId: int("conversationId"),
   readAt: timestamp("readAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });

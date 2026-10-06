@@ -33,6 +33,7 @@ import { useAuth } from '../hooks/use-auth';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type RouteT = RouteProp<ContentStackParamList, 'Conversation'>;
+type AudioDraft = { base64: string; mimeType: 'audio/m4a' | 'audio/mp4' | 'audio/webm' | 'audio/mpeg'; size: number };
 
 async function readUriAsBase64(uri: string): Promise<string> {
   if (Platform.OS !== 'web') {
@@ -74,6 +75,8 @@ export default function ConversationScreen() {
   const [gifError, setGifError] = useState<string | null>(null);
   const [failedGif, setFailedGif] = useState<GiphyGif | null>(null);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [messageSearchOpen, setMessageSearchOpen] = useState(false);
+  const [messageSearch, setMessageSearch] = useState('');
   const [cardSearch, setCardSearch] = useState('');
   const cardSearchQuery = trpc.tmdb.get.useQuery({ path: '/search/multi', params: { query: cardSearch, include_adult: false } }, { enabled: cardPickerOpen && cardSearch.trim().length >= 2, retry: 1 });
   const remoteUser = useMemo<MockUser | undefined>(() => {
@@ -93,6 +96,8 @@ export default function ConversationScreen() {
   const isTyping = false;
   const [text, setText] = useState('');
   const [pendingImage, setPendingImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [failedAudio, setFailedAudio] = useState<AudioDraft | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(audioRecorder, 250);
@@ -173,10 +178,12 @@ export default function ConversationScreen() {
     }
     if (sendAttachmentMutation.isPending) return;
     setFailedGif(null);
+    setAttachmentError(null);
     try {
       await sendAttachmentMutation.mutateAsync({ otherUserId: numericOtherUserId, externalUrl: gif.images.original.url, mediaType: 'gif', mimeType: 'image/gif', size: 0 });
       setGifPickerOpen(false);
     } catch {
+      setAttachmentError('Could not send GIF. Tap Retry to try again.');
       setFailedGif(gif);
     }
   };
@@ -206,7 +213,15 @@ export default function ConversationScreen() {
         if (!uri) return;
         const base64 = await readUriAsBase64(uri);
         const mimeType = Platform.OS === 'web' ? 'audio/webm' : 'audio/m4a';
-        await sendAttachmentMutation.mutateAsync({ otherUserId: numericOtherUserId, base64, mediaType: 'audio', mimeType, size: base64.length });
+        const draft: AudioDraft = { base64, mimeType, size: base64.length };
+        setAttachmentError(null);
+        try {
+          await sendAttachmentMutation.mutateAsync({ otherUserId: numericOtherUserId, ...draft, mediaType: 'audio' });
+          setFailedAudio(null);
+        } catch {
+          setFailedAudio(draft);
+          setAttachmentError('Could not send voice message. Tap Retry to try again.');
+        }
         return;
       }
       const permission = await requestRecordingPermissionsAsync();
@@ -231,10 +246,23 @@ export default function ConversationScreen() {
   const handleSendImage = async () => {
     if (!pendingImage || !authUser || sendImageMutation.isPending) return;
     try {
+      setAttachmentError(null);
       const base64 = await FileSystem.readAsStringAsync(pendingImage.uri, { encoding: FileSystem.EncodingType.Base64 });
       await sendImageMutation.mutateAsync({ otherUserId: numericOtherUserId, base64, mimeType: pendingImage.mimeType === 'image/png' ? 'image/png' : 'image/jpeg', size: pendingImage.fileSize ?? base64.length });
       setPendingImage(null);
-    } catch { Alert.alert('Could not send image', 'Please try again.'); }
+      setAttachmentError(null);
+    } catch { setAttachmentError('Could not send image. Tap Retry to try again.'); }
+  };
+
+  const handleRetryAudio = async () => {
+    if (!failedAudio || !isRemoteConversation || sendAttachmentMutation.isPending) return;
+    try {
+      setAttachmentError(null);
+      await sendAttachmentMutation.mutateAsync({ otherUserId: numericOtherUserId, ...failedAudio, mediaType: 'audio' });
+      setFailedAudio(null);
+    } catch {
+      setAttachmentError('Could not send voice message. Tap Retry to try again.');
+    }
   };
 
   const handleDelete = () => {
@@ -251,7 +279,9 @@ export default function ConversationScreen() {
   };
 
   const remoteMessages = (messagesQuery.data ?? []).map((item: any) => ({ ...item, id: String(item.id), sender: item.senderId === Number(authUser?.id) ? 'me' : 'them', createdAt: new Date(item.createdAt), text: item.text ?? '' }));
-  const data = remoteMessages;
+  const data = messageSearch.trim()
+    ? remoteMessages.filter((item: any) => item.text.toLowerCase().includes(messageSearch.trim().toLowerCase()))
+    : remoteMessages;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -267,7 +297,7 @@ export default function ConversationScreen() {
           </View>
         </Pressable>
         <View style={styles.headerActions}>
-          <Pressable onPress={() => Alert.alert('Search messages', 'Message search will be available here.')} hitSlop={8} accessibilityLabel="Search messages">
+          <Pressable onPress={() => setMessageSearchOpen((open) => !open)} hitSlop={8} accessibilityLabel="Search messages">
             <Ionicons name="search-outline" size={20} color={colors.textDim} />
           </Pressable>
           <Pressable onPress={() => Alert.alert('Conversation options', undefined, [{ text: 'Delete conversation', style: 'destructive', onPress: handleDelete }, { text: 'Cancel', style: 'cancel' }])} hitSlop={8} accessibilityLabel="Conversation options">
@@ -275,6 +305,7 @@ export default function ConversationScreen() {
           </Pressable>
         </View>
       </View>
+      {messageSearchOpen ? <View style={styles.messageSearchBar}><Ionicons name="search-outline" size={17} color={colors.textFaint} /><TextInput autoFocus value={messageSearch} onChangeText={setMessageSearch} placeholder="Search this conversation" placeholderTextColor={colors.textFaint} style={styles.messageSearchInput} returnKeyType="search" /><Pressable onPress={() => { setMessageSearch(''); setMessageSearchOpen(false); }} hitSlop={8}><Ionicons name="close" size={18} color={colors.textDim} /></Pressable></View> : null}
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={90}>
         {data.length === 0 ? (
@@ -317,7 +348,8 @@ export default function ConversationScreen() {
           />
         )}
 
-        {pendingImage ? <View style={styles.previewBar}><Image source={{ uri: pendingImage.uri }} style={styles.previewImage} /><View style={styles.previewCopy}><Text style={styles.previewTitle}>Ready to send</Text><Text style={styles.previewMeta}>{pendingImage.width} × {pendingImage.height}</Text></View><Pressable onPress={() => setPendingImage(null)} style={styles.previewCancel}><Ionicons name="close" size={19} color={colors.textDim} /></Pressable><Pressable onPress={handleSendImage} style={styles.previewSend} disabled={sendImageMutation.isPending}><Ionicons name="send" size={16} color="#04120C" /></Pressable></View> : null}
+        {attachmentError ? <View style={styles.attachmentError}><Ionicons name="warning-outline" size={16} color="#FF8A4C" /><Text style={styles.attachmentErrorText}>{attachmentError}</Text><Pressable onPress={() => failedAudio ? handleRetryAudio() : pendingImage ? handleSendImage() : failedGif ? handleSelectGiphy(failedGif) : undefined} disabled={sendImageMutation.isPending || sendAttachmentMutation.isPending}><Text style={styles.retryAction}>Retry</Text></Pressable></View> : null}
+        {pendingImage ? <View style={styles.previewBar}><Image source={{ uri: pendingImage.uri }} style={styles.previewImage} /><View style={styles.previewCopy}><Text style={styles.previewTitle}>Ready to send</Text><Text style={styles.previewMeta}>{pendingImage.width} × {pendingImage.height}</Text></View><Pressable onPress={() => { setPendingImage(null); setAttachmentError(null); }} style={styles.previewCancel}><Ionicons name="close" size={19} color={colors.textDim} /></Pressable><Pressable onPress={handleSendImage} style={styles.previewSend} disabled={sendImageMutation.isPending}><Ionicons name="send" size={16} color="#04120C" /></Pressable></View> : null}
         <View style={styles.inputBar}>
           <Pressable style={({ pressed }) => [styles.attachBtn, pressed && styles.iconBtnPressed]} onPress={() => setAttachmentOpen(true)} accessibilityLabel="Open attachment menu">
             <Ionicons name="add" size={24} color={colors.textDim} />
@@ -367,13 +399,9 @@ export default function ConversationScreen() {
             <Text style={styles.sheetTitle}>Share something</Text>
             <View style={styles.attachmentGrid}>
               <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); setCardPickerOpen(true); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(53, 211, 153, 0.16)' }]}><Ionicons name="film" size={22} color={colors.accent} /></View><Text style={styles.attachmentLabel}>Share a movie</Text></Pressable>
-              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Share a review', 'Open a movie from Create or Details to write and share a review.'); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(255, 195, 80, 0.16)' }]}><Ionicons name="star" size={22} color={colors.gold} /></View><Text style={styles.attachmentLabel}>Share a review</Text></Pressable>
-              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Share watchlist', 'Watchlist sharing will be available when a saved list is selected.'); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(80, 160, 255, 0.16)' }]}><Ionicons name="bookmark" size={22} color="#62B2FF" /></View><Text style={styles.attachmentLabel}>Share watchlist</Text></Pressable>
               <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Send photo', 'Choose a source', [{ text: 'Camera', onPress: () => handlePickImage(true) }, { text: 'Photo library', onPress: () => handlePickImage(false) }, { text: 'Cancel', style: 'cancel' }]); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(91, 178, 255, 0.16)' }]}><Ionicons name="image" size={22} color="#62B2FF" /></View><Text style={styles.attachmentLabel}>Send photo</Text></Pressable>
               <Pressable style={styles.attachmentItem} onPress={openGifPicker}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(146, 91, 255, 0.18)' }]}><Text style={styles.gifLabel}>GIF</Text></View><Text style={styles.attachmentLabel}>Find GIF</Text></Pressable>
               <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); handleRecordToggle(); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(255, 126, 58, 0.16)' }]}><Ionicons name="mic" size={22} color="#FF8A4C" /></View><Text style={styles.attachmentLabel}>{recorderState.isRecording ? 'Stop recording' : 'Voice message'}</Text></Pressable>
-              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Share list', 'List sharing will be available when a saved list is selected.'); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(53, 211, 153, 0.16)' }]}><Ionicons name="list" size={22} color={colors.accent} /></View><Text style={styles.attachmentLabel}>Share list</Text></Pressable>
-              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('More options', 'More sharing options will appear here.'); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(140, 151, 170, 0.2)' }]}><Ionicons name="ellipsis-horizontal" size={22} color={colors.textDim} /></View><Text style={styles.attachmentLabel}>More</Text></Pressable>
             </View>
           </View>
         </View>
@@ -397,6 +425,8 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   headerName: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800' },
   headerStatus: { color: colors.textFaint, fontSize: 11, marginTop: 1 },
+  messageSearchBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginHorizontal: spacing.lg, marginTop: spacing.sm, paddingHorizontal: spacing.md, height: 42, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  messageSearchInput: { flex: 1, color: colors.text, fontSize: fontSizes.sm, paddingVertical: 0 },
   messagesContent: { padding: spacing.lg, gap: spacing.sm },
   bubbleRow: { marginBottom: spacing.sm, maxWidth: '80%' },
   bubbleRowMine: { alignSelf: 'flex-end', alignItems: 'flex-end' },
@@ -454,6 +484,8 @@ const styles = StyleSheet.create({
   retryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,80,100,0.12)', borderRadius: radius.md, padding: spacing.sm, marginBottom: spacing.md },
   retryText: { color: colors.textDim, fontSize: 12 },
   retryAction: { color: colors.accent, fontWeight: '800', fontSize: 12 },
+  attachmentError: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginHorizontal: spacing.lg, marginBottom: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: radius.sm, backgroundColor: 'rgba(255,138,76,0.12)' },
+  attachmentErrorText: { flex: 1, color: colors.textDim, fontSize: 11 },
   mediaCard: { flexDirection: 'row', width: 245, minHeight: 118, overflow: 'hidden', borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.xs },
   cardPoster: { width: 76, height: 118, backgroundColor: colors.surfaceHigh },
   cardCopy: { flex: 1, padding: spacing.sm, justifyContent: 'center' },
