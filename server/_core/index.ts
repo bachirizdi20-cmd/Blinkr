@@ -57,25 +57,28 @@ async function startServer() {
   // CORS is allowlisted. Native clients use Bearer auth and normally do not send an Origin.
   app.use((req, res, next) => {
     const origin = req.headers.origin;
-    if (!isAllowedOrigin(origin)) {
+    const trustedOrigin = isAllowedOrigin(origin);
+    if (!trustedOrigin) {
       if (req.method === "OPTIONS") {
         res.status(403).json({ error: "Origin is not allowed" });
         return;
       }
-      next();
-      return;
+      if (origin) {
+        res.status(403).json({ error: "Origin is not allowed" });
+        return;
+      }
+    } else {
+      res.header("Vary", "Origin");
+      if (origin) {
+        res.header("Access-Control-Allow-Origin", origin);
+        res.header("Access-Control-Allow-Credentials", "true");
+      }
+      res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+      res.header(
+        "Access-Control-Allow-Headers",
+        "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-CSRF-Token",
+      );
     }
-
-    res.header("Vary", "Origin");
-    if (origin) {
-      res.header("Access-Control-Allow-Origin", origin);
-      res.header("Access-Control-Allow-Credentials", "true");
-    }
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.header(
-      "Access-Control-Allow-Headers",
-      "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-CSRF-Token",
-    );
 
     const cookies = parseCookies(req.headers.cookie ?? "");
     if (!cookies[CSRF_COOKIE_NAME]) {
@@ -92,12 +95,16 @@ async function startServer() {
     }
 
     // Bearer-authenticated native requests are not exposed to browser CSRF.
-    // Cookie-authenticated browser mutations must echo the readable CSRF cookie.
+    // For browser requests from explicitly allowlisted origins, Origin validation
+    // is the CSRF boundary: a frontend on another registrable domain cannot read
+    // the API host's CSRF cookie to echo it in a header.
     const tokenProtectedReset = req.path === "/api/auth/reset-password";
     if (STATE_CHANGING_METHODS.has(req.method) && !hasBearerAuthorization(req) && !tokenProtectedReset) {
       const csrfCookie = cookies[CSRF_COOKIE_NAME];
       const csrfHeader = req.headers["x-csrf-token"];
-      if (!csrfCookie || typeof csrfHeader !== "string" || csrfHeader !== csrfCookie) {
+      const validCsrfToken = Boolean(csrfCookie && typeof csrfHeader === "string" && csrfHeader === csrfCookie);
+      const trustedBrowserOrigin = typeof origin === "string" && trustedOrigin;
+      if (!trustedBrowserOrigin && !validCsrfToken) {
         res.status(403).json({ error: "CSRF validation failed" });
         return;
       }
