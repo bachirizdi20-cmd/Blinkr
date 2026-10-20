@@ -3,7 +3,6 @@ import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-nativ
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { trpc } from "@/lib/trpc";
 import * as Auth from "@/lib/_core/auth";
-import { startOAuthLogin } from "@/constants/oauth";
 import { colors, fontSizes, radius, spacing } from "@/lib/theme";
 
 type Props = { onAuthenticated: () => Promise<void> | void };
@@ -13,20 +12,26 @@ type FieldErrors = Partial<Record<FieldName, string>>;
 
 function friendlyAuthError(message: string) {
   const normalized = message.toLowerCase();
+  if (normalized.includes("too many")) return "محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.";
   if (normalized.includes("network") || normalized.includes("fetch") || normalized.includes("timeout") || normalized.includes("connect")) {
-    return "We couldn't connect right now. Check your internet connection and try again.";
+    return "تعذّر الاتصال الآن. تحقق من الإنترنت وحاول مرة أخرى.";
   }
-  if (normalized.includes("invalid") || normalized.includes("incorrect") || normalized.includes("password") || normalized.includes("credential")) {
-    return "The email or password is incorrect. Check your details and try again.";
+  if (normalized.includes("already") || normalized.includes("exists") || normalized.includes("conflict")) {
+    return "هذا البريد مسجّل بالفعل. سجّل الدخول بدلًا من ذلك.";
   }
-  if (normalized.includes("already") || normalized.includes("exists")) {
-    return "This email is already registered. Try signing in instead.";
+  if (normalized.includes("invalid") || normalized.includes("incorrect") || normalized.includes("password") || normalized.includes("credential") || normalized.includes("unauthorized")) {
+    return "البريد الإلكتروني أو كلمة المرور غير صحيحة. تحقق منهما وحاول مجددًا.";
   }
-  return "Something went wrong. Please try again in a moment.";
+  return "تعذّر إكمال العملية. حاول مرة أخرى بعد قليل.";
 }
 
 function FieldError({ message }: { message?: string }) {
-  return message ? <Text style={styles.fieldError} accessibilityRole="alert"><Ionicons name="alert-circle-outline" size={13} color={colors.danger} /> {message}</Text> : null;
+  if (!message) return null;
+  return (
+    <Text style={styles.fieldError} accessibilityRole="alert">
+      <Ionicons name="alert-circle-outline" size={14} color={colors.danger} /> {message}
+    </Text>
+  );
 }
 
 export function AuthPanel({ onAuthenticated }: Props) {
@@ -40,7 +45,10 @@ export function AuthPanel({ onAuthenticated }: Props) {
   const [fieldErrors, setFieldErrors] = React.useState<FieldErrors>({});
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
-  const [oauthLoading, setOauthLoading] = React.useState(false);
+  const nameRef = React.useRef<TextInput>(null);
+  const emailRef = React.useRef<TextInput>(null);
+  const passwordRef = React.useRef<TextInput>(null);
+  const confirmPasswordRef = React.useRef<TextInput>(null);
 
   const complete = React.useCallback(async (result: { sessionToken: string; user: Auth.User }) => {
     await Auth.setSessionToken(result.sessionToken);
@@ -52,12 +60,20 @@ export function AuthPanel({ onAuthenticated }: Props) {
   const login = trpc.auth.login.useMutation({ onSuccess: complete, onError: onMutationError });
   const register = trpc.auth.register.useMutation({ onSuccess: complete, onError: onMutationError });
   const forgotPassword = trpc.auth.forgotPassword.useMutation({
-    onSuccess: () => { setNotice("If an account exists for this email, a reset link has been sent."); setError(null); },
+    onSuccess: () => {
+      setNotice("إذا كان البريد مرتبطًا بحساب، فسيصلك رابط إعادة التعيين.");
+      setError(null);
+    },
     onError: onMutationError,
   });
-  const busy = login.isPending || register.isPending || forgotPassword.isPending || oauthLoading;
+  const busy = login.isPending || register.isPending || forgotPassword.isPending;
 
-  const clearFeedback = () => { setFieldErrors({}); setError(null); setNotice(null); };
+  const clearFeedback = () => {
+    setFieldErrors({});
+    setError(null);
+    setNotice(null);
+  };
+
   const changeMode = (nextMode: AuthMode) => {
     setMode(nextMode);
     clearFeedback();
@@ -71,99 +87,197 @@ export function AuthPanel({ onAuthenticated }: Props) {
     clearFeedback();
     const errors: FieldErrors = {};
     const normalizedEmail = email.trim().toLowerCase();
-    if (mode === "register" && name.trim().length < 2) errors.name = "Enter at least 2 characters for your name.";
-    if (!normalizedEmail) errors.email = "Email is required.";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) errors.email = "Enter a valid email address.";
-    if (mode !== "forgot" && password.length < 8) errors.password = "Use at least 8 characters.";
-    if (mode === "register" && password !== confirmPassword) errors.confirmPassword = "Passwords do not match.";
-    if (Object.keys(errors).length) { setFieldErrors(errors); setError("Please check the highlighted fields."); return; }
-    if (mode === "forgot") { forgotPassword.mutate({ email: normalizedEmail }); return; }
-    if (mode === "register") register.mutate({ email: normalizedEmail, password, name: name.trim() });
-    else login.mutate({ email: normalizedEmail, password });
-  };
+    if (mode === "register" && name.trim().length < 2) errors.name = "اكتب اسمًا من حرفين على الأقل.";
+    if (!normalizedEmail) errors.email = "البريد الإلكتروني مطلوب.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) errors.email = "اكتب بريدًا إلكترونيًا صحيحًا.";
+    if (mode !== "forgot" && password.length < 8) errors.password = "استخدم 8 أحرف على الأقل.";
+    if (mode === "register" && password !== confirmPassword) errors.confirmPassword = "كلمتا المرور غير متطابقتين.";
 
-  const oauth = async () => {
-    clearFeedback();
-    setOauthLoading(true);
-    try { await startOAuthLogin(); }
-    catch (oauthError) { setError(friendlyAuthError(oauthError instanceof Error ? oauthError.message : "OAuth sign in failed")); }
-    finally { setOauthLoading(false); }
+    if (Object.keys(errors).length) {
+      setFieldErrors(errors);
+      setError("راجع الحقول المحددة ثم حاول مرة أخرى.");
+      return;
+    }
+
+    if (mode === "forgot") {
+      forgotPassword.mutate({ email: normalizedEmail });
+      return;
+    }
+    if (mode === "register") {
+      register.mutate({ email: normalizedEmail, password, name: name.trim() });
+      return;
+    }
+    login.mutate({ email: normalizedEmail, password });
   };
 
   const isForgot = mode === "forgot";
-  const submitLabel = mode === "register" ? "Create account" : isForgot ? "Send reset link" : "Sign in";
-  const inputStyle = (field: FieldName) => [styles.input, fieldErrors[field] && styles.inputInvalid];
+  const isRegister = mode === "register";
+  const submitLabel = isRegister ? "إنشاء حساب" : isForgot ? "إرسال رابط الاستعادة" : "تسجيل الدخول";
 
   return (
     <View style={styles.container}>
-      <Text style={styles.modeTitle}>{mode === "register" ? "Create an account" : isForgot ? "Reset your password" : "Sign in"}</Text>
-      <Text style={styles.modeSubtitle}>{isForgot ? "Enter your email and we’ll send you a secure reset link." : mode === "register" ? "Join Blinkr and keep your movie world in one place." : "Sign in to continue to your Blinkr account."}</Text>
-      {mode === "register" ? <>
-        <Text style={styles.label}>Name</Text>
-        <TextInput value={name} onChangeText={(value) => { setName(value); setFieldErrors((current) => ({ ...current, name: undefined })); }} placeholder="Your name" placeholderTextColor={colors.textFaint} autoCapitalize="words" style={inputStyle("name")} editable={!busy} />
+      <Text style={styles.modeTitle}>{isRegister ? "إنشاء حساب" : isForgot ? "استعادة كلمة المرور" : "تسجيل الدخول"}</Text>
+      <Text style={styles.modeSubtitle}>
+        {isForgot
+          ? "أدخل بريدك الإلكتروني وسنرسل لك رابطًا آمنًا لإعادة تعيين كلمة المرور."
+          : isRegister
+            ? "أنشئ حسابك وابدأ بمشاركة عالمك السينمائي."
+            : "أدخل بيانات حسابك للمتابعة إلى Blinkr."}
+      </Text>
+
+      {isRegister ? <>
+        <Text style={styles.label}>الاسم</Text>
+        <TextInput
+          ref={nameRef}
+          value={name}
+          onChangeText={(value) => { setName(value); setFieldErrors((current) => ({ ...current, name: undefined })); }}
+          placeholder="اكتب اسمك"
+          placeholderTextColor={colors.textFaint}
+          autoCapitalize="words"
+          autoCorrect={false}
+          autoComplete="name"
+          textContentType="name"
+          returnKeyType="next"
+          onSubmitEditing={() => emailRef.current?.focus()}
+          maxLength={80}
+          accessibilityLabel="الاسم"
+          style={[styles.input, styles.rtlInput, fieldErrors.name && styles.inputInvalid]}
+          editable={!busy}
+        />
         <FieldError message={fieldErrors.name} />
       </> : null}
-      <Text style={styles.label}>Email</Text>
-      <TextInput value={email} onChangeText={(value) => { setEmail(value); setFieldErrors((current) => ({ ...current, email: undefined })); }} placeholder="you@example.com" placeholderTextColor={colors.textFaint} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} textContentType="emailAddress" autoComplete="email" style={inputStyle("email")} editable={!busy} />
+
+      <Text style={styles.label}>البريد الإلكتروني</Text>
+      <TextInput
+        ref={emailRef}
+        value={email}
+        onChangeText={(value) => { setEmail(value); setFieldErrors((current) => ({ ...current, email: undefined })); }}
+        placeholder="name@example.com"
+        placeholderTextColor={colors.textFaint}
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="email"
+        textContentType="emailAddress"
+        returnKeyType={isForgot ? "go" : "next"}
+        onSubmitEditing={() => isForgot ? submit() : passwordRef.current?.focus()}
+        accessibilityLabel="البريد الإلكتروني"
+        style={[styles.input, styles.ltrInput, fieldErrors.email && styles.inputInvalid]}
+        editable={!busy}
+      />
       <FieldError message={fieldErrors.email} />
+
       {!isForgot ? <>
-        <Text style={styles.label}>Password</Text>
+        <Text style={styles.label}>كلمة المرور</Text>
         <View style={[styles.passwordRow, fieldErrors.password && styles.inputInvalid]}>
-          <TextInput value={password} onChangeText={(value) => { setPassword(value); setFieldErrors((current) => ({ ...current, password: undefined })); }} placeholder="At least 8 characters" placeholderTextColor={colors.textFaint} secureTextEntry={!showPassword} textContentType={mode === "register" ? "newPassword" : "password"} autoComplete={mode === "register" ? "new-password" : "current-password"} style={styles.passwordInput} editable={!busy} returnKeyType={mode === "register" ? "next" : "done"} onSubmitEditing={mode === "login" ? submit : undefined} />
-          <Pressable onPress={() => setShowPassword((value) => !value)} disabled={busy} style={styles.eyeButton} accessibilityRole="button" accessibilityLabel={showPassword ? "Hide password" : "Show password"}><Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textDim} /></Pressable>
+          <TextInput
+            ref={passwordRef}
+            value={password}
+            onChangeText={(value) => { setPassword(value); setFieldErrors((current) => ({ ...current, password: undefined })); }}
+            placeholder="8 أحرف على الأقل"
+            placeholderTextColor={colors.textFaint}
+            secureTextEntry={!showPassword}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete={isRegister ? "new-password" : "current-password"}
+            textContentType={isRegister ? "newPassword" : "password"}
+            returnKeyType={isRegister ? "next" : "go"}
+            onSubmitEditing={() => isRegister ? confirmPasswordRef.current?.focus() : submit()}
+            accessibilityLabel="كلمة المرور"
+            style={[styles.passwordInput, styles.ltrInput]}
+            editable={!busy}
+          />
+          <Pressable
+            onPress={() => setShowPassword((value) => !value)}
+            disabled={busy}
+            style={styles.eyeButton}
+            accessibilityRole="button"
+            accessibilityLabel={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+          >
+            <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={22} color={colors.textDim} />
+          </Pressable>
         </View>
         <FieldError message={fieldErrors.password} />
-        {mode === "register" ? <>
-          <Text style={styles.label}>Confirm password</Text>
+
+        {isRegister ? <>
+          <Text style={styles.label}>تأكيد كلمة المرور</Text>
           <View style={[styles.passwordRow, fieldErrors.confirmPassword && styles.inputInvalid]}>
-            <TextInput value={confirmPassword} onChangeText={(value) => { setConfirmPassword(value); setFieldErrors((current) => ({ ...current, confirmPassword: undefined })); }} placeholder="Repeat your password" placeholderTextColor={colors.textFaint} secureTextEntry={!showConfirmPassword} textContentType="newPassword" autoComplete="new-password" style={styles.passwordInput} editable={!busy} returnKeyType="done" onSubmitEditing={submit} />
-            <Pressable onPress={() => setShowConfirmPassword((value) => !value)} disabled={busy} style={styles.eyeButton} accessibilityRole="button" accessibilityLabel={showConfirmPassword ? "Hide confirmed password" : "Show confirmed password"}><Ionicons name={showConfirmPassword ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textDim} /></Pressable>
+            <TextInput
+              ref={confirmPasswordRef}
+              value={confirmPassword}
+              onChangeText={(value) => { setConfirmPassword(value); setFieldErrors((current) => ({ ...current, confirmPassword: undefined })); }}
+              placeholder="أعد كتابة كلمة المرور"
+              placeholderTextColor={colors.textFaint}
+              secureTextEntry={!showConfirmPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="new-password"
+              textContentType="newPassword"
+              returnKeyType="go"
+              onSubmitEditing={submit}
+              accessibilityLabel="تأكيد كلمة المرور"
+              style={[styles.passwordInput, styles.ltrInput]}
+              editable={!busy}
+            />
+            <Pressable
+              onPress={() => setShowConfirmPassword((value) => !value)}
+              disabled={busy}
+              style={styles.eyeButton}
+              accessibilityRole="button"
+              accessibilityLabel={showConfirmPassword ? "إخفاء كلمة التأكيد" : "إظهار كلمة التأكيد"}
+            >
+              <Ionicons name={showConfirmPassword ? "eye-off-outline" : "eye-outline"} size={22} color={colors.textDim} />
+            </Pressable>
           </View>
           <FieldError message={fieldErrors.confirmPassword} />
         </> : null}
       </> : null}
-      {error ? <View style={styles.errorBox} accessibilityRole="alert"><Ionicons name="warning-outline" size={18} color={colors.danger} /><Text style={styles.errorText}>{error}</Text></View> : null}
-      {notice ? <View style={styles.noticeBox} accessibilityRole="alert"><Ionicons name="checkmark-circle-outline" size={18} color={colors.accent} /><Text style={styles.noticeText}>{notice}</Text></View> : null}
-      <Pressable onPress={submit} disabled={busy} style={({ pressed }) => [styles.primary, pressed && styles.pressed, busy && styles.disabled]} accessibilityRole="button">
+
+      {error ? <View style={styles.errorBox} accessibilityRole="alert"><Ionicons name="warning-outline" size={19} color={colors.danger} /><Text style={styles.errorText}>{error}</Text></View> : null}
+      {notice ? <View style={styles.noticeBox} accessibilityRole="alert"><Ionicons name="checkmark-circle-outline" size={19} color={colors.accent} /><Text style={styles.noticeText}>{notice}</Text></View> : null}
+
+      <Pressable
+        onPress={submit}
+        disabled={busy}
+        style={({ pressed }) => [styles.primary, pressed && styles.pressed, busy && styles.disabled]}
+        accessibilityRole="button"
+        accessibilityLabel={submitLabel}
+      >
         {busy ? <ActivityIndicator color={colors.bg} /> : <Text style={styles.primaryText}>{submitLabel}</Text>}
       </Pressable>
-      {mode === "login" ? <Pressable onPress={() => changeMode("forgot")} disabled={busy} style={styles.switch}><Text style={styles.switchText}>Forgot password?</Text></Pressable> : null}
-      {mode === "forgot" ? <Pressable onPress={() => changeMode("login")} disabled={busy} style={styles.switch}><Text style={styles.switchText}>Back to sign in</Text></Pressable> : null}
-      <Pressable onPress={() => changeMode(mode === "register" ? "login" : "register")} disabled={busy} style={styles.switch}><Text style={styles.switchText}>{mode === "login" || mode === "forgot" ? "New to Blinkr? Create an account" : "Already have an account? Sign in"}</Text></Pressable>
-      {mode !== "forgot" ? <>
-        <View style={styles.divider}><View style={styles.line} /><Text style={styles.or}>OR</Text><View style={styles.line} /></View>
-        <Pressable onPress={oauth} disabled={busy} style={({ pressed }) => [styles.oauth, pressed && styles.pressed, busy && styles.disabled]}>
-          {oauthLoading ? <ActivityIndicator color={colors.text} /> : <><Ionicons name="globe-outline" size={18} color={colors.text} /><Text style={styles.oauthText}>Continue with OAuth</Text></>}
-        </Pressable>
-      </> : null}
+
+      {mode === "login" ? <Pressable onPress={() => changeMode("forgot")} disabled={busy} style={styles.switch}><Text style={styles.switchText}>نسيت كلمة المرور؟</Text></Pressable> : null}
+      {isForgot ? <Pressable onPress={() => changeMode("login")} disabled={busy} style={styles.switch}><Text style={styles.switchText}>العودة إلى تسجيل الدخول</Text></Pressable> : null}
+      <Pressable onPress={() => changeMode(isRegister ? "login" : "register")} disabled={busy} style={styles.switch}>
+        <Text style={styles.switchText}>{isRegister ? "لديك حساب بالفعل؟ سجّل الدخول" : "مستخدم جديد؟ أنشئ حسابًا"}</Text>
+      </Pressable>
+      <Text style={styles.passwordHint}>كلمة المرور يجب أن تحتوي على 8 أحرف على الأقل.</Text>
     </View>
   );
 }
 
 const styles = {
-  container: { width: "100%" as const, maxWidth: 380 },
-  modeTitle: { color: colors.text, fontSize: fontSizes.xl, fontWeight: "900" as const, textAlign: "center" as const, marginBottom: 3 },
-  modeSubtitle: { color: colors.textDim, fontSize: fontSizes.sm, lineHeight: 19, textAlign: "center" as const, marginBottom: spacing.sm },
-  label: { color: colors.textDim, fontSize: 12, fontWeight: "800" as const, marginTop: spacing.sm + 2, marginBottom: 2 },
-  input: { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.borderLight, borderRadius: 9, color: colors.text, paddingHorizontal: spacing.md, paddingVertical: 13, fontSize: fontSizes.md },
+  container: { width: "100%" as const, maxWidth: 420, alignSelf: "center" as const, direction: "rtl" as const },
+  modeTitle: { color: colors.text, fontSize: fontSizes.xl, fontWeight: "900" as const, textAlign: "center" as const, marginBottom: 5 },
+  modeSubtitle: { color: colors.textDim, fontSize: fontSizes.sm, lineHeight: 22, textAlign: "center" as const, marginBottom: spacing.md, writingDirection: "rtl" as const },
+  label: { color: colors.text, fontSize: fontSizes.sm, fontWeight: "800" as const, textAlign: "right" as const, marginTop: spacing.sm, marginBottom: 6, writingDirection: "rtl" as const },
+  input: { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.borderLight, borderRadius: 12, color: colors.text, paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 16, lineHeight: 22, minHeight: 56 },
+  rtlInput: { textAlign: "right" as const, writingDirection: "rtl" as const },
+  ltrInput: { textAlign: "left" as const, writingDirection: "ltr" as const },
   inputInvalid: { borderColor: colors.danger, borderWidth: 1.5 },
-  passwordRow: { flexDirection: "row" as const, alignItems: "center" as const, backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.borderLight, borderRadius: 9 },
-  passwordInput: { flex: 1, color: colors.text, paddingHorizontal: spacing.md, paddingVertical: 13, fontSize: fontSizes.md },
-  eyeButton: { minWidth: 48, alignItems: "center" as const, justifyContent: "center" as const, alignSelf: "stretch" as const },
-  fieldError: { color: colors.danger, fontSize: 12, lineHeight: 17, marginTop: 4 },
-  errorBox: { flexDirection: "row" as const, alignItems: "flex-start" as const, gap: 8, backgroundColor: "rgba(248, 113, 113, 0.12)", borderWidth: 1, borderColor: "rgba(248, 113, 113, 0.32)", borderRadius: radius.md, padding: spacing.sm, marginTop: spacing.md },
-  errorText: { flex: 1, color: colors.danger, fontSize: fontSizes.sm, lineHeight: 20 },
-  noticeBox: { flexDirection: "row" as const, alignItems: "flex-start" as const, gap: 8, backgroundColor: "rgba(53, 211, 153, 0.10)", borderWidth: 1, borderColor: "rgba(53, 211, 153, 0.30)", borderRadius: radius.md, padding: spacing.sm, marginTop: spacing.md },
-  noticeText: { flex: 1, color: colors.accent, fontSize: fontSizes.sm, lineHeight: 20 },
-  primary: { marginTop: spacing.lg, backgroundColor: colors.accent, borderRadius: 9, paddingVertical: 14, alignItems: "center" as const, justifyContent: "center" as const, minHeight: 48 },
+  passwordRow: { flexDirection: "row" as const, alignItems: "center" as const, backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.borderLight, borderRadius: 12, minHeight: 56 },
+  passwordInput: { flex: 1, minWidth: 0, color: colors.text, paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 16, lineHeight: 22, minHeight: 56 },
+  eyeButton: { minWidth: 54, minHeight: 54, alignItems: "center" as const, justifyContent: "center" as const, alignSelf: "stretch" as const },
+  fieldError: { color: colors.danger, fontSize: 13, lineHeight: 19, textAlign: "right" as const, marginTop: 5, writingDirection: "rtl" as const },
+  errorBox: { flexDirection: "row" as const, alignItems: "flex-start" as const, gap: 9, backgroundColor: "rgba(248, 113, 113, 0.12)", borderWidth: 1, borderColor: "rgba(248, 113, 113, 0.32)", borderRadius: radius.md, padding: spacing.md, marginTop: spacing.md },
+  errorText: { flex: 1, color: colors.danger, fontSize: fontSizes.sm, lineHeight: 22, textAlign: "right" as const, writingDirection: "rtl" as const },
+  noticeBox: { flexDirection: "row" as const, alignItems: "flex-start" as const, gap: 9, backgroundColor: "rgba(53, 211, 153, 0.10)", borderWidth: 1, borderColor: "rgba(53, 211, 153, 0.30)", borderRadius: radius.md, padding: spacing.md, marginTop: spacing.md },
+  noticeText: { flex: 1, color: colors.accent, fontSize: fontSizes.sm, lineHeight: 22, textAlign: "right" as const, writingDirection: "rtl" as const },
+  primary: { marginTop: spacing.lg, backgroundColor: colors.accent, borderRadius: 12, paddingHorizontal: spacing.md, paddingVertical: 15, alignItems: "center" as const, justifyContent: "center" as const, minHeight: 56 },
   primaryText: { color: colors.bg, fontSize: fontSizes.md, fontWeight: "900" as const },
-  switch: { alignItems: "center" as const, paddingVertical: spacing.md },
-  switchText: { color: colors.accent, fontSize: fontSizes.sm, fontWeight: "700" as const },
-  divider: { flexDirection: "row" as const, alignItems: "center" as const, gap: spacing.sm, marginVertical: spacing.sm },
-  line: { flex: 1, height: 1, backgroundColor: colors.border },
-  or: { color: colors.textFaint, fontSize: 11, fontWeight: "800" as const },
-  oauth: { minHeight: 46, borderRadius: 9, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderLight, flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: spacing.sm },
-  oauthText: { color: colors.text, fontSize: fontSizes.sm, fontWeight: "800" as const },
+  switch: { alignItems: "center" as const, justifyContent: "center" as const, minHeight: 48, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
+  switchText: { color: colors.accent, fontSize: fontSizes.sm, fontWeight: "700" as const, textAlign: "center" as const, writingDirection: "rtl" as const },
+  passwordHint: { color: colors.textFaint, fontSize: 12, lineHeight: 18, textAlign: "center" as const, marginTop: spacing.xs, writingDirection: "rtl" as const },
   pressed: { opacity: 0.82 },
   disabled: { opacity: 0.65 },
 };
