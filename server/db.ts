@@ -138,8 +138,19 @@ export async function getUserByEmail(email: string) {
     throw new Error("Database not available");
   }
 
-  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  return result[0];
+  try {
+    const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    return result[0];
+  } catch (error) {
+    const dbError = error as { code?: unknown; errno?: unknown; sqlState?: unknown };
+    console.error("[Database] User lookup failed", {
+      name: error instanceof Error ? error.name : "UnknownError",
+      code: typeof dbError.code === "string" ? dbError.code : undefined,
+      errno: typeof dbError.errno === "number" ? dbError.errno : undefined,
+      sqlState: typeof dbError.sqlState === "string" ? dbError.sqlState : undefined,
+    });
+    throw error;
+  }
 }
 
 export async function createEmailUser(input: {
