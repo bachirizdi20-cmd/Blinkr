@@ -142,13 +142,19 @@ export async function getUserByEmail(email: string) {
     const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
     return result[0];
   } catch (error) {
-    const dbError = error as { code?: unknown; errno?: unknown; sqlState?: unknown };
-    console.error("[Database] User lookup failed", {
-      name: error instanceof Error ? error.name : "UnknownError",
-      code: typeof dbError.code === "string" ? dbError.code : undefined,
-      errno: typeof dbError.errno === "number" ? dbError.errno : undefined,
-      sqlState: typeof dbError.sqlState === "string" ? dbError.sqlState : undefined,
-    });
+    const errorChain: Array<Record<string, string | number | undefined>> = [];
+    let current: unknown = error;
+    for (let depth = 0; depth < 3 && current && typeof current === "object"; depth += 1) {
+      const item = current as { name?: unknown; code?: unknown; errno?: unknown; sqlState?: unknown; cause?: unknown };
+      errorChain.push({
+        name: typeof item.name === "string" ? item.name : undefined,
+        code: typeof item.code === "string" ? item.code : undefined,
+        errno: typeof item.errno === "number" ? item.errno : undefined,
+        sqlState: typeof item.sqlState === "string" ? item.sqlState : undefined,
+      });
+      current = item.cause;
+    }
+    console.error("[Database] User lookup failed", { errorChain });
     throw error;
   }
 }
