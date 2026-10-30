@@ -119,6 +119,10 @@ async function startServer() {
   registerOAuthRoutes(app);
   registerAuthLinkRoutes(app);
 
+  app.get("/", (_req, res) => {
+    res.redirect(302, "https://bachirizdi20-cmd.github.io/Blinkr/");
+  });
+
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true, timestamp: Date.now() });
   });

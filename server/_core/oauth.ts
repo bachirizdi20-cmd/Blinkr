@@ -3,6 +3,7 @@ import type { Express, Request, Response } from "express";
 import { getUserByOpenId, upsertUser } from "../db";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
+import { ENV } from "./env";
 
 function getQueryParam(req: Request, key: string): string | undefined {
   const value = req.query[key];
@@ -71,6 +72,11 @@ export function registerOAuthRoutes(app: Express) {
       return;
     }
 
+    if (!ENV.oAuthServerUrl) {
+      res.status(503).json({ error: "Manus OAuth is not configured for this deployment" });
+      return;
+    }
+
     try {
       const tokenResponse = await sdk.exchangeCodeForToken(code, state);
       const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
@@ -102,6 +108,11 @@ export function registerOAuthRoutes(app: Express) {
 
     if (!code || !state) {
       res.status(400).json({ error: "code and state are required" });
+      return;
+    }
+
+    if (!ENV.oAuthServerUrl) {
+      res.status(503).json({ error: "Manus OAuth is not configured for this deployment" });
       return;
     }
 
