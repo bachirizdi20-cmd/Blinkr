@@ -1,4 +1,3 @@
-import { Platform } from "react-native";
 import { getApiBaseUrl } from "@/constants/oauth";
 import * as Auth from "./auth";
 
@@ -21,24 +20,14 @@ export async function apiCall<T>(endpoint: string, options: RequestInit = {}): P
   const csrf = getBrowserCsrfToken();
   if (csrf && (options.method ?? "GET").toUpperCase() !== "GET") headers["X-CSRF-Token"] = csrf;
 
-  // Determine the auth method:
-  // - Native platform: use stored session token as Bearer auth
-  // - Web (including iframe): use cookie-based auth (browser handles automatically)
-  //   Cookie is set on backend domain via POST /api/auth/session after receiving token via postMessage
-  if (Platform.OS !== "web") {
-    const sessionToken = await Auth.getSessionToken();
-    console.log("[API] apiCall:", {
-      endpoint,
-      hasToken: !!sessionToken,
-      method: options.method || "GET",
-    });
-    if (sessionToken) {
-      headers["Authorization"] = `Bearer ${sessionToken}`;
-      console.log("[API] Authorization header added");
-    }
-  } else {
-    console.log("[API] apiCall:", { endpoint, platform: "web", method: options.method || "GET" });
+  // Use the session token as Bearer auth on both web and native clients.
+  // Web runs on GitHub Pages while the API is on Render, so browsers may block
+  // the API's cross-site session cookie.
+  const sessionToken = await Auth.getSessionToken();
+  if (sessionToken) {
+    headers["Authorization"] = `Bearer ${sessionToken}`;
   }
+  console.log("[API] apiCall:", { endpoint, hasToken: !!sessionToken, method: options.method || "GET" });
 
   const baseUrl = getApiBaseUrl();
   // Ensure no double slashes between baseUrl and endpoint
@@ -131,7 +120,7 @@ export async function logout(): Promise<void> {
   });
 }
 
-// Get current authenticated user (web uses cookie-based auth)
+// Get the current authenticated user (web and native send Bearer tokens when available)
 export async function getMe(): Promise<{
   id: number;
   openId: string;
