@@ -1,8 +1,10 @@
 import React from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { createUserWithEmailAndPassword, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { trpc } from "@/lib/trpc";
 import * as Auth from "@/lib/_core/auth";
+import { firebaseAuth } from "@/lib/firebaseAuth";
 import { colors, fontSizes, radius, spacing } from "@/lib/theme";
 
 type Props = { onAuthenticated: () => Promise<void> | void };
@@ -12,7 +14,8 @@ type FieldErrors = Partial<Record<FieldName, string>>;
 
 function friendlyAuthError(message: string) {
   const normalized = message.toLowerCase();
-  if (normalized.includes("too many")) return "محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.";
+  if (normalized.includes("too many") || normalized.includes("too-many-requests")) return "محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.";
+  if (normalized.includes("verify") || normalized.includes("verified")) return "تحقق من بريدك الإلكتروني أولًا، ثم سجّل الدخول مجددًا.";
   if (normalized.includes("network") || normalized.includes("fetch") || normalized.includes("timeout") || normalized.includes("connect")) {
     return "تعذّر الاتصال الآن. تحقق من الإنترنت وحاول مرة أخرى.";
   }
@@ -20,7 +23,7 @@ function friendlyAuthError(message: string) {
     return "هذا البريد مسجّل بالفعل. سجّل الدخول بدلًا من ذلك.";
   }
   if (normalized.includes("invalid") || normalized.includes("incorrect") || normalized.includes("password") || normalized.includes("credential") || normalized.includes("unauthorized")) {
-    return "البريد الإلكتروني أو كلمة المرور غير صحيحة. تحقق منهما وحاول مجددًا.";
+    return "البريد أو كلمة المرور غير صحيحين. إذا كان هذا حساب Blinkr قديمًا، اختر إنشاء حساب بالبريد نفسه وأكّد البريد لربط بياناتك القديمة.";
   }
   return "تعذّر إكمال العملية. حاول مرة أخرى بعد قليل.";
 }
@@ -45,6 +48,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
   const [fieldErrors, setFieldErrors] = React.useState<FieldErrors>({});
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
   const nameRef = React.useRef<TextInput>(null);
   const emailRef = React.useRef<TextInput>(null);
   const passwordRef = React.useRef<TextInput>(null);
@@ -56,17 +60,8 @@ export function AuthPanel({ onAuthenticated }: Props) {
     await onAuthenticated();
   }, [onAuthenticated]);
 
-  const onMutationError = (mutationError: { message: string }) => setError(friendlyAuthError(mutationError.message));
-  const login = trpc.auth.login.useMutation({ onSuccess: complete, onError: onMutationError });
-  const register = trpc.auth.register.useMutation({ onSuccess: complete, onError: onMutationError });
-  const forgotPassword = trpc.auth.forgotPassword.useMutation({
-    onSuccess: () => {
-      setNotice("إذا كان البريد مرتبطًا بحساب، فسيصلك رابط إعادة التعيين.");
-      setError(null);
-    },
-    onError: onMutationError,
-  });
-  const busy = login.isPending || register.isPending || forgotPassword.isPending;
+  const firebaseSession = trpc.auth.firebaseSession.useMutation();
+  const busy = isSubmitting || firebaseSession.isPending;
 
   const clearFeedback = () => {
     setFieldErrors({});
@@ -83,7 +78,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
     setShowConfirmPassword(false);
   };
 
-  const submit = () => {
+  const submit = async () => {
     clearFeedback();
     const errors: FieldErrors = {};
     const normalizedEmail = email.trim().toLowerCase();
@@ -99,15 +94,41 @@ export function AuthPanel({ onAuthenticated }: Props) {
       return;
     }
 
-    if (mode === "forgot") {
-      forgotPassword.mutate({ email: normalizedEmail });
-      return;
+    setIsSubmitting(true);
+    try {
+      if (mode === "forgot") {
+        await sendPasswordResetEmail(firebaseAuth, normalizedEmail);
+        setNotice("إذا كان البريد مرتبطًا بحساب، فسيصلك رابط إعادة تعيين كلمة المرور من Firebase.");
+        return;
+      }
+
+      if (mode === "register") {
+        const credential = await createUserWithEmailAndPassword(firebaseAuth, normalizedEmail, password);
+        if (name.trim()) await updateProfile(credential.user, { displayName: name.trim() });
+        await sendEmailVerification(credential.user);
+        setNotice("أرسلنا رسالة تحقق من Firebase. افتحها ثم ارجع وسجّل الدخول؛ وإذا كان لديك ملف Blinkr قديم بالبريد نفسه فسنربطه بعد التأكيد.");
+        return;
+      }
+
+      const credential = await signInWithEmailAndPassword(firebaseAuth, normalizedEmail, password);
+      await reload(credential.user);
+      if (!credential.user.emailVerified) {
+        await sendEmailVerification(credential.user);
+        setNotice("يجب تأكيد بريدك قبل المتابعة. أرسلنا لك رسالة تحقق جديدة؛ افتحها ثم سجّل الدخول مجددًا.");
+        return;
+      }
+
+      const idToken = await credential.user.getIdToken(true);
+      const result = await firebaseSession.mutateAsync({
+        idToken,
+        name: credential.user.displayName || (isRegister ? name.trim() : undefined),
+      });
+      await complete(result);
+    } catch (submitError) {
+      setError(friendlyAuthError(submitError instanceof Error ? submitError.message : String(submitError)));
+    } finally {
+      setIsSubmitting(false);
     }
-    if (mode === "register") {
-      register.mutate({ email: normalizedEmail, password, name: name.trim() });
-      return;
-    }
-    login.mutate({ email: normalizedEmail, password });
   };
 
   const isForgot = mode === "forgot";

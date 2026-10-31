@@ -181,6 +181,50 @@ export async function createEmailUser(input: {
   return getUserByOpenId(openId);
 }
 
+export async function syncFirebaseUser(input: { uid: string; email: string; name?: string | null }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const email = input.email.trim().toLowerCase();
+  const displayName = input.name?.trim().slice(0, 80) || email.split("@")[0] || "Blinkr user";
+  const now = new Date();
+  const firebaseOpenId = `firebase_${createHash("sha256").update(input.uid).digest("hex").slice(0, 54)}`;
+  const linkedUser = await getUserByOpenId(firebaseOpenId);
+
+  if (linkedUser) {
+    await db.update(users).set({
+      email,
+      name: displayName,
+      loginMethod: "firebase",
+      emailVerifiedAt: linkedUser.emailVerifiedAt ?? now,
+      lastSignedIn: now,
+    }).where(eq(users.id, linkedUser.id));
+    return getUserById(linkedUser.id);
+  }
+
+  const existingUser = await getUserByEmail(email);
+  if (existingUser) {
+    await db.update(users).set({
+      name: existingUser.name || displayName,
+      loginMethod: "firebase",
+      passwordHash: null,
+      emailVerifiedAt: existingUser.emailVerifiedAt ?? now,
+      lastSignedIn: now,
+    }).where(eq(users.id, existingUser.id));
+    return getUserById(existingUser.id);
+  }
+
+  await db.insert(users).values({
+    openId: firebaseOpenId,
+    email,
+    name: displayName,
+    loginMethod: "firebase",
+    emailVerifiedAt: now,
+    lastSignedIn: now,
+  });
+  return getUserByOpenId(firebaseOpenId);
+}
+
 async function isBlockedEitherWay(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, a: number, b: number) {
   const rows = await db.select({ id: blocks.id }).from(blocks).where(or(and(eq(blocks.userId, a), eq(blocks.blockedUserId, b)), and(eq(blocks.userId, b), eq(blocks.blockedUserId, a))));
   return rows.length > 0;

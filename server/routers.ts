@@ -12,6 +12,7 @@ import { storagePut, storageDelete, storageKeyFromUrl } from "./storage";
 import { assertLoginAllowed, clearLoginFailures, recordLoginFailure } from "./rate-limit";
 import { createAuthToken, consumeAuthToken, markEmailVerified, updateUserPassword } from "./db";
 import { sendAuthEmail } from "./email";
+import { verifyFirebaseIdToken } from "./_core/firebase-auth";
 
 const tmdbPathSchema = z.string().regex(
   /^\/(?:trending|movie|tv|discover|genre|search|person|authentication)(?:\/[A-Za-z0-9_,-]+)*$/,
@@ -135,6 +136,18 @@ export const appRouter = router({
         const cookieOptions = getSessionCookieOptions(ctx.req);
         ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: 365 * 24 * 60 * 60 * 1000 });
         return { sessionToken, user: toPublicUser({ ...user, lastSignedIn: new Date() }) };
+      }),
+    firebaseSession: publicProcedure
+      .input(z.object({ idToken: z.string().min(100).max(10_000), name: z.string().trim().min(1).max(80).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const identity = await verifyFirebaseIdToken(input.idToken);
+        const user = await db.syncFirebaseUser({ uid: identity.uid, email: identity.email, name: input.name });
+        if (!user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not synchronize the Blinkr account" });
+
+        const sessionToken = await sdk.createSessionToken(user.openId, { name: user.name ?? identity.email });
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: 365 * 24 * 60 * 60 * 1000 });
+        return { sessionToken, user: toPublicUser(user) };
       }),
     me: publicProcedure.query((opts) => opts.ctx.user),
     requestVerification: protectedProcedure.mutation(async ({ ctx }) => {
