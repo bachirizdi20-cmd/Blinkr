@@ -18,6 +18,8 @@ export const ENV = {
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   tmdbApiReadToken: process.env.TMDB_API_READ_TOKEN ?? "",
   firebaseProjectId: process.env.FIREBASE_PROJECT_ID ?? "",
+  databaseHostOverride: process.env.DATABASE_HOST_OVERRIDE ?? "",
+  databasePortOverride: process.env.DATABASE_PORT_OVERRIDE ?? "",
   // OCI Object Storage (S3-compatible API) - used to replace Manus Forge storage
   // when self-hosting outside the Manus platform.
   s3Endpoint: process.env.S3_ENDPOINT ?? "",

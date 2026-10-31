@@ -8,11 +8,35 @@ import { storageDelete, storageKeyFromUrl } from "./storage";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
+export function resolveDatabaseUrl(
+  connectionString: string,
+  hostOverride = ENV.databaseHostOverride,
+  portOverride = ENV.databasePortOverride,
+) {
+  const host = hostOverride.trim();
+  const port = portOverride.trim();
+  if (!host && !port) return connectionString;
+
+  const connectionUrl = new URL(connectionString);
+  if (host) {
+    if (!/^[A-Za-z0-9.-]+$/.test(host)) throw new Error("DATABASE_HOST_OVERRIDE must be a host name");
+    connectionUrl.hostname = host;
+  }
+  if (port) {
+    const numericPort = Number(port);
+    if (!Number.isInteger(numericPort) || numericPort < 1 || numericPort > 65535) {
+      throw new Error("DATABASE_PORT_OVERRIDE must be a valid TCP port");
+    }
+    connectionUrl.port = String(numericPort);
+  }
+  return connectionUrl.toString();
+}
+
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
+  if (!_db && ENV.databaseUrl) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      _db = drizzle(resolveDatabaseUrl(ENV.databaseUrl));
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
