@@ -1,5 +1,5 @@
 import React from "react";
-import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, Text, TextInput, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { createUserWithEmailAndPassword, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { trpc } from "@/lib/trpc";
@@ -26,6 +26,10 @@ function friendlyAuthError(message: string) {
     return "البريد أو كلمة المرور غير صحيحين. إذا كان هذا حساب Blinkr قديمًا، اختر إنشاء حساب بالبريد نفسه وأكّد البريد لربط بياناتك القديمة.";
   }
   return "تعذّر إكمال العملية. حاول مرة أخرى بعد قليل.";
+}
+
+function preserveWebInputFocus(event: { stopPropagation: () => void }) {
+  if (Platform.OS === "web") event.stopPropagation();
 }
 
 function FieldError({ message }: { message?: string }) {
@@ -150,6 +154,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
         <Text style={styles.label}>الاسم</Text>
         <TextInput
           ref={nameRef}
+          onTouchStart={preserveWebInputFocus}
           value={name}
           onChangeText={(value) => { setName(value); setFieldErrors((current) => ({ ...current, name: undefined })); }}
           placeholder="اكتب اسمك"
@@ -171,6 +176,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
       <Text style={styles.label}>البريد الإلكتروني</Text>
       <TextInput
         ref={emailRef}
+        onTouchStart={preserveWebInputFocus}
         value={email}
         onChangeText={(value) => { setEmail(value); setFieldErrors((current) => ({ ...current, email: undefined })); }}
         placeholder="name@example.com"
@@ -193,6 +199,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
         <View style={[styles.passwordRow, fieldErrors.password && styles.inputInvalid]}>
           <TextInput
             ref={passwordRef}
+            onTouchStart={preserveWebInputFocus}
             value={password}
             onChangeText={(value) => { setPassword(value); setFieldErrors((current) => ({ ...current, password: undefined })); }}
             placeholder="8 أحرف على الأقل"
@@ -225,6 +232,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
           <View style={[styles.passwordRow, fieldErrors.confirmPassword && styles.inputInvalid]}>
             <TextInput
               ref={confirmPasswordRef}
+              onTouchStart={preserveWebInputFocus}
               value={confirmPassword}
               onChangeText={(value) => { setConfirmPassword(value); setFieldErrors((current) => ({ ...current, confirmPassword: undefined })); }}
               placeholder="أعد كتابة كلمة المرور"

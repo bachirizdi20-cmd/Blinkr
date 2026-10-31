@@ -33,8 +33,8 @@ function FirstLaunchGate() {
         <ScrollView
           style={{ flex: 1, width: "100%" }}
           contentContainerStyle={{ flexGrow: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.lg, paddingVertical: spacing.lg }}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+          keyboardShouldPersistTaps={Platform.OS === "web" ? "always" : "handled"}
+          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : Platform.OS === "android" ? "on-drag" : "none"}
         >
           <View style={{ width: "100%", maxWidth: 460, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.border, borderRadius: 18, paddingHorizontal: spacing.lg, paddingVertical: spacing.lg }}>
             <View style={{ alignItems: "center", marginBottom: spacing.md }}>
