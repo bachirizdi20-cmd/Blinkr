@@ -2,7 +2,7 @@ import React from "react";
 import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { AuthTextInput, type AuthTextInputHandle } from "@/components/AuthTextInput";
-import { createUserWithEmailAndPassword, GoogleAuthProvider, OAuthProvider, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signInWithPopup, updateProfile, type User } from "firebase/auth";
+import { createUserWithEmailAndPassword, GoogleAuthProvider, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signInWithPopup, updateProfile, type User } from "firebase/auth";
 import { trpc } from "@/lib/trpc";
 import * as Auth from "@/lib/_core/auth";
 import { firebaseAuth } from "@/lib/firebaseAuth";
@@ -84,22 +84,18 @@ export function AuthPanel({ onAuthenticated }: Props) {
     await complete(result);
   }, [complete, firebaseSession]);
 
-  const handleSocialSignIn = async (kind: "google" | "apple") => {
+  const handleGoogleSignIn = async () => {
     clearFeedback();
     if (Platform.OS !== "web") {
-      setError("تسجيل Google وApple متاح حاليًا عبر نسخة Blinkr على الويب.");
+      setError("تسجيل Google متاح حاليًا عبر نسخة Blinkr على الويب.");
       return;
     }
 
     setIsSubmitting(true);
     try {
       firebaseAuth.languageCode = "ar";
-      const provider = kind === "google" ? new GoogleAuthProvider() : new OAuthProvider("apple.com");
-      if (kind === "google") provider.setCustomParameters({ prompt: "select_account" });
-      if (kind === "apple") {
-        provider.addScope("email");
-        provider.addScope("name");
-      }
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
       // GitHub Pages and Firebase authDomain are cross-site; popup avoids redirect storage workarounds.
       const result = await signInWithPopup(firebaseAuth, provider);
       await completeFederatedSignIn(result.user);
@@ -196,7 +192,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
       {Platform.OS === "web" && !isForgot ? <>
         <View style={styles.socialButtons}>
           <Pressable
-            onPress={() => handleSocialSignIn("google")}
+            onPress={handleGoogleSignIn}
             disabled={busy}
             style={({ pressed }) => [styles.socialButton, pressed && styles.pressed, busy && styles.disabled]}
             accessibilityRole="button"
@@ -204,16 +200,6 @@ export function AuthPanel({ onAuthenticated }: Props) {
           >
             <Ionicons name="logo-google" size={19} color="#4285F4" />
             <Text style={styles.socialButtonText}>Google</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => handleSocialSignIn("apple")}
-            disabled={busy}
-            style={({ pressed }) => [styles.socialButton, pressed && styles.pressed, busy && styles.disabled]}
-            accessibilityRole="button"
-            accessibilityLabel={isRegister ? "إنشاء حساب باستخدام Apple" : "تسجيل الدخول باستخدام Apple"}
-          >
-            <Ionicons name="logo-apple" size={20} color={colors.text} />
-            <Text style={styles.socialButtonText}>Apple</Text>
           </Pressable>
         </View>
         <View style={styles.socialDivider}>
