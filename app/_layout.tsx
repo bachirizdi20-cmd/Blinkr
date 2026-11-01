@@ -1,5 +1,5 @@
 import React from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -9,11 +9,11 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 import RootTabNavigator from "@/navigation/RootTabNavigator";
-import { LibraryProvider } from "@/context/LibraryContext";
+import { LibraryProvider, useLibrary } from "@/context/LibraryContext";
 import { MetadataProvider } from "@/context/MetadataContext";
 import { SocialProvider } from "@/context/SocialContext";
 import { trpc, createTRPCClient } from "@/lib/trpc";
-import { useAuth } from "@/hooks/use-auth";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { AuthPanel } from "@/components/AuthPanel";
 import { colors, fontSizes, spacing } from "@/lib/theme";
 
@@ -54,6 +54,37 @@ function FirstLaunchGate() {
     );
   }
 
+  return (
+    <LibraryProvider key={user.openId} accountId={user.openId}>
+      <AuthenticatedTabs />
+    </LibraryProvider>
+  );
+}
+
+function AuthenticatedTabs() {
+  const { loaded, loadError, retryLoad } = useLibrary();
+  const { logout } = useAuth();
+
+  if (!loaded) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", padding: spacing.lg }}>
+        {loadError ? (
+          <>
+            <Text style={{ color: colors.text, fontSize: fontSizes.md, textAlign: "center", writingDirection: "rtl" }}>
+              تعذّر تحميل بيانات مكتبتك بأمان. لم نحذفها؛ حاول مجددًا.
+            </Text>
+            <Pressable onPress={retryLoad} style={{ marginTop: spacing.md, padding: spacing.md }} accessibilityRole="button">
+              <Text style={{ color: colors.accent, fontSize: fontSizes.sm, fontWeight: "700" }}>إعادة المحاولة</Text>
+            </Pressable>
+            <Pressable onPress={() => void logout()} style={{ padding: spacing.sm }} accessibilityRole="button">
+              <Text style={{ color: colors.textDim, fontSize: fontSizes.sm }}>تسجيل الخروج</Text>
+            </Pressable>
+          </>
+        ) : <ActivityIndicator color={colors.accent} />}
+      </View>
+    );
+  }
+
   return <RootTabNavigator />;
 }
 
@@ -69,14 +100,14 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <trpc.Provider client={trpcClient} queryClient={queryClient}>
-            <LibraryProvider>
-          <MetadataProvider>
-            <SocialProvider>
-              <StatusBar style="light" />
-              <FirstLaunchGate />
-            </SocialProvider>
-            </MetadataProvider>
-          </LibraryProvider>
+            <AuthProvider>
+              <MetadataProvider>
+                <SocialProvider>
+                  <StatusBar style="light" />
+                  <FirstLaunchGate />
+                </SocialProvider>
+              </MetadataProvider>
+            </AuthProvider>
           </trpc.Provider>
         </QueryClientProvider>
       </SafeAreaProvider>

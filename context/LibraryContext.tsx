@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MediaType } from '../types/tmdb';
+import { getAccountLibraryStorageKeys, loadAccountLibraryStorage } from '../lib/library-storage';
 
 export interface MediaRef {
   mediaType: MediaType;
@@ -45,15 +46,6 @@ interface WatchlistMap { [key: string]: MediaRef & { addedAt: number } }
 interface LikesMap { [key: string]: MediaRef & { likedAt: number } }
 interface EpisodeWatchedMap { [key: string]: boolean }
 
-const KEYS = {
-  watchlist: '@reelog/watchlist',
-  diary: '@reelog/diary',
-  likes: '@reelog/likes',
-  lists: '@reelog/lists',
-  profile: '@reelog/profile',
-  episodes: '@reelog/episodes',
-};
-
 const AVATAR_COLORS = ['#33D6A6', '#FF9F43', '#4EA8DE', '#FF5C7A', '#B48CFF', '#FFC94D'];
 
 function uid() {
@@ -62,6 +54,8 @@ function uid() {
 
 interface LibraryContextValue {
   loaded: boolean;
+  loadError: boolean;
+  retryLoad: () => void;
   watchlist: WatchlistMap;
   likes: LikesMap;
   diary: DiaryEntry[];
@@ -108,8 +102,17 @@ interface LibraryContextValue {
 
 const LibraryContext = createContext<LibraryContextValue | undefined>(undefined);
 
-export function LibraryProvider({ children }: { children: React.ReactNode }) {
-  const [loaded, setLoaded] = useState(false);
+export function LibraryProvider({ children, accountId }: { children: React.ReactNode; accountId: string }) {
+  const storageKeys = useMemo(() => getAccountLibraryStorageKeys(accountId), [accountId]);
+  const [loadedAccountId, setLoadedAccountId] = useState<string | null>(null);
+  const [failedAccountId, setFailedAccountId] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const loaded = loadedAccountId === accountId;
+  const loadError = failedAccountId === accountId;
+  const retryLoad = useCallback(() => {
+    setFailedAccountId(null);
+    setLoadAttempt((attempt) => attempt + 1);
+  }, []);
   const [watchlist, setWatchlist] = useState<WatchlistMap>({});
   const [likes, setLikes] = useState<LikesMap>({});
   const [diary, setDiary] = useState<DiaryEntry[]>([]);
@@ -125,36 +128,33 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    (async () => {
+    let active = true;
+    void (async () => {
       try {
-        const [w, d, l, li, p, e] = await Promise.all([
-          AsyncStorage.getItem(KEYS.watchlist),
-          AsyncStorage.getItem(KEYS.diary),
-          AsyncStorage.getItem(KEYS.lists),
-          AsyncStorage.getItem(KEYS.likes),
-          AsyncStorage.getItem(KEYS.profile),
-          AsyncStorage.getItem(KEYS.episodes),
-        ]);
-        if (w) setWatchlist(JSON.parse(w));
-        if (d) setDiary(JSON.parse(d));
-        if (l) setLists(JSON.parse(l));
-        if (li) setLikes(JSON.parse(li));
-        if (p) setProfile(JSON.parse(p));
-        if (e) setEpisodeWatched(JSON.parse(e));
+        const { values } = await loadAccountLibraryStorage(AsyncStorage, accountId);
+        if (!active) return;
+        if (values.watchlist) setWatchlist(JSON.parse(values.watchlist));
+        if (values.diary) setDiary(JSON.parse(values.diary));
+        if (values.lists) setLists(JSON.parse(values.lists));
+        if (values.likes) setLikes(JSON.parse(values.likes));
+        if (values.profile) setProfile(JSON.parse(values.profile));
+        if (values.episodes) setEpisodeWatched(JSON.parse(values.episodes));
+        setLoadedAccountId(accountId);
       } catch (err) {
-        console.warn('Failed to load library', err);
-      } finally {
-        setLoaded(true);
+        // Do not enable persistence after a failed read/migration; that could overwrite the old data.
+        console.warn('Failed to load account library', err);
+        if (active) setFailedAccountId(accountId);
       }
     })();
-  }, []);
+    return () => { active = false; };
+  }, [accountId, loadAttempt]);
 
-  useEffect(() => { if (loaded) AsyncStorage.setItem(KEYS.watchlist, JSON.stringify(watchlist)); }, [watchlist, loaded]);
-  useEffect(() => { if (loaded) AsyncStorage.setItem(KEYS.diary, JSON.stringify(diary)); }, [diary, loaded]);
-  useEffect(() => { if (loaded) AsyncStorage.setItem(KEYS.lists, JSON.stringify(lists)); }, [lists, loaded]);
-  useEffect(() => { if (loaded) AsyncStorage.setItem(KEYS.likes, JSON.stringify(likes)); }, [likes, loaded]);
-  useEffect(() => { if (loaded) AsyncStorage.setItem(KEYS.profile, JSON.stringify(profile)); }, [profile, loaded]);
-  useEffect(() => { if (loaded) AsyncStorage.setItem(KEYS.episodes, JSON.stringify(episodeWatched)); }, [episodeWatched, loaded]);
+  useEffect(() => { if (loaded) AsyncStorage.setItem(storageKeys.watchlist, JSON.stringify(watchlist)); }, [watchlist, loaded, storageKeys.watchlist]);
+  useEffect(() => { if (loaded) AsyncStorage.setItem(storageKeys.diary, JSON.stringify(diary)); }, [diary, loaded, storageKeys.diary]);
+  useEffect(() => { if (loaded) AsyncStorage.setItem(storageKeys.lists, JSON.stringify(lists)); }, [lists, loaded, storageKeys.lists]);
+  useEffect(() => { if (loaded) AsyncStorage.setItem(storageKeys.likes, JSON.stringify(likes)); }, [likes, loaded, storageKeys.likes]);
+  useEffect(() => { if (loaded) AsyncStorage.setItem(storageKeys.profile, JSON.stringify(profile)); }, [profile, loaded, storageKeys.profile]);
+  useEffect(() => { if (loaded) AsyncStorage.setItem(storageKeys.episodes, JSON.stringify(episodeWatched)); }, [episodeWatched, loaded, storageKeys.episodes]);
 
   const isInWatchlist = useCallback((mediaType: MediaType, mediaId: number) => !!watchlist[mediaKey(mediaType, mediaId)], [watchlist]);
 
@@ -330,6 +330,8 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
 
   const value: LibraryContextValue = {
     loaded,
+    loadError,
+    retryLoad,
     watchlist,
     likes,
     diary,

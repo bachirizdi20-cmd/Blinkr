@@ -1,13 +1,25 @@
 import * as Api from "@/lib/_core/api";
 import * as Auth from "@/lib/_core/auth";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
+import { useQueryClient } from "@tanstack/react-query";
 
 type UseAuthOptions = {
   autoFetch?: boolean;
 };
 
-export function useAuth(options?: UseAuthOptions) {
+type AuthState = {
+  user: Auth.User | null;
+  loading: boolean;
+  error: Error | null;
+  isAuthenticated: boolean;
+  refresh: () => Promise<void>;
+  logout: () => Promise<void>;
+};
+
+const AuthContext = createContext<AuthState | null>(null);
+
+function useAuthController(options?: UseAuthOptions) {
   const { autoFetch = true } = options ?? {};
   const [user, setUser] = useState<Auth.User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -148,4 +160,31 @@ export function useAuth(options?: UseAuthOptions) {
     refresh: fetchUser,
     logout,
   };
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const auth = useAuthController();
+  const queryClient = useQueryClient();
+  const currentOpenId = auth.user?.openId ?? null;
+  const [cacheOpenId, setCacheOpenId] = useState(currentOpenId);
+
+  useLayoutEffect(() => {
+    if (cacheOpenId === currentOpenId) return;
+    // Private tRPC results are cached by query input, not by the active user.
+    // Hide children until the old cache is cleared, so it cannot flash on screen.
+    queryClient.clear();
+    setCacheOpenId(currentOpenId);
+  }, [cacheOpenId, currentOpenId, queryClient]);
+
+  return React.createElement(
+    AuthContext.Provider,
+    { value: auth },
+    cacheOpenId === currentOpenId ? children : null,
+  );
+}
+
+export function useAuth(): AuthState {
+  const auth = useContext(AuthContext);
+  if (!auth) throw new Error("useAuth must be used within AuthProvider");
+  return auth;
 }
