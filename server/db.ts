@@ -257,22 +257,20 @@ async function isBlockedEitherWay(db: NonNullable<Awaited<ReturnType<typeof getD
 export async function searchUsers(viewerId: number, query: string) {
   const db = await getDb();
   if (!db) return [];
-  const rows = await db.select({ id: users.id, name: users.name, username: userData.username, bio: userData.bio, avatarUrl: userData.avatarUrl, isPrivate: userData.isPrivate }).from(users).leftJoin(userData, eq(userData.userId, users.id)).where(not(eq(users.id, viewerId))).limit(50);
+  const rows = await db.select({ id: users.id, name: users.name, username: userData.username, bio: userData.bio, avatarUrl: userData.avatarUrl }).from(users).leftJoin(userData, eq(userData.userId, users.id)).where(not(eq(users.id, viewerId))).limit(50);
   const blockedRows = await db.select({ userId: blocks.userId, blockedUserId: blocks.blockedUserId }).from(blocks).where(or(eq(blocks.userId, viewerId), eq(blocks.blockedUserId, viewerId)));
   const blockedIds = new Set(blockedRows.map((row) => (row.userId === viewerId ? row.blockedUserId : row.userId)));
-  const followingRows = await db.select({ followingId: follows.followingId }).from(follows).where(eq(follows.followerId, viewerId));
-  const followingIds = new Set(followingRows.map((row) => row.followingId));
   const needle = query.trim().toLowerCase();
   return rows
     .filter((row) => !blockedIds.has(row.id))
     .filter((row) => !needle || `${row.username ?? ""} ${row.name ?? ""}`.toLowerCase().includes(needle))
-    .map((row) => row.isPrivate && !followingIds.has(row.id) ? { ...row, bio: null, avatarUrl: null } : row);
+    .map((row) => ({ ...row, isPrivate: false }));
 }
 
 export async function searchReviews(viewerId: number, query: string) {
   const db = await getDb();
   if (!db) return [];
-  const rows = await db.select({ review: reviews, username: userData.username, displayName: users.name, avatarUrl: userData.avatarUrl, isPrivate: userData.isPrivate }).from(reviews).innerJoin(users, eq(users.id, reviews.userId)).leftJoin(userData, eq(userData.userId, reviews.userId)).where(or(isNull(userData.isPrivate), eq(userData.isPrivate, false), eq(reviews.userId, viewerId))).orderBy(desc(reviews.updatedAt)).limit(100);
+  const rows = await db.select({ review: reviews, username: userData.username, displayName: users.name, avatarUrl: userData.avatarUrl }).from(reviews).innerJoin(users, eq(users.id, reviews.userId)).leftJoin(userData, eq(userData.userId, reviews.userId)).orderBy(desc(reviews.updatedAt)).limit(100);
   const blockedRows = await db.select({ userId: blocks.userId, blockedUserId: blocks.blockedUserId }).from(blocks).where(or(eq(blocks.userId, viewerId), eq(blocks.blockedUserId, viewerId)));
   const blockedIds = new Set(blockedRows.map((row) => (row.userId === viewerId ? row.blockedUserId : row.userId)));
   const needle = query.trim().toLowerCase();
@@ -290,14 +288,6 @@ export async function toggleFollow(followerId: number, followingId: number) {
   if (existing[0]) {
     await db.delete(follows).where(eq(follows.id, existing[0].id));
     return { following: false, requested: false } as const;
-  }
-  const target = await db.select({ isPrivate: userData.isPrivate }).from(userData).where(eq(userData.userId, followingId)).limit(1);
-  if (target[0]?.isPrivate) {
-    const request = await db.select().from(followRequests).where(and(eq(followRequests.requesterId, followerId), eq(followRequests.targetId, followingId))).limit(1);
-    if (request[0]?.status === "pending") return { following: false, requested: true } as const;
-    await db.insert(followRequests).values({ requesterId: followerId, targetId: followingId, status: "pending" }).onDuplicateKeyUpdate({ set: { status: "pending" } });
-    await db.insert(notifications).values({ userId: followingId, actorId: followerId, kind: "follow" });
-    return { following: false, requested: true } as const;
   }
   await db.insert(follows).values({ followerId, followingId });
   await db.insert(notifications).values({ userId: followingId, actorId: followerId, kind: "follow" });
@@ -317,16 +307,16 @@ export function redactPrivateProfile<
     followRequested?: boolean;
   },
 ) {
-  const locked = Boolean(profile.isPrivate) && !options.isFollowing && !options.isSelf;
   return {
     ...profile,
-    bio: locked ? null : profile.bio,
-    followerCount: locked ? null : options.followerCount,
-    followingCount: locked ? null : options.followingCount,
+    isPrivate: false,
+    bio: profile.bio,
+    followerCount: options.followerCount,
+    followingCount: options.followingCount,
     isFollowing: options.isFollowing,
     followsYou: options.followsYou,
     followRequested: options.followRequested ?? false,
-    locked,
+    locked: false,
   };
 }
 
@@ -342,12 +332,11 @@ export async function getUserProfile(viewerId: number, targetUserId: number) {
   const profile = rows[0];
   if (!profile) return null;
 
-  const [followerRows, followingRows, viewerFollowsRow, targetFollowsViewerRow, requestRows] = await Promise.all([
+  const [followerRows, followingRows, viewerFollowsRow, targetFollowsViewerRow] = await Promise.all([
     db.select({ id: follows.id }).from(follows).where(eq(follows.followingId, targetUserId)),
     db.select({ id: follows.id }).from(follows).where(eq(follows.followerId, targetUserId)),
     db.select().from(follows).where(and(eq(follows.followerId, viewerId), eq(follows.followingId, targetUserId))).limit(1),
     db.select().from(follows).where(and(eq(follows.followerId, targetUserId), eq(follows.followingId, viewerId))).limit(1),
-    db.select({ id: followRequests.id }).from(followRequests).where(and(eq(followRequests.requesterId, viewerId), eq(followRequests.targetId, targetUserId), eq(followRequests.status, "pending"))).limit(1),
   ]);
 
   const isFollowing = viewerFollowsRow.length > 0;
@@ -358,7 +347,7 @@ export async function getUserProfile(viewerId: number, targetUserId: number) {
     followerCount: followerRows.length,
     followingCount: followingRows.length,
     followsYou: targetFollowsViewerRow.length > 0,
-    followRequested: requestRows.length > 0,
+    followRequested: false,
   });
 }
 
@@ -395,7 +384,7 @@ export async function listSocialFeed(userId: number) {
   const blockedIds = blocked.map((row) => row.userId === userId ? row.blockedUserId : row.userId);
   const allowedIds = followingIds.filter((id) => !blockedIds.includes(id));
   if (!allowedIds.length) return [];
-  const rows = await db.select({ review: reviews, username: userData.username, displayName: users.name, avatarUrl: userData.avatarUrl }).from(reviews).innerJoin(users, eq(users.id, reviews.userId)).leftJoin(userData, eq(userData.userId, reviews.userId)).where(and(inArray(reviews.userId, allowedIds), or(isNull(userData.isPrivate), eq(userData.isPrivate, false)))).orderBy(desc(reviews.updatedAt)).limit(50);
+  const rows = await db.select({ review: reviews, username: userData.username, displayName: users.name, avatarUrl: userData.avatarUrl }).from(reviews).innerJoin(users, eq(users.id, reviews.userId)).leftJoin(userData, eq(userData.userId, reviews.userId)).where(inArray(reviews.userId, allowedIds)).orderBy(desc(reviews.updatedAt)).limit(50);
   if (!rows.length) return [];
 
   const reviewIds = rows.map((row) => row.review.id);
@@ -510,14 +499,8 @@ export async function removeBlock(userId: number, blockedUserId: number) {
 }
 
 export async function listFollowRequests(userId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select({ request: followRequests, name: users.name, username: userData.username, avatarUrl: userData.avatarUrl })
-    .from(followRequests)
-    .innerJoin(users, eq(users.id, followRequests.requesterId))
-    .leftJoin(userData, eq(userData.userId, followRequests.requesterId))
-    .where(and(eq(followRequests.targetId, userId), eq(followRequests.status, "pending")))
-    .orderBy(desc(followRequests.createdAt));
+  void userId;
+  return [];
 }
 
 export async function respondToFollowRequest(userId: number, requesterId: number, accept: boolean) {
@@ -549,34 +532,31 @@ export async function createReport(input: { reporterId: number; targetType: stri
 
 async function canViewReview(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, viewerId: number, review: Review) {
   if (viewerId === review.userId) return true;
-  if (await isBlockedEitherWay(db, viewerId, review.userId)) return false;
-  const ownerData = await db.select({ isPrivate: userData.isPrivate }).from(userData).where(eq(userData.userId, review.userId)).limit(1);
-  if (!ownerData[0]?.isPrivate) return true;
-  const follow = await db.select({ id: follows.id }).from(follows).where(and(eq(follows.followerId, viewerId), eq(follows.followingId, review.userId))).limit(1);
-  return Boolean(follow[0]);
+  return !(await isBlockedEitherWay(db, viewerId, review.userId));
 }
 
 export async function getUserData(userId: number): Promise<UserData | undefined> {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(userData).where(eq(userData.userId, userId)).limit(1);
-  return result[0];
+  return result[0] ? { ...result[0], isPrivate: false } : undefined;
 }
 
 export async function upsertUserData(userId: number, patch: Partial<Omit<InsertUserData, 'userId' | 'id'>>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const existing = await getUserData(userId);
+  const publicPatch = { ...patch, isPrivate: false };
   if (existing) {
-    await db.update(userData).set(patch).where(eq(userData.userId, userId));
-    return { ...existing, ...patch };
+    await db.update(userData).set(publicPatch).where(eq(userData.userId, userId));
+    return { ...existing, ...publicPatch };
   }
   const values: InsertUserData = {
     userId,
     username: patch.username ?? 'cinephile',
     bio: patch.bio ?? '',
     avatarUrl: patch.avatarUrl ?? null,
-    isPrivate: patch.isPrivate ?? false,
+    isPrivate: false,
     libraryJson: patch.libraryJson ?? '{}',
     socialJson: patch.socialJson ?? '{}',
   };
@@ -666,6 +646,15 @@ export async function deleteUserAccount(userId: number) {
   const conversationIds = myConversations.map((row) => row.id);
 
   if (conversationIds.length) {
+    const mediaRows = await db.select({ mediaKey: chatMessages.mediaKey }).from(chatMessages).where(inArray(chatMessages.conversationId, conversationIds));
+    for (const row of mediaRows) {
+      if (!row.mediaKey) continue;
+      try {
+        await storageDelete(row.mediaKey);
+      } catch (error) {
+        console.error("[Account] Failed to delete chat media during account deletion:", error);
+      }
+    }
     await db.delete(chatMessages).where(inArray(chatMessages.conversationId, conversationIds));
     await db.delete(conversations).where(inArray(conversations.id, conversationIds));
   }
@@ -675,6 +664,7 @@ export async function deleteUserAccount(userId: number) {
   await db.delete(notifications).where(or(eq(notifications.userId, userId), eq(notifications.actorId, userId)));
   await db.delete(blocks).where(or(eq(blocks.userId, userId), eq(blocks.blockedUserId, userId)));
   await db.delete(reports).where(eq(reports.reporterId, userId));
+  await db.delete(followRequests).where(or(eq(followRequests.requesterId, userId), eq(followRequests.targetId, userId)));
   await db.delete(follows).where(or(eq(follows.followerId, userId), eq(follows.followingId, userId)));
   await db.delete(authTokens).where(eq(authTokens.userId, userId));
 

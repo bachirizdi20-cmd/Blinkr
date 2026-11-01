@@ -1,30 +1,29 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Share, Switch, View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { ActivityIndicator, Alert, Share, View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
-import SectionHeader from '../components/SectionHeader';
 import RatingStars from '../components/RatingStars';
 import EmptyState from '../components/EmptyState';
 import PosterCard from '../components/PosterCard';
 import { ContentStackParamList } from '../navigation/types';
 import { useLibrary } from '../context/LibraryContext';
-import { posterUrl } from '../lib/tmdb';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { useAuth } from '../hooks/use-auth';
 import { AuthPanel } from '../components/AuthPanel';
 import { trpc } from '../lib/trpc';
 import { ProfileSkeleton, ReviewsSkeleton } from '../components/Skeleton';
 import { resolveMediaUrl } from '../lib/media-url';
+import { clearAccountLibraryStorage } from '../lib/library-storage';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 
 export default function ProfileScreen() {
   const navigation = useNavigation<Nav>();
   const { user, loading: authLoading, error: authError, logout, refresh } = useAuth();
-  const privacyMutation = trpc.account.updatePrivacy.useMutation();
   const deleteMutation = trpc.account.delete.useMutation();
   const requestVerification = trpc.auth.requestVerification.useMutation();
   const accountQuery = trpc.account.me.useQuery(undefined, { enabled: !!user, retry: false });
@@ -32,6 +31,7 @@ export default function ProfileScreen() {
   const remoteLibraryQuery = trpc.library.mine.useQuery(undefined, { enabled: !!user, retry: false });
   const lib = useLibrary();
   const { profile, stats, diary, lists, likes } = lib;
+  const [menuVisible, setMenuVisible] = useState(false);
 
   if (authLoading) {
     return (
@@ -80,23 +80,35 @@ export default function ProfileScreen() {
     }
   };
 
-  const handlePrivacyChange = (isPrivate: boolean) => {
-    lib.updateProfile({ isPrivate });
-    privacyMutation.mutate({ isPrivate });
-  };
-
   const handleDeleteAccount = () => {
-    Alert.alert('Delete account?', 'This permanently removes your account data and cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
+    setMenuVisible(false);
+    setTimeout(() => Alert.alert('حذف الحساب نهائيًا؟', 'سيؤدي هذا إلى حذف حسابك وبياناته، ولا يمكن التراجع عن ذلك.', [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'حذف الحساب', style: 'destructive', onPress: async () => {
         try {
           await deleteMutation.mutateAsync({ confirmation: 'DELETE MY ACCOUNT' });
+          let localDataRemovalFailed = false;
+          try {
+            await clearAccountLibraryStorage(AsyncStorage, user.openId);
+          } catch (error) {
+            localDataRemovalFailed = true;
+            console.error('[Account] Failed to clear local library after account deletion:', error);
+          }
           await logout();
-        } catch (error) {
-          Alert.alert('Could not delete account', 'Please try again.');
+          if (localDataRemovalFailed) Alert.alert('تم حذف الحساب', 'تعذر مسح بعض البيانات المحلية. احذف بيانات التطبيق من إعدادات الهاتف قبل استخدامه مجددًا.');
+        } catch {
+          Alert.alert('تعذّر حذف الحساب', 'حاول مرة أخرى لاحقًا.');
         }
       } },
-    ]);
+    ]), 150);
+  };
+
+  const confirmLogout = () => {
+    setMenuVisible(false);
+    setTimeout(() => Alert.alert('تسجيل الخروج؟', 'هل تريد تسجيل الخروج من Blinkr؟', [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'تسجيل الخروج', style: 'destructive', onPress: () => void logout() },
+    ]), 150);
   };
 
   return (
@@ -105,7 +117,7 @@ export default function ProfileScreen() {
         <View style={styles.topNav}>
           <Pressable onPress={() => navigation.goBack()} style={styles.topNavButton} accessibilityLabel="Go back"><Ionicons name="chevron-back" size={24} color={colors.text} /></Pressable>
           <Text style={styles.topNavTitle}>Profile</Text>
-          <Pressable onPress={() => Alert.alert('Profile options', undefined, [{ text: 'Edit profile', onPress: () => navigation.navigate('EditProfile') }, { text: 'Notifications', onPress: () => navigation.navigate('Notifications') }, { text: 'Sign out', style: 'destructive', onPress: () => logout() }, { text: 'Cancel', style: 'cancel' }])} style={styles.topNavButton} accessibilityLabel="Profile options"><Ionicons name="ellipsis-vertical" size={21} color={colors.text} /></Pressable>
+          <Pressable onPress={() => setMenuVisible(true)} style={styles.topNavButton} accessibilityLabel="فتح قائمة الحساب"><Ionicons name="menu" size={25} color={colors.text} /></Pressable>
         </View>
 
         <View style={styles.profileHero}>
@@ -147,10 +159,32 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.cloudStats}><Text style={styles.cloudStatsTitle}>Synced across devices</Text><View style={styles.cloudStatsRow}><Text style={styles.cloudStatText}>{remoteReviewsQuery.data?.length ?? 0} cloud reviews</Text><Text style={styles.cloudStatText}>{remoteLibraryQuery.data?.length ?? 0} library items</Text></View>{!emailVerified && user.email ? <Pressable onPress={handleRequestVerification} disabled={requestVerification.isPending} style={styles.verifyButton}><Ionicons name="mail-outline" size={15} color={colors.accent} /><Text style={styles.verifyText}>{requestVerification.isPending ? 'Sending...' : 'Verify your email'}</Text></Pressable> : null}</View>
-        <View style={styles.accountSettings}><Text style={styles.settingsTitle}>Account & Privacy</Text><View style={styles.settingRow}><View style={{ flex: 1 }}><Text style={styles.settingLabel}>Private activity</Text><Text style={styles.settingHint}>Hide your reviews and lists from people who do not follow you.</Text></View><Switch value={!!profile.isPrivate} onValueChange={handlePrivacyChange} trackColor={{ false: colors.surfaceHigh, true: colors.accent }} thumbColor={colors.text} /></View><Pressable style={styles.deleteButton} onPress={handleDeleteAccount} disabled={deleteMutation.isPending}><Ionicons name="trash-outline" size={17} color={colors.danger} /><Text style={styles.deleteText}>{deleteMutation.isPending ? 'Deleting…' : 'Delete account'}</Text></Pressable></View>
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
+      <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
+        <View style={styles.menuOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setMenuVisible(false)} accessibilityLabel="إغلاق القائمة" />
+          <View style={styles.menuCard}>
+            <Text style={styles.menuTitle}>الحساب والإعدادات</Text>
+            <MenuItem icon="settings-outline" label="الإعدادات" onPress={() => { setMenuVisible(false); navigation.navigate('Settings'); }} />
+            <MenuItem icon="person-outline" label="تعديل الملف الشخصي" onPress={() => { setMenuVisible(false); navigation.navigate('EditProfile'); }} />
+            <MenuItem icon="notifications-outline" label="الإشعارات" onPress={() => { setMenuVisible(false); navigation.navigate('Notifications'); }} />
+            <View style={styles.menuDivider} />
+            <MenuItem icon="log-out-outline" label="تسجيل الخروج" onPress={confirmLogout} danger />
+            <MenuItem icon="trash-outline" label={deleteMutation.isPending ? 'جارٍ حذف الحساب…' : 'حذف الحساب'} onPress={handleDeleteAccount} danger disabled={deleteMutation.isPending} />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
+  );
+}
+
+function MenuItem({ icon, label, onPress, danger, disabled }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; onPress: () => void; danger?: boolean; disabled?: boolean }) {
+  return (
+    <Pressable onPress={onPress} disabled={disabled} style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed, disabled && { opacity: 0.55 }]} accessibilityRole="button">
+      <Ionicons name={icon} size={20} color={danger ? colors.danger : colors.text} />
+      <Text style={[styles.menuItemText, danger && { color: colors.danger }]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -215,13 +249,13 @@ const styles = StyleSheet.create({
   verifyButton: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.md, alignSelf: 'flex-start' as const },
   verifyText: { color: colors.accent, fontSize: fontSizes.xs, fontWeight: '800' as const },
   cloudStatText: { color: colors.textDim, fontSize: 12 },
-  accountSettings: { marginHorizontal: spacing.lg, marginTop: spacing.sm, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
-  settingsTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800', marginBottom: spacing.md },
-  settingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  settingLabel: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '700' },
-  settingHint: { color: colors.textFaint, fontSize: 11, lineHeight: 16, marginTop: 3 },
-  deleteButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.lg, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
-  deleteText: { color: colors.danger, fontSize: fontSizes.sm, fontWeight: '700' },
+  menuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'flex-end', paddingTop: 62, paddingHorizontal: spacing.md },
+  menuCard: { width: 280, backgroundColor: colors.bgElevated, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.sm, elevation: 12 },
+  menuTitle: { color: colors.textDim, fontSize: fontSizes.xs, fontWeight: '700', textAlign: 'right', writingDirection: 'rtl', paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xs },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 48, paddingHorizontal: spacing.md, borderRadius: radius.md },
+  menuItemPressed: { backgroundColor: colors.surfaceHigh },
+  menuItemText: { flex: 1, color: colors.text, fontSize: fontSizes.sm, fontWeight: '700', textAlign: 'right', writingDirection: 'rtl' },
+  menuDivider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.xs, marginHorizontal: spacing.md },
   authLoading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl },
   authLoadingText: { color: colors.textDim, fontSize: fontSizes.sm },
   authScreen: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl, paddingBottom: spacing.xxl },

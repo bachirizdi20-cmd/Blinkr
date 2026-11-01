@@ -216,9 +216,6 @@ export const appRouter = router({
     updateProfile: protectedProcedure
       .input(z.object({ username: z.string().trim().min(2).max(64).optional(), bio: z.string().trim().max(160).optional(), avatarUrl: z.string().max(2_000_000).nullable().optional() }))
       .mutation(async ({ ctx, input }) => db.upsertUserData(ctx.user.id, input)),
-    updatePrivacy: protectedProcedure
-      .input(z.object({ isPrivate: z.boolean() }))
-      .mutation(async ({ ctx, input }) => db.upsertUserData(ctx.user.id, input)),
     sync: protectedProcedure
       .input(z.object({ libraryJson: z.string().max(2_000_000), socialJson: z.string().max(2_000_000) }))
       .mutation(async ({ ctx, input }) => db.upsertUserData(ctx.user.id, input)),

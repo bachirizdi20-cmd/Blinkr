@@ -130,6 +130,14 @@ export function getAccountLibraryStorageKeys(accountId: string): LibraryStorageK
   ) as LibraryStorageKeys;
 }
 
+export async function clearAccountLibraryStorage(
+  storage: LibraryKeyValueStorage,
+  accountId: string,
+): Promise<void> {
+  const keys = getAccountLibraryStorageKeys(accountId);
+  await storage.multiRemove(LIBRARY_STORAGE_FIELDS.map((field) => keys[field]));
+}
+
 async function migrateLegacyLibrary(
   storage: LibraryKeyValueStorage,
   accountId: string,

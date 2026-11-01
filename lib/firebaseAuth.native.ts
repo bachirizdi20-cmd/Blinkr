@@ -21,3 +21,7 @@ function createNativeAuth() {
 }
 
 export const firebaseAuth = createNativeAuth();
+
+export async function signOutFirebase() {
+  await nativeAuthApi.signOut(firebaseAuth);
+}

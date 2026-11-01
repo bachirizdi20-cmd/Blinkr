@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { redactPrivateProfile } from "../server/db";
 import { storageKeyFromUrl } from "../server/storage";
 
-describe("private profiles", () => {
+describe("public profiles", () => {
   const profile = {
     id: 7,
     name: "Private Viewer",
@@ -12,7 +12,7 @@ describe("private profiles", () => {
     isPrivate: true,
   };
 
-  it("hides private profile details from a non-follower", () => {
+  it("keeps legacy profiles public even when the stored privacy flag is true", () => {
     const result = redactPrivateProfile(profile, {
       isFollowing: false,
       isSelf: false,
@@ -21,13 +21,14 @@ describe("private profiles", () => {
       followsYou: false,
     });
 
-    expect(result.locked).toBe(true);
-    expect(result.bio).toBeNull();
-    expect(result.followerCount).toBeNull();
-    expect(result.followingCount).toBeNull();
+    expect(result.locked).toBe(false);
+    expect(result.isPrivate).toBe(false);
+    expect(result.bio).toBe(profile.bio);
+    expect(result.followerCount).toBe(12);
+    expect(result.followingCount).toBe(8);
   });
 
-  it("reveals details to the owner or an approved follower", () => {
+  it("keeps public profile details visible", () => {
     expect(
       redactPrivateProfile(profile, {
         isFollowing: true,

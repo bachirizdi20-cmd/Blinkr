@@ -1,5 +1,6 @@
 import * as Api from "@/lib/_core/api";
 import * as Auth from "@/lib/_core/auth";
+import { signOutFirebase } from "@/lib/firebaseAuth";
 import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
@@ -107,6 +108,11 @@ function useAuthController(options?: UseAuthOptions) {
       console.error("[Auth] Logout API call failed:", err);
       // Continue with logout even if API call fails
     } finally {
+      try {
+        await signOutFirebase();
+      } catch (err) {
+        console.error("[Auth] Firebase logout failed:", err);
+      }
       await Auth.removeSessionToken();
       await Auth.clearUserInfo();
       setUser(null);

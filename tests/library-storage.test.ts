@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  clearAccountLibraryStorage,
   getAccountLibraryStorageKeys,
   loadAccountLibraryStorage,
   type LibraryKeyValueStorage,
@@ -32,6 +33,19 @@ class MemoryStorage implements LibraryKeyValueStorage {
 }
 
 describe("account-scoped library storage", () => {
+  it("clears only the deleted account's library data", async () => {
+    const deletedKeys = getAccountLibraryStorageKeys("firebase-user-deleted");
+    const otherKeys = getAccountLibraryStorageKeys("firebase-user-active");
+    const deletedValues = Object.fromEntries(Object.values(deletedKeys).map((key) => [key, `deleted:${key}`]));
+    const otherValues = Object.fromEntries(Object.values(otherKeys).map((key) => [key, `active:${key}`]));
+    const storage = new MemoryStorage({ ...deletedValues, ...otherValues });
+
+    await clearAccountLibraryStorage(storage, "firebase-user-deleted");
+
+    for (const key of Object.values(deletedKeys)) expect(await storage.getItem(key)).toBeNull();
+    for (const key of Object.values(otherKeys)) expect(await storage.getItem(key)).toBe(`active:${key}`);
+  });
+
   it("imports the legacy library into only the first signed-in account", async () => {
     const oldDiary = JSON.stringify([{ id: "old-review", review: "Keep this review" }]);
     const oldWatchlist = JSON.stringify({ "movie-42": { title: "Keep this title" } });

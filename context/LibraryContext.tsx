@@ -137,7 +137,7 @@ export function LibraryProvider({ children, accountId }: { children: React.React
         if (values.diary) setDiary(JSON.parse(values.diary));
         if (values.lists) setLists(JSON.parse(values.lists));
         if (values.likes) setLikes(JSON.parse(values.likes));
-        if (values.profile) setProfile(JSON.parse(values.profile));
+        if (values.profile) setProfile({ ...JSON.parse(values.profile), isPrivate: false });
         if (values.episodes) setEpisodeWatched(JSON.parse(values.episodes));
         setLoadedAccountId(accountId);
       } catch (err) {
@@ -291,7 +291,7 @@ export function LibraryProvider({ children, accountId }: { children: React.React
   );
 
   const updateProfile = useCallback((patch: Partial<UserProfile>) => {
-    setProfile((prev) => ({ ...prev, ...patch }));
+    setProfile((prev) => ({ ...prev, ...patch, isPrivate: false }));
   }, []);
 
   const toggleEpisodeWatched = useCallback((tvId: number, season: number, episode: number) => {

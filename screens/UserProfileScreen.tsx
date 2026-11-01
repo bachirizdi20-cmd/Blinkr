@@ -34,7 +34,6 @@ export default function UserProfileScreen() {
 function RemoteUserProfile({ userId, onBack, onMessage }: { userId: number; onBack: () => void; onMessage: () => void }) {
   const profileQuery = trpc.social.profile.useQuery({ userId });
   const followMutation = trpc.social.toggleFollow.useMutation({ onSuccess: () => profileQuery.refetch() });
-  const cancelRequestMutation = trpc.social.cancelFollowRequest.useMutation({ onSuccess: () => profileQuery.refetch() });
   const blockMutation = trpc.social.block.useMutation({ onSuccess: () => { Alert.alert('User blocked', "You won't see each other's content anymore."); onBack(); } });
   const reportMutation = trpc.social.report.useMutation({ onSuccess: () => Alert.alert('Report sent', "Thanks — our team will review it.") });
   const [menuOpen, setMenuOpen] = useState(false);
@@ -119,36 +118,27 @@ function RemoteUserProfile({ userId, onBack, onMessage }: { userId: number; onBa
           )}
         </View>
         <Text style={styles.username}>@{profile.username ?? 'user'}</Text>
-        {profile.locked ? (
-          <View style={styles.lockedNotice}>
-            <Ionicons name="lock-closed-outline" size={14} color={colors.textFaint} />
-            <Text style={styles.lockedText}>This account is private. Follow to see their bio, stats, and reviews.</Text>
+        {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{(profile.followerCount ?? 0).toLocaleString()}</Text>
+            <Text style={styles.statLabel}>Followers</Text>
           </View>
-        ) : (
-          <>
-            {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
-            <View style={styles.statsRow}>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{(profile.followerCount ?? 0).toLocaleString()}</Text>
-                <Text style={styles.statLabel}>Followers</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{(profile.followingCount ?? 0).toLocaleString()}</Text>
-                <Text style={styles.statLabel}>Following</Text>
-              </View>
-            </View>
-          </>
-        )}
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{(profile.followingCount ?? 0).toLocaleString()}</Text>
+            <Text style={styles.statLabel}>Following</Text>
+          </View>
+        </View>
 
         <View style={styles.actionsRow}>
           <Pressable
-            style={[styles.actionBtn, (profile.isFollowing || profile.followRequested) ? styles.followingBtn : styles.followBtn]}
-            disabled={followMutation.isPending || cancelRequestMutation.isPending}
-            onPress={() => profile.followRequested ? cancelRequestMutation.mutate({ targetId: userId }) : followMutation.mutate({ userId })}
+            style={[styles.actionBtn, profile.isFollowing ? styles.followingBtn : styles.followBtn]}
+            disabled={followMutation.isPending}
+            onPress={() => followMutation.mutate({ userId })}
           >
-            <Ionicons name={profile.isFollowing || profile.followRequested ? 'checkmark' : 'person-add'} size={16} color={profile.isFollowing || profile.followRequested ? colors.text : '#04120C'} />
-            <Text style={[styles.actionBtnText, (profile.isFollowing || profile.followRequested) ? styles.followingBtnText : styles.followBtnText]}>
-              {profile.isFollowing ? 'Following' : profile.followRequested ? 'Requested' : 'Follow'}
+            <Ionicons name={profile.isFollowing ? 'checkmark' : 'person-add'} size={16} color={profile.isFollowing ? colors.text : '#04120C'} />
+            <Text style={[styles.actionBtnText, profile.isFollowing ? styles.followingBtnText : styles.followBtnText]}>
+              {profile.isFollowing ? 'Following' : 'Follow'}
             </Text>
           </Pressable>
           <Pressable style={[styles.actionBtn, styles.messageBtn]} onPress={onMessage}>
