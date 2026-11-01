@@ -55,9 +55,16 @@ export const AuthTextInput = React.forwardRef<AuthTextInputHandle, AuthTextInput
 
   if (Platform.OS === "web") {
     const flattenedStyle = StyleSheet.flatten(props.style) ?? {};
-    const { writingDirection, ...textStyle } = flattenedStyle;
+    const { writingDirection, paddingHorizontal, paddingVertical, lineHeight, ...textStyle } = flattenedStyle;
     const inputStyle = {
+      backgroundColor: "transparent",
+      border: "none",
+      margin: 0,
       ...textStyle,
+      ...(paddingHorizontal !== undefined || paddingVertical !== undefined
+        ? { padding: `${paddingVertical ?? 0}px ${paddingHorizontal ?? 0}px` }
+        : {}),
+      ...(lineHeight !== undefined ? { lineHeight: `${lineHeight}px` } : {}),
       boxSizing: "border-box",
       direction: writingDirection,
       fontFamily: "inherit",
