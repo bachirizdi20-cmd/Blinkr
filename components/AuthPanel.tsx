@@ -1,6 +1,7 @@
 import React from "react";
-import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { AuthTextInput, type AuthTextInputHandle } from "@/components/AuthTextInput";
 import { createUserWithEmailAndPassword, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { trpc } from "@/lib/trpc";
 import * as Auth from "@/lib/_core/auth";
@@ -57,10 +58,10 @@ export function AuthPanel({ onAuthenticated }: Props) {
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const nameRef = React.useRef<TextInput>(null);
-  const emailRef = React.useRef<TextInput>(null);
-  const passwordRef = React.useRef<TextInput>(null);
-  const confirmPasswordRef = React.useRef<TextInput>(null);
+  const nameRef = React.useRef<AuthTextInputHandle>(null);
+  const emailRef = React.useRef<AuthTextInputHandle>(null);
+  const passwordRef = React.useRef<AuthTextInputHandle>(null);
+  const confirmPasswordRef = React.useRef<AuthTextInputHandle>(null);
 
   const complete = React.useCallback(async (result: { sessionToken: string; user: Auth.User }) => {
     await Auth.setSessionToken(result.sessionToken);
@@ -156,7 +157,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
 
       {isRegister ? <>
         <Text style={styles.label}>الاسم</Text>
-        <TextInput
+        <AuthTextInput
           ref={nameRef}
           value={name}
           onChangeText={(value) => { setName(value); setFieldErrors((current) => ({ ...current, name: undefined })); }}
@@ -178,7 +179,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
       </> : null}
 
       <Text style={styles.label}>البريد الإلكتروني</Text>
-      <TextInput
+      <AuthTextInput
         ref={emailRef}
         value={email}
         onChangeText={(value) => { setEmail(value); setFieldErrors((current) => ({ ...current, email: undefined })); }}
@@ -201,7 +202,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
       {!isForgot ? <>
         <Text style={styles.label}>كلمة المرور</Text>
         <View style={[styles.passwordRow, fieldErrors.password && styles.inputInvalid]}>
-          <TextInput
+          <AuthTextInput
             ref={passwordRef}
             value={password}
             onChangeText={(value) => { setPassword(value); setFieldErrors((current) => ({ ...current, password: undefined })); }}
@@ -234,7 +235,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
         {isRegister ? <>
           <Text style={styles.label}>تأكيد كلمة المرور</Text>
           <View style={[styles.passwordRow, fieldErrors.confirmPassword && styles.inputInvalid]}>
-            <TextInput
+            <AuthTextInput
               ref={confirmPasswordRef}
               value={confirmPassword}
               onChangeText={(value) => { setConfirmPassword(value); setFieldErrors((current) => ({ ...current, confirmPassword: undefined })); }}
