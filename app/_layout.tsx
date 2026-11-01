@@ -6,6 +6,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useFonts } from "expo-font";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 import RootTabNavigator from "@/navigation/RootTabNavigator";
 import { LibraryProvider } from "@/context/LibraryContext";
@@ -57,7 +58,7 @@ function FirstLaunchGate() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({ ...Ionicons.font });
+  const [fontsLoaded] = useFonts({ ...Ionicons.font, ...MaterialIcons.font });
   const [queryClient] = React.useState(() => new QueryClient());
   const [trpcClient] = React.useState(() => createTRPCClient());
 
