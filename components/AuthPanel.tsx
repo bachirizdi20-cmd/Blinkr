@@ -1,8 +1,8 @@
 import React from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { AuthTextInput, type AuthTextInputHandle } from "@/components/AuthTextInput";
-import { createUserWithEmailAndPassword, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword, GoogleAuthProvider, OAuthProvider, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signInWithPopup, updateProfile, type User } from "firebase/auth";
 import { trpc } from "@/lib/trpc";
 import * as Auth from "@/lib/_core/auth";
 import { firebaseAuth } from "@/lib/firebaseAuth";
@@ -17,10 +17,13 @@ function friendlyAuthError(error: unknown) {
   const code = typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : "";
   const message = error instanceof Error ? error.message : String(error);
   const normalized = `${code} ${message}`.toLowerCase();
-  if (code === "auth/operation-not-allowed") return "تسجيل البريد وكلمة المرور غير مفعّل في Firebase. فعّله من Authentication ثم Sign-in method.";
+  if (code === "auth/operation-not-allowed") return "طريقة تسجيل الدخول هذه غير مفعّلة في Firebase. فعّل المزوّد المطلوب من Authentication ثم Sign-in method.";
   if (code === "auth/unauthorized-domain") return "نطاق التطبيق غير مسموح في Firebase. أضف bachirizdi20-cmd.github.io إلى Authentication ثم Settings ثم Authorized domains.";
   if (code === "auth/invalid-api-key") return "إعداد Firebase غير صالح. راجع إعدادات تطبيق الويب في مشروع Firebase.";
   if (code === "auth/email-already-in-use") return "هذا البريد لديه حساب بالفعل. اختر تسجيل الدخول؛ إذا لم يكن موثقًا سنعيد إرسال رابط التحقق.";
+  if (code === "auth/account-exists-with-different-credential") return "هذا البريد مرتبط بطريقة دخول أخرى. استخدم طريقة الدخول الأصلية أولًا؛ لا تنشئ حسابًا جديدًا كي لا تفصل بياناتك.";
+  if (code === "auth/popup-blocked") return "منع المتصفح نافذة تسجيل الدخول. اسمح بالنوافذ المنبثقة لهذا الموقع ثم أعد المحاولة.";
+  if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return "أُغلقت نافذة تسجيل الدخول قبل اكتمال العملية. حاول مرة أخرى.";
   if (code === "auth/invalid-email") return "صيغة البريد الإلكتروني غير صحيحة.";
   if (code === "auth/weak-password") return "كلمة المرور ضعيفة؛ اختر كلمة مرور أقوى من 8 أحرف.";
   if (normalized.includes("too many") || normalized.includes("too-many-requests")) return "محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.";
@@ -71,6 +74,41 @@ export function AuthPanel({ onAuthenticated }: Props) {
 
   const firebaseSession = trpc.auth.firebaseSession.useMutation();
   const busy = isSubmitting || firebaseSession.isPending;
+
+  const completeFederatedSignIn = React.useCallback(async (user: User) => {
+    const idToken = await user.getIdToken(true);
+    const result = await firebaseSession.mutateAsync({
+      idToken,
+      name: user.displayName || undefined,
+    });
+    await complete(result);
+  }, [complete, firebaseSession]);
+
+  const handleSocialSignIn = async (kind: "google" | "apple") => {
+    clearFeedback();
+    if (Platform.OS !== "web") {
+      setError("تسجيل Google وApple متاح حاليًا عبر نسخة Blinkr على الويب.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      firebaseAuth.languageCode = "ar";
+      const provider = kind === "google" ? new GoogleAuthProvider() : new OAuthProvider("apple.com");
+      if (kind === "google") provider.setCustomParameters({ prompt: "select_account" });
+      if (kind === "apple") {
+        provider.addScope("email");
+        provider.addScope("name");
+      }
+      // GitHub Pages and Firebase authDomain are cross-site; popup avoids redirect storage workarounds.
+      const result = await signInWithPopup(firebaseAuth, provider);
+      await completeFederatedSignIn(result.user);
+    } catch (signInError) {
+      setError(friendlyAuthError(signInError));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const clearFeedback = () => {
     setFieldErrors({});
@@ -154,6 +192,36 @@ export function AuthPanel({ onAuthenticated }: Props) {
             ? "أنشئ حسابك وابدأ بمشاركة عالمك السينمائي."
             : "أدخل بيانات حسابك للمتابعة إلى Blinkr."}
       </Text>
+
+      {Platform.OS === "web" && !isForgot ? <>
+        <View style={styles.socialButtons}>
+          <Pressable
+            onPress={() => handleSocialSignIn("google")}
+            disabled={busy}
+            style={({ pressed }) => [styles.socialButton, pressed && styles.pressed, busy && styles.disabled]}
+            accessibilityRole="button"
+            accessibilityLabel={isRegister ? "إنشاء حساب باستخدام Google" : "تسجيل الدخول باستخدام Google"}
+          >
+            <Ionicons name="logo-google" size={19} color="#4285F4" />
+            <Text style={styles.socialButtonText}>Google</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => handleSocialSignIn("apple")}
+            disabled={busy}
+            style={({ pressed }) => [styles.socialButton, pressed && styles.pressed, busy && styles.disabled]}
+            accessibilityRole="button"
+            accessibilityLabel={isRegister ? "إنشاء حساب باستخدام Apple" : "تسجيل الدخول باستخدام Apple"}
+          >
+            <Ionicons name="logo-apple" size={20} color={colors.text} />
+            <Text style={styles.socialButtonText}>Apple</Text>
+          </Pressable>
+        </View>
+        <View style={styles.socialDivider}>
+          <View style={styles.socialDividerLine} />
+          <Text style={styles.socialDividerText}>أو بالبريد الإلكتروني</Text>
+          <View style={styles.socialDividerLine} />
+        </View>
+      </> : null}
 
       {isRegister ? <>
         <Text style={styles.label}>الاسم</Text>
@@ -311,6 +379,12 @@ const styles = {
   switch: { alignItems: "center" as const, justifyContent: "center" as const, minHeight: 48, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
   switchText: { color: colors.accent, fontSize: fontSizes.sm, fontWeight: "700" as const, textAlign: "center" as const, writingDirection: "rtl" as const },
   passwordHint: { color: colors.textFaint, fontSize: 12, lineHeight: 18, textAlign: "center" as const, marginTop: spacing.xs, writingDirection: "rtl" as const },
+  socialButtons: { flexDirection: "row" as const, gap: spacing.sm, marginTop: spacing.sm },
+  socialButton: { flex: 1, flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 9, minHeight: 52, paddingHorizontal: spacing.sm, borderWidth: 1, borderColor: colors.borderLight, borderRadius: 12, backgroundColor: colors.surfaceHigh },
+  socialButtonText: { color: colors.text, fontSize: fontSizes.sm, fontWeight: "800" as const },
+  socialDivider: { flexDirection: "row" as const, alignItems: "center" as const, gap: spacing.sm, marginTop: spacing.md, marginBottom: spacing.xs },
+  socialDividerLine: { flex: 1, height: 1, backgroundColor: colors.borderLight },
+  socialDividerText: { color: colors.textFaint, fontSize: 12, writingDirection: "rtl" as const },
   pressed: { opacity: 0.82 },
   disabled: { opacity: 0.65 },
 };
