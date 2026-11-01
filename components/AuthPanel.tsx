@@ -1,5 +1,5 @@
 import React from "react";
-import { ActivityIndicator, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { createUserWithEmailAndPassword, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { trpc } from "@/lib/trpc";
@@ -12,8 +12,16 @@ type AuthMode = "login" | "register" | "forgot";
 type FieldName = "name" | "email" | "password" | "confirmPassword";
 type FieldErrors = Partial<Record<FieldName, string>>;
 
-function friendlyAuthError(message: string) {
-  const normalized = message.toLowerCase();
+function friendlyAuthError(error: unknown) {
+  const code = typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : "";
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = `${code} ${message}`.toLowerCase();
+  if (code === "auth/operation-not-allowed") return "تسجيل البريد وكلمة المرور غير مفعّل في Firebase. فعّله من Authentication ثم Sign-in method.";
+  if (code === "auth/unauthorized-domain") return "نطاق التطبيق غير مسموح في Firebase. أضف bachirizdi20-cmd.github.io إلى Authentication ثم Settings ثم Authorized domains.";
+  if (code === "auth/invalid-api-key") return "إعداد Firebase غير صالح. راجع إعدادات تطبيق الويب في مشروع Firebase.";
+  if (code === "auth/email-already-in-use") return "هذا البريد لديه حساب بالفعل. اختر تسجيل الدخول؛ إذا لم يكن موثقًا سنعيد إرسال رابط التحقق.";
+  if (code === "auth/invalid-email") return "صيغة البريد الإلكتروني غير صحيحة.";
+  if (code === "auth/weak-password") return "كلمة المرور ضعيفة؛ اختر كلمة مرور أقوى من 8 أحرف.";
   if (normalized.includes("too many") || normalized.includes("too-many-requests")) return "محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.";
   if (normalized.includes("verify") || normalized.includes("verified")) return "تحقق من بريدك الإلكتروني أولًا، ثم سجّل الدخول مجددًا.";
   if (normalized.includes("network") || normalized.includes("fetch") || normalized.includes("timeout") || normalized.includes("connect")) {
@@ -26,10 +34,6 @@ function friendlyAuthError(message: string) {
     return "البريد أو كلمة المرور غير صحيحين. إذا كان هذا حساب Blinkr قديمًا، اختر إنشاء حساب بالبريد نفسه وأكّد البريد لربط بياناتك القديمة.";
   }
   return "تعذّر إكمال العملية. حاول مرة أخرى بعد قليل.";
-}
-
-function preserveWebInputFocus(event: { stopPropagation: () => void }) {
-  if (Platform.OS === "web") event.stopPropagation();
 }
 
 function FieldError({ message }: { message?: string }) {
@@ -110,7 +114,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
         const credential = await createUserWithEmailAndPassword(firebaseAuth, normalizedEmail, password);
         if (name.trim()) await updateProfile(credential.user, { displayName: name.trim() });
         await sendEmailVerification(credential.user);
-        setNotice("أرسلنا رسالة تحقق من Firebase. افتحها ثم ارجع وسجّل الدخول؛ وإذا كان لديك ملف Blinkr قديم بالبريد نفسه فسنربطه بعد التأكيد.");
+        setNotice("أرسل Firebase رابط تحقق إلى بريدك، وليس رمزًا رقميًا. افحص الوارد والرسائل غير المرغوب فيها؛ ثم ارجع وسجّل الدخول بعد فتح الرابط.");
         return;
       }
 
@@ -129,7 +133,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
       });
       await complete(result);
     } catch (submitError) {
-      setError(friendlyAuthError(submitError instanceof Error ? submitError.message : String(submitError)));
+      setError(friendlyAuthError(submitError));
     } finally {
       setIsSubmitting(false);
     }
@@ -154,7 +158,6 @@ export function AuthPanel({ onAuthenticated }: Props) {
         <Text style={styles.label}>الاسم</Text>
         <TextInput
           ref={nameRef}
-          onTouchStart={preserveWebInputFocus}
           value={name}
           onChangeText={(value) => { setName(value); setFieldErrors((current) => ({ ...current, name: undefined })); }}
           placeholder="اكتب اسمك"
@@ -164,6 +167,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
           autoComplete="name"
           textContentType="name"
           returnKeyType="next"
+          blurOnSubmit={false}
           onSubmitEditing={() => emailRef.current?.focus()}
           maxLength={80}
           accessibilityLabel="الاسم"
@@ -176,7 +180,6 @@ export function AuthPanel({ onAuthenticated }: Props) {
       <Text style={styles.label}>البريد الإلكتروني</Text>
       <TextInput
         ref={emailRef}
-        onTouchStart={preserveWebInputFocus}
         value={email}
         onChangeText={(value) => { setEmail(value); setFieldErrors((current) => ({ ...current, email: undefined })); }}
         placeholder="name@example.com"
@@ -187,6 +190,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
         autoComplete="email"
         textContentType="emailAddress"
         returnKeyType={isForgot ? "go" : "next"}
+        blurOnSubmit={false}
         onSubmitEditing={() => isForgot ? submit() : passwordRef.current?.focus()}
         accessibilityLabel="البريد الإلكتروني"
         style={[styles.input, styles.ltrInput, fieldErrors.email && styles.inputInvalid]}
@@ -199,7 +203,6 @@ export function AuthPanel({ onAuthenticated }: Props) {
         <View style={[styles.passwordRow, fieldErrors.password && styles.inputInvalid]}>
           <TextInput
             ref={passwordRef}
-            onTouchStart={preserveWebInputFocus}
             value={password}
             onChangeText={(value) => { setPassword(value); setFieldErrors((current) => ({ ...current, password: undefined })); }}
             placeholder="8 أحرف على الأقل"
@@ -210,6 +213,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
             autoComplete={isRegister ? "new-password" : "current-password"}
             textContentType={isRegister ? "newPassword" : "password"}
             returnKeyType={isRegister ? "next" : "go"}
+            blurOnSubmit={false}
             onSubmitEditing={() => isRegister ? confirmPasswordRef.current?.focus() : submit()}
             accessibilityLabel="كلمة المرور"
             style={[styles.passwordInput, styles.ltrInput]}
@@ -232,7 +236,6 @@ export function AuthPanel({ onAuthenticated }: Props) {
           <View style={[styles.passwordRow, fieldErrors.confirmPassword && styles.inputInvalid]}>
             <TextInput
               ref={confirmPasswordRef}
-              onTouchStart={preserveWebInputFocus}
               value={confirmPassword}
               onChangeText={(value) => { setConfirmPassword(value); setFieldErrors((current) => ({ ...current, confirmPassword: undefined })); }}
               placeholder="أعد كتابة كلمة المرور"
