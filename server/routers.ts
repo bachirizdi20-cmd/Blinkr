@@ -259,6 +259,7 @@ export const appRouter = router({
   social: router({
     users: protectedProcedure.input(z.object({ query: z.string().trim().max(80).default("") })).query(({ ctx, input }) => db.searchUsers(ctx.user.id, input.query)),
     profile: protectedProcedure.input(z.object({ userId: z.number().int().positive() })).query(({ ctx, input }) => db.getUserProfile(ctx.user.id, input.userId)),
+    userReviews: protectedProcedure.input(z.object({ userId: z.number().int().positive() })).query(({ ctx, input }) => db.listPublicUserReviews(ctx.user.id, input.userId)),
     searchReviews: protectedProcedure.input(z.object({ query: z.string().trim().max(120).default("") })).query(({ ctx, input }) => db.searchReviews(ctx.user.id, input.query)),
     following: protectedProcedure.query(({ ctx }) => db.listFollowingIds(ctx.user.id)),
     followers: protectedProcedure.query(({ ctx }) => db.listFollowerIds(ctx.user.id)),
@@ -272,7 +273,13 @@ export const appRouter = router({
     markNotificationsRead: protectedProcedure.mutation(async ({ ctx }) => { await db.markNotificationsRead(ctx.user.id); return { success: true } as const; }),
     block: protectedProcedure.input(z.object({ userId: z.number().int().positive() })).mutation(({ ctx, input }) => db.addBlock(ctx.user.id, input.userId)),
     unblock: protectedProcedure.input(z.object({ userId: z.number().int().positive() })).mutation(({ ctx, input }) => db.removeBlock(ctx.user.id, input.userId)),
-    report: protectedProcedure.input(z.object({ targetType: z.enum(["review", "comment", "user"]), targetId: z.number().int().positive(), reason: z.enum(["spam", "harassment", "spoiler", "other"]), details: z.string().trim().max(1000).optional() })).mutation(({ ctx, input }) => db.createReport({ reporterId: ctx.user.id, ...input })),
+    report: protectedProcedure.input(z.object({ targetType: z.enum(["review", "comment", "user"]), targetId: z.number().int().positive(), reason: z.enum(["spam", "harassment", "spoiler", "other"]), details: z.string().trim().max(1000).optional() })).mutation(async ({ ctx, input }) => {
+      if (input.targetType === "user") {
+        if (input.targetId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "You cannot report your own account" });
+        if (!(await db.getUserById(input.targetId))) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+      }
+      return db.createReport({ reporterId: ctx.user.id, ...input });
+    }),
     toggleLike: protectedProcedure.input(z.object({ reviewId: z.number().int().positive() })).mutation(({ ctx, input }) => db.toggleReviewLike(ctx.user.id, input.reviewId)),
     comments: protectedProcedure.input(z.object({ reviewId: z.number().int().positive() })).query(({ ctx, input }) => db.listReviewComments(ctx.user.id, input.reviewId)),
     addComment: protectedProcedure.input(z.object({ reviewId: z.number().int().positive(), text: z.string().trim().min(1).max(1000) })).mutation(({ ctx, input }) => db.addReviewComment(ctx.user.id, input.reviewId, input.text)),

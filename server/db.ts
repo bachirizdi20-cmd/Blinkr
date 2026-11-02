@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, desc, isNull, gt, or, not, inArray } from "drizzle-orm";
+import { and, eq, desc, isNull, gt, or, not, inArray, like } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertMediaStatus, InsertReview, InsertUser, InsertUserData, MediaStatus, Review, authTokens, blocks, follows, followRequests, notifications, reports, reviewComments, reviewLikes, mediaStatuses, reviews, UserData, userData, users, conversations, chatMessages, InsertChatMessage } from "../drizzle/schema";
 import { ENV } from "./_core/env";
@@ -257,13 +257,17 @@ async function isBlockedEitherWay(db: NonNullable<Awaited<ReturnType<typeof getD
 export async function searchUsers(viewerId: number, query: string) {
   const db = await getDb();
   if (!db) return [];
-  const rows = await db.select({ id: users.id, name: users.name, username: userData.username, bio: userData.bio, avatarUrl: userData.avatarUrl }).from(users).leftJoin(userData, eq(userData.userId, users.id)).where(not(eq(users.id, viewerId))).limit(50);
+  const needle = query.trim();
+  const escapedNeedle = needle.replace(/[\\%_]/g, "\\$&");
+  const baseFilter = not(eq(users.id, viewerId));
+  const searchFilter = needle
+    ? and(baseFilter, or(like(users.name, `%${escapedNeedle}%`), like(userData.username, `%${escapedNeedle}%`)))
+    : baseFilter;
+  const rows = await db.select({ id: users.id, name: users.name, username: userData.username, bio: userData.bio, avatarUrl: userData.avatarUrl }).from(users).leftJoin(userData, eq(userData.userId, users.id)).where(searchFilter).orderBy(desc(users.lastSignedIn)).limit(50);
   const blockedRows = await db.select({ userId: blocks.userId, blockedUserId: blocks.blockedUserId }).from(blocks).where(or(eq(blocks.userId, viewerId), eq(blocks.blockedUserId, viewerId)));
   const blockedIds = new Set(blockedRows.map((row) => (row.userId === viewerId ? row.blockedUserId : row.userId)));
-  const needle = query.trim().toLowerCase();
   return rows
     .filter((row) => !blockedIds.has(row.id))
-    .filter((row) => !needle || `${row.username ?? ""} ${row.name ?? ""}`.toLowerCase().includes(needle))
     .map((row) => ({ ...row, isPrivate: false }));
 }
 
@@ -314,6 +318,7 @@ export function redactPrivateProfile<
     followerCount: options.followerCount,
     followingCount: options.followingCount,
     isFollowing: options.isFollowing,
+    isSelf: options.isSelf,
     followsYou: options.followsYou,
     followRequested: options.followRequested ?? false,
     locked: false,
@@ -349,6 +354,36 @@ export async function getUserProfile(viewerId: number, targetUserId: number) {
     followsYou: targetFollowsViewerRow.length > 0,
     followRequested: false,
   });
+}
+
+export async function listPublicUserReviews(viewerId: number, targetUserId: number) {
+  const db = await getDb();
+  if (!db || (viewerId !== targetUserId && await isBlockedEitherWay(db, viewerId, targetUserId))) return [];
+
+  const rows = await db.select({ review: reviews }).from(reviews)
+    .where(eq(reviews.userId, targetUserId))
+    .orderBy(desc(reviews.updatedAt))
+    .limit(20);
+  if (!rows.length) return [];
+
+  const reviewIds = rows.map(({ review }) => review.id);
+  const [likeRows, commentRows, myLikeRows] = await Promise.all([
+    db.select({ reviewId: reviewLikes.reviewId }).from(reviewLikes).where(inArray(reviewLikes.reviewId, reviewIds)),
+    db.select({ reviewId: reviewComments.reviewId }).from(reviewComments).where(inArray(reviewComments.reviewId, reviewIds)),
+    db.select({ reviewId: reviewLikes.reviewId }).from(reviewLikes).where(and(inArray(reviewLikes.reviewId, reviewIds), eq(reviewLikes.userId, viewerId))),
+  ]);
+  const likeCounts = new Map<number, number>();
+  const commentCounts = new Map<number, number>();
+  for (const row of likeRows) likeCounts.set(row.reviewId, (likeCounts.get(row.reviewId) ?? 0) + 1);
+  for (const row of commentRows) commentCounts.set(row.reviewId, (commentCounts.get(row.reviewId) ?? 0) + 1);
+  const likedByMe = new Set(myLikeRows.map((row) => row.reviewId));
+
+  return rows.map(({ review }) => ({
+    review,
+    likeCount: likeCounts.get(review.id) ?? 0,
+    commentCount: commentCounts.get(review.id) ?? 0,
+    likedByMe: likedByMe.has(review.id),
+  }));
 }
 
 export async function listFollowingIds(userId: number) {
@@ -526,6 +561,15 @@ export async function cancelFollowRequest(requesterId: number, targetId: number)
 export async function createReport(input: { reporterId: number; targetType: string; targetId: number; reason: string; details?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  if (input.targetType === "user" && input.reporterId === input.targetId) throw new Error("Cannot report yourself");
+  if (input.targetType === "user") {
+    const existing = await db.select({ id: reports.id }).from(reports).where(and(
+      eq(reports.reporterId, input.reporterId),
+      eq(reports.targetType, input.targetType),
+      eq(reports.targetId, input.targetId),
+    )).limit(1);
+    if (existing.length) return { success: true, duplicate: true } as const;
+  }
   await db.insert(reports).values(input);
   return { success: true } as const;
 }

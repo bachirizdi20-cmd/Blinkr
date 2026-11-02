@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -9,6 +10,7 @@ import EmptyState from '../components/EmptyState';
 import ApiErrorState from '../components/ApiErrorState';
 import { ContentStackParamList } from '../navigation/types';
 import { trpc } from '../lib/trpc';
+import { posterUrl } from '../lib/tmdb';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
@@ -17,169 +19,301 @@ type RouteT = RouteProp<ContentStackParamList, 'UserProfile'>;
 export default function UserProfileScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<RouteT>();
-  const paramId = route.params.userId;
-  const isRemote = paramId.startsWith('remote-');
-  const numericId = isRemote ? Number(paramId.replace('remote-', '')) : null;
+  const routeUserId = route.params.userId;
+  const rawId = routeUserId.replace(/^remote-/, '');
+  const numericId = Number(rawId);
 
-  if (isRemote && numericId) {
-    return <RemoteUserProfile userId={numericId} onBack={() => navigation.goBack()} onMessage={() => navigation.navigate('Conversation', { userId: paramId })} />;
+  if (/^\d+$/.test(rawId) && Number.isSafeInteger(numericId) && numericId > 0) {
+    return (
+      <RemoteUserProfile
+        userId={numericId}
+        onBack={() => navigation.goBack()}
+        onMessage={() => navigation.navigate('Conversation', { userId: `remote-${numericId}` })}
+        onOpenMedia={(mediaType, mediaId) => navigation.navigate('Detail', { mediaType, id: mediaId })}
+      />
+    );
   }
+
+  return (
+    <ProfileState onBack={() => navigation.goBack()}>
+      <EmptyState icon="alert-circle-outline" title="الملف غير متاح" message="لم نتمكن من العثور على هذا المستخدم." />
+    </ProfileState>
+  );
+}
+
+function ProfileState({ onBack, children }: { onBack: () => void; children: React.ReactNode }) {
   return (
     <SafeAreaView style={styles.safe}>
-      <EmptyState icon="alert-circle-outline" title="User not found" message="This profile is no longer available." />
+      <View style={styles.header}>
+        <Pressable onPress={onBack} hitSlop={8} accessibilityLabel="رجوع"><Ionicons name="chevron-back" size={24} color={colors.text} /></Pressable>
+        <Text style={styles.headerTitle}>الملف الشخصي</Text>
+        <View style={{ width: 24 }} />
+      </View>
+      {children}
     </SafeAreaView>
   );
 }
 
-function RemoteUserProfile({ userId, onBack, onMessage }: { userId: number; onBack: () => void; onMessage: () => void }) {
+function RemoteUserProfile({
+  userId,
+  onBack,
+  onMessage,
+  onOpenMedia,
+}: {
+  userId: number;
+  onBack: () => void;
+  onMessage: () => void;
+  onOpenMedia: (mediaType: 'movie' | 'tv', mediaId: number) => void;
+}) {
   const profileQuery = trpc.social.profile.useQuery({ userId });
-  const followMutation = trpc.social.toggleFollow.useMutation({ onSuccess: () => profileQuery.refetch() });
-  const blockMutation = trpc.social.block.useMutation({ onSuccess: () => { Alert.alert('User blocked', "You won't see each other's content anymore."); onBack(); } });
-  const reportMutation = trpc.social.report.useMutation({ onSuccess: () => Alert.alert('Report sent', "Thanks — our team will review it.") });
+  const reviewsQuery = trpc.social.userReviews.useQuery({ userId }, { enabled: Boolean(profileQuery.data) });
+  const followMutation = trpc.social.toggleFollow.useMutation({
+    onSuccess: () => { void profileQuery.refetch(); },
+    onError: () => Alert.alert('تعذرت المتابعة', 'تحقق من اتصالك ثم حاول مرة أخرى.'),
+  });
+  const blockMutation = trpc.social.block.useMutation({
+    onSuccess: () => { Alert.alert('تم حظر المستخدم', 'لن تظهر لكما ملفات أو محتويات بعضكما.'); onBack(); },
+    onError: () => Alert.alert('تعذر حظر المستخدم', 'حاول مرة أخرى لاحقًا.'),
+  });
+  const reportMutation = trpc.social.report.useMutation({
+    onSuccess: (result) => {
+      const duplicate = 'duplicate' in result && result.duplicate;
+      Alert.alert(duplicate ? 'سبق الإبلاغ' : 'تم إرسال البلاغ', duplicate ? 'سبق أن أرسلت بلاغًا عن هذا المستخدم.' : 'شكرًا، سيراجع فريق Blinkr البلاغ.');
+    },
+    onError: () => Alert.alert('تعذر إرسال البلاغ', 'حاول مرة أخرى لاحقًا.'),
+  });
+  const likeMutation = trpc.social.toggleLike.useMutation({
+    onSuccess: () => { void reviewsQuery.refetch(); },
+    onError: () => Alert.alert('تعذر تسجيل الإعجاب', 'حاول مرة أخرى لاحقًا.'),
+  });
   const [menuOpen, setMenuOpen] = useState(false);
+  const [revealedSpoilers, setRevealedSpoilers] = useState<Record<number, boolean>>({});
 
   const confirmBlock = () => {
     setMenuOpen(false);
-    Alert.alert('Block this user?', 'They will no longer be able to follow you, message you, or see your reviews.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Block', style: 'destructive', onPress: () => blockMutation.mutate({ userId }) },
+    Alert.alert('حظر هذا المستخدم؟', 'لن تتمكنا من متابعة بعضكما أو مراسلة بعضكما، ولن ترى محتوى هذا المستخدم.', [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'حظر', style: 'destructive', onPress: () => blockMutation.mutate({ userId }) },
     ]);
   };
 
   const confirmReport = () => {
     setMenuOpen(false);
-    Alert.alert('Report this user?', 'Let us know why you\u2019re reporting this account.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Spam', onPress: () => reportMutation.mutate({ targetType: 'user', targetId: userId, reason: 'spam' }) },
-      { text: 'Harassment', onPress: () => reportMutation.mutate({ targetType: 'user', targetId: userId, reason: 'harassment' }) },
-      { text: 'Other', onPress: () => reportMutation.mutate({ targetType: 'user', targetId: userId, reason: 'other' }) },
+    Alert.alert('الإبلاغ عن المستخدم', 'اختر سبب الإبلاغ:', [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'رسائل مزعجة', onPress: () => reportMutation.mutate({ targetType: 'user', targetId: userId, reason: 'spam' }) },
+      { text: 'مضايقة', onPress: () => reportMutation.mutate({ targetType: 'user', targetId: userId, reason: 'harassment' }) },
+      { text: 'سبب آخر', onPress: () => reportMutation.mutate({ targetType: 'user', targetId: userId, reason: 'other' }) },
     ]);
   };
 
   if (profileQuery.isLoading) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.loading}><ActivityIndicator color={colors.accent} /></View>
-      </SafeAreaView>
-    );
+    return <ProfileState onBack={onBack}><View style={styles.loading}><ActivityIndicator size="large" color={colors.accent} /><Text style={styles.loadingText}>جارٍ تحميل الملف الشخصي…</Text></View></ProfileState>;
   }
 
   if (profileQuery.isError) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <ApiErrorState message="Couldn't load this profile." onRetry={() => profileQuery.refetch()} />
-      </SafeAreaView>
-    );
+    return <ProfileState onBack={onBack}><ApiErrorState message="تعذر تحميل الملف الشخصي." onRetry={() => profileQuery.refetch()} /></ProfileState>;
   }
 
   const profile = profileQuery.data;
   if (!profile) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <EmptyState icon="alert-circle-outline" title="User not found" />
-      </SafeAreaView>
-    );
+    return <ProfileState onBack={onBack}><EmptyState icon="person-remove-outline" title="الملف غير متاح" message="قد يكون المستخدم حذف حسابه أو حظرك." /></ProfileState>;
   }
 
-  const displayName = profile.name ?? profile.username ?? 'Blinkr user';
+  const displayName = profile.name?.trim() || profile.username || 'مستخدم Blinkr';
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <Pressable onPress={onBack} hitSlop={8}>
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Profile</Text>
-        <Pressable onPress={() => setMenuOpen((v) => !v)} hitSlop={8}>
-          <Ionicons name="ellipsis-horizontal" size={22} color={colors.text} />
-        </Pressable>
+        <Pressable onPress={onBack} hitSlop={8} accessibilityLabel="رجوع"><Ionicons name="chevron-back" size={24} color={colors.text} /></Pressable>
+        <Text style={styles.headerTitle}>الملف الشخصي</Text>
+        {!profile.isSelf ? <Pressable onPress={() => setMenuOpen((open) => !open)} hitSlop={8} accessibilityLabel="خيارات المستخدم"><Ionicons name="ellipsis-horizontal" size={22} color={colors.text} /></Pressable> : <View style={{ width: 24 }} />}
       </View>
-      {menuOpen && (
-        <View style={styles.menuCard}>
-          <Pressable style={styles.menuItem} onPress={confirmReport}>
-            <Ionicons name="flag-outline" size={16} color={colors.text} />
-            <Text style={styles.menuItemText}>Report user</Text>
-          </Pressable>
-          <Pressable style={styles.menuItem} onPress={confirmBlock}>
-            <Ionicons name="ban-outline" size={16} color={colors.danger} />
-            <Text style={[styles.menuItemText, { color: colors.danger }]}>Block user</Text>
-          </Pressable>
+
+      {menuOpen && !profile.isSelf ? (
+        <View style={styles.menuOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setMenuOpen(false)} accessibilityLabel="إغلاق القائمة" />
+          <View style={styles.menuCard}>
+            <Pressable style={styles.menuItem} onPress={confirmReport}><Ionicons name="flag-outline" size={17} color={colors.text} /><Text style={styles.menuText}>الإبلاغ عن المستخدم</Text></Pressable>
+            <Pressable style={styles.menuItem} onPress={confirmBlock}><Ionicons name="ban-outline" size={17} color={colors.danger} /><Text style={[styles.menuText, styles.dangerText]}>حظر المستخدم</Text></Pressable>
+          </View>
         </View>
-      )}
+      ) : null}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        <UserAvatar name={displayName} color={colors.accent} size={100} imageUrl={profile.avatarUrl ?? undefined} />
-        <View style={styles.nameBlock}>
-          <Text style={styles.name}>{displayName}</Text>
-          {profile.followsYou && (
-            <View style={styles.followsYouTag}>
-              <Text style={styles.followsYouText}>Follows you</Text>
+        <View style={styles.profileHero}>
+          <UserAvatar name={displayName} color={colors.accent} size={92} imageUrl={profile.avatarUrl ?? undefined} />
+          <View style={styles.profileInfo}>
+            <View style={styles.nameLine}>
+              <Text style={styles.name} numberOfLines={2}>{displayName}</Text>
+              {profile.followsYou ? <View style={styles.followsYouTag}><Text style={styles.followsYouText}>يتابعك</Text></View> : null}
             </View>
-          )}
-        </View>
-        <Text style={styles.username}>@{profile.username ?? 'user'}</Text>
-        {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{(profile.followerCount ?? 0).toLocaleString()}</Text>
-            <Text style={styles.statLabel}>Followers</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{(profile.followingCount ?? 0).toLocaleString()}</Text>
-            <Text style={styles.statLabel}>Following</Text>
+            <Text style={styles.username}>@{profile.username || `user${userId}`}</Text>
+            {profile.isSelf ? <Text style={styles.selfLabel}>هذا ملفك الشخصي</Text> : (
+              <View style={styles.actionsRow}>
+                <Pressable
+                  style={[styles.actionButton, profile.isFollowing ? styles.secondaryButton : styles.primaryButton]}
+                  disabled={followMutation.isPending}
+                  onPress={() => followMutation.mutate({ userId })}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name={profile.isFollowing ? 'checkmark' : 'person-add-outline'} size={16} color={profile.isFollowing ? colors.text : '#04120C'} />
+                  <Text style={[styles.actionText, profile.isFollowing ? styles.secondaryButtonText : styles.primaryButtonText]}>
+                    {profile.isFollowing ? 'تتابعه' : 'متابعة'}
+                  </Text>
+                </Pressable>
+                <Pressable style={[styles.actionButton, styles.secondaryButton]} onPress={onMessage} accessibilityRole="button">
+                  <Ionicons name="chatbubble-outline" size={16} color={colors.text} />
+                  <Text style={[styles.actionText, styles.secondaryButtonText]}>مراسلة</Text>
+                </Pressable>
+              </View>
+            )}
           </View>
         </View>
 
-        <View style={styles.actionsRow}>
-          <Pressable
-            style={[styles.actionBtn, profile.isFollowing ? styles.followingBtn : styles.followBtn]}
-            disabled={followMutation.isPending}
-            onPress={() => followMutation.mutate({ userId })}
-          >
-            <Ionicons name={profile.isFollowing ? 'checkmark' : 'person-add'} size={16} color={profile.isFollowing ? colors.text : '#04120C'} />
-            <Text style={[styles.actionBtnText, profile.isFollowing ? styles.followingBtnText : styles.followBtnText]}>
-              {profile.isFollowing ? 'Following' : 'Follow'}
-            </Text>
-          </Pressable>
-          <Pressable style={[styles.actionBtn, styles.messageBtn]} onPress={onMessage}>
-            <Ionicons name="chatbubble-outline" size={16} color={colors.text} />
-            <Text style={[styles.actionBtnText, { color: colors.text }]}>Message</Text>
-          </Pressable>
+        <Text style={styles.bio}>{profile.bio?.trim() || 'لم يضف هذا المستخدم نبذة شخصية بعد.'}</Text>
+
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{(profile.followerCount ?? 0).toLocaleString('ar')}</Text>
+            <Text style={styles.statLabel}>المتابعون</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{(profile.followingCount ?? 0).toLocaleString('ar')}</Text>
+            <Text style={styles.statLabel}>يتابع</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{(reviewsQuery.data?.length ?? 0).toLocaleString('ar')}</Text>
+            <Text style={styles.statLabel}>مراجعة حديثة</Text>
+          </View>
         </View>
+
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>أحدث المراجعات</Text>
+            <Text style={styles.sectionSubtitle}>آراء هذا المستخدم في الأفلام والمسلسلات</Text>
+          </View>
+          <Ionicons name="film-outline" size={21} color={colors.accent} />
+        </View>
+
+        {reviewsQuery.isLoading ? (
+          <View style={styles.reviewLoading}><ActivityIndicator color={colors.accent} /><Text style={styles.loadingText}>جارٍ تحميل المراجعات…</Text></View>
+        ) : reviewsQuery.isError ? (
+          <View style={styles.inlineError}><Text style={styles.emptyText}>تعذر تحميل المراجعات.</Text><Pressable onPress={() => reviewsQuery.refetch()}><Text style={styles.retryText}>إعادة المحاولة</Text></Pressable></View>
+        ) : !reviewsQuery.data?.length ? (
+          <View style={styles.emptyReviews}><Ionicons name="chatbox-ellipses-outline" size={26} color={colors.textFaint} /><Text style={styles.emptyTitle}>لا توجد مراجعات بعد</Text><Text style={styles.emptyText}>ستظهر هنا المراجعات التي ينشرها هذا المستخدم.</Text></View>
+        ) : (
+          <View style={styles.reviewsList}>
+            {reviewsQuery.data.map((item) => {
+              const review = item.review;
+              const mediaType: 'movie' | 'tv' = review.mediaType === 'tv' ? 'tv' : 'movie';
+              const poster = posterUrl(review.posterPath, 'w200');
+              const reviewDate = formatArabicDate(review.updatedAt);
+              const spoilerVisible = !review.spoiler || revealedSpoilers[review.id];
+              return (
+                <View key={review.id} style={styles.reviewCard}>
+                  <Pressable style={styles.reviewTop} onPress={() => onOpenMedia(mediaType, review.mediaId)} accessibilityRole="button">
+                    {poster ? <Image source={{ uri: poster }} style={styles.poster} contentFit="cover" /> : <View style={[styles.poster, styles.posterFallback]}><Ionicons name="film-outline" size={25} color={colors.textFaint} /></View>}
+                    <View style={styles.reviewInfo}>
+                      <Text style={styles.reviewTitle} numberOfLines={2}>{review.title}</Text>
+                      <View style={styles.ratingPill}><Ionicons name="star" size={13} color={colors.gold} /><Text style={styles.ratingText}>{review.rating}/10</Text></View>
+                      {reviewDate ? <Text style={styles.reviewDate}>{reviewDate}</Text> : null}
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
+                  </Pressable>
+
+                  {review.spoiler && !spoilerVisible ? (
+                    <Pressable style={styles.spoilerNotice} onPress={() => setRevealedSpoilers((current) => ({ ...current, [review.id]: true }))}>
+                      <Ionicons name="warning-outline" size={15} color={colors.gold} />
+                      <Text style={styles.spoilerText}>تحتوي المراجعة على حرق — اضغط لإظهارها</Text>
+                    </Pressable>
+                  ) : review.review ? <Text style={styles.reviewBody} numberOfLines={5}>{review.review}</Text> : <Text style={styles.reviewBodyMuted}>قيّم هذا العنوان دون إضافة تعليق مكتوب.</Text>}
+
+                  <View style={styles.reviewFooter}>
+                    <Text style={styles.reviewMeta}>{item.commentCount.toLocaleString('ar')} تعليق</Text>
+                    <Pressable
+                      style={styles.likeButton}
+                      disabled={likeMutation.isPending}
+                      onPress={() => likeMutation.mutate({ reviewId: review.id })}
+                      accessibilityRole="button"
+                      accessibilityLabel={item.likedByMe ? 'إلغاء الإعجاب بالمراجعة' : 'أعجبني'}
+                    >
+                      <Ionicons name={item.likedByMe ? 'heart' : 'heart-outline'} size={17} color={item.likedByMe ? colors.danger : colors.textDim} />
+                      <Text style={styles.reviewMeta}>{item.likeCount.toLocaleString('ar')}</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+function formatArabicDate(value: Date | string | number) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('ar', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, marginBottom: spacing.md },
+  header: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border },
   headerTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800' },
-  content: { alignItems: 'center', padding: spacing.lg, paddingTop: spacing.md },
-  nameBlock: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
-  name: { color: colors.text, fontSize: fontSizes.xl, fontWeight: '800' },
-  followsYouTag: { backgroundColor: colors.surfaceHigh, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
+  content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
+  loadingText: { color: colors.textDim, fontSize: fontSizes.sm },
+  profileHero: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, paddingTop: spacing.xl, paddingBottom: spacing.md },
+  profileInfo: { flex: 1, minWidth: 0, gap: 5 },
+  nameLine: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm },
+  name: { color: colors.text, fontSize: fontSizes.xl, fontWeight: '800', flexShrink: 1 },
+  followsYouTag: { backgroundColor: colors.surfaceHigh, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 4 },
   followsYouText: { color: colors.textDim, fontSize: 10, fontWeight: '700' },
-  username: { color: colors.textFaint, fontSize: fontSizes.sm, marginTop: 2 },
-  bio: { color: colors.textDim, fontSize: fontSizes.sm, textAlign: 'center', marginTop: spacing.md, lineHeight: 20, paddingHorizontal: spacing.md },
-  genreTag: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surface, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 6, marginTop: spacing.md, borderWidth: 1, borderColor: colors.border },
-  genreText: { color: colors.text, fontSize: fontSizes.xs, fontWeight: '600' },
-  statsRow: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xl, width: '100%' },
-  statCard: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
+  username: { color: colors.textFaint, fontSize: fontSizes.sm, textAlign: 'right' },
+  selfLabel: { color: colors.textDim, fontSize: fontSizes.xs, fontWeight: '700', marginTop: spacing.xs, textAlign: 'right' },
+  actionsRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
+  actionButton: { minHeight: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: spacing.md, borderRadius: radius.md },
+  primaryButton: { backgroundColor: colors.accent },
+  secondaryButton: { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border },
+  actionText: { fontSize: fontSizes.xs, fontWeight: '800' },
+  primaryButtonText: { color: '#04120C' },
+  secondaryButtonText: { color: colors.text },
+  bio: { color: colors.textDim, fontSize: fontSizes.sm, lineHeight: 22, textAlign: 'right', marginTop: spacing.sm },
+  statsRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, marginBottom: spacing.xl },
+  statCard: { flex: 1, minHeight: 68, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.sm },
   statValue: { color: colors.accent, fontSize: fontSizes.lg, fontWeight: '800' },
-  statLabel: { color: colors.textFaint, fontSize: 10, fontWeight: '700', marginTop: 2, textTransform: 'uppercase' },
-  actionsRow: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xl, width: '100%' },
-  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: radius.md, paddingVertical: spacing.sm + 4 },
-  followBtn: { backgroundColor: colors.accent },
-  followingBtn: { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border },
-  messageBtn: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  actionBtnText: { fontWeight: '800', fontSize: fontSizes.sm },
-  followBtnText: { color: '#04120C' },
-  followingBtnText: { color: colors.text },
-  menuCard: { position: 'absolute', top: 44, right: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingVertical: 4, zIndex: 10, elevation: 6 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: spacing.md, paddingVertical: 10, minWidth: 160 },
-  menuItemText: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '600' },
-  lockedNotice: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, marginTop: spacing.md, maxWidth: 280 },
-  lockedText: { color: colors.textFaint, fontSize: fontSizes.xs, flexShrink: 1 },
+  statLabel: { color: colors.textFaint, fontSize: 10, fontWeight: '700', marginTop: 3, textAlign: 'center' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
+  sectionTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800', textAlign: 'right' },
+  sectionSubtitle: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: 3, textAlign: 'right' },
+  reviewLoading: { minHeight: 100, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.md },
+  inlineError: { alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.lg },
+  retryText: { color: colors.accent, fontSize: fontSizes.sm, fontWeight: '800' },
+  emptyReviews: { alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.xl },
+  emptyTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800' },
+  emptyText: { color: colors.textDim, fontSize: fontSizes.sm, textAlign: 'center' },
+  reviewsList: { gap: spacing.md },
+  reviewCard: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md },
+  reviewTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  poster: { width: 58, height: 82, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh },
+  posterFallback: { alignItems: 'center', justifyContent: 'center' },
+  reviewInfo: { flex: 1, alignItems: 'flex-end', gap: 5 },
+  reviewTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800', textAlign: 'right' },
+  ratingPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.surfaceHigh, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 4 },
+  ratingText: { color: colors.text, fontSize: fontSizes.xs, fontWeight: '800' },
+  reviewDate: { color: colors.textFaint, fontSize: 10 },
+  reviewBody: { color: colors.textDim, fontSize: fontSizes.sm, lineHeight: 21, textAlign: 'right', marginTop: spacing.md },
+  reviewBodyMuted: { color: colors.textFaint, fontSize: fontSizes.xs, textAlign: 'right', marginTop: spacing.md },
+  spoilerNotice: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, padding: spacing.md, marginTop: spacing.md, backgroundColor: colors.surfaceHigh, borderRadius: radius.sm },
+  spoilerText: { color: colors.gold, fontSize: fontSizes.xs, fontWeight: '700', textAlign: 'right' },
+  reviewFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.md, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
+  reviewMeta: { color: colors.textFaint, fontSize: fontSizes.xs },
+  likeButton: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 5 },
+  menuOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 20, elevation: 20 },
+  menuCard: { position: 'absolute', top: 52, right: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingVertical: 4, elevation: 8, minWidth: 190 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: spacing.md, paddingVertical: 11 },
+  menuText: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '700' },
+  dangerText: { color: colors.danger },
 });
