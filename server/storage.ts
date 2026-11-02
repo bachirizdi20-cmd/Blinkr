@@ -49,6 +49,16 @@ function hasForgeConfig() {
   return Boolean(ENV.forgeApiUrl && ENV.forgeApiKey);
 }
 
+/** Exposes only whether a storage backend is configured, never its credentials. */
+export function isStorageConfigured() {
+  return hasS3Config() || hasForgeConfig();
+}
+
+/** The managed Forge runtime has no delete endpoint; S3-compatible stores do. */
+export function isStorageDeletionSupported() {
+  return hasS3Config();
+}
+
 function getForgeConfig() {
   if (!hasForgeConfig()) {
     throw new Error(
@@ -147,12 +157,13 @@ export async function storageGetSignedUrl(relKey: string) {
   return url;
 }
 
-export async function storageDelete(relKey: string) {
-  if (!hasS3Config()) return;
+export async function storageDelete(relKey: string): Promise<boolean> {
+  if (!hasS3Config()) return false;
   const { client, bucket } = getS3Config();
   await client.send(
     new DeleteObjectCommand({ Bucket: bucket, Key: normalizeKey(relKey) }),
   );
+  return true;
 }
 
 /** Extract a storage key from a URL returned by storagePut. */

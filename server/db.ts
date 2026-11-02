@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, desc, isNull, gt, or, not, inArray, like } from "drizzle-orm";
+import { and, avg, count, eq, desc, isNull, gt, or, not, inArray, like } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertMediaStatus, InsertReview, InsertUser, InsertUserData, MediaStatus, Review, authTokens, blocks, follows, followRequests, notifications, reports, reviewComments, reviewLikes, mediaStatuses, reviews, UserData, userData, users, conversations, chatMessages, InsertChatMessage } from "../drizzle/schema";
 import { ENV } from "./_core/env";
@@ -333,27 +333,38 @@ export async function getUserProfile(viewerId: number, targetUserId: number) {
     return null;
   }
 
-  const rows = await db.select({ id: users.id, name: users.name, username: userData.username, bio: userData.bio, avatarUrl: userData.avatarUrl, isPrivate: userData.isPrivate }).from(users).leftJoin(userData, eq(userData.userId, users.id)).where(eq(users.id, targetUserId)).limit(1);
+  const rows = await db.select({ id: users.id, name: users.name, username: userData.username, bio: userData.bio, avatarUrl: userData.avatarUrl, isPrivate: userData.isPrivate, joinedAt: users.createdAt }).from(users).leftJoin(userData, eq(userData.userId, users.id)).where(eq(users.id, targetUserId)).limit(1);
   const profile = rows[0];
   if (!profile) return null;
 
-  const [followerRows, followingRows, viewerFollowsRow, targetFollowsViewerRow] = await Promise.all([
+  const [followerRows, followingRows, viewerFollowsRow, targetFollowsViewerRow, reviewStatsRows, reviewTypeRows] = await Promise.all([
     db.select({ id: follows.id }).from(follows).where(eq(follows.followingId, targetUserId)),
     db.select({ id: follows.id }).from(follows).where(eq(follows.followerId, targetUserId)),
     db.select().from(follows).where(and(eq(follows.followerId, viewerId), eq(follows.followingId, targetUserId))).limit(1),
     db.select().from(follows).where(and(eq(follows.followerId, targetUserId), eq(follows.followingId, viewerId))).limit(1),
+    db.select({ total: count(), average: avg(reviews.rating) }).from(reviews).where(eq(reviews.userId, targetUserId)),
+    db.select({ mediaType: reviews.mediaType, total: count() }).from(reviews).where(eq(reviews.userId, targetUserId)).groupBy(reviews.mediaType),
   ]);
 
   const isFollowing = viewerFollowsRow.length > 0;
   const isSelf = viewerId === targetUserId;
-  return redactPrivateProfile(profile, {
-    isFollowing,
-    isSelf,
-    followerCount: followerRows.length,
-    followingCount: followingRows.length,
-    followsYou: targetFollowsViewerRow.length > 0,
-    followRequested: false,
-  });
+  const mediaReviewCount = (mediaType: string) => Number(reviewTypeRows.find((row) => row.mediaType === mediaType)?.total ?? 0);
+  const reviewSummary = reviewStatsRows[0];
+  return {
+    ...redactPrivateProfile(profile, {
+      isFollowing,
+      isSelf,
+      followerCount: followerRows.length,
+      followingCount: followingRows.length,
+      followsYou: targetFollowsViewerRow.length > 0,
+      followRequested: false,
+    }),
+    joinedAt: profile.joinedAt,
+    reviewCount: Number(reviewSummary?.total ?? 0),
+    averageRating: reviewSummary?.average == null ? null : Math.round(Number(reviewSummary.average) * 10) / 10,
+    movieReviewCount: mediaReviewCount("movie"),
+    tvReviewCount: mediaReviewCount("tv"),
+  };
 }
 
 export async function listPublicUserReviews(viewerId: number, targetUserId: number) {
@@ -384,6 +395,23 @@ export async function listPublicUserReviews(viewerId: number, targetUserId: numb
     commentCount: commentCounts.get(review.id) ?? 0,
     likedByMe: likedByMe.has(review.id),
   }));
+}
+
+export async function listPublicUserTopReviews(viewerId: number, targetUserId: number) {
+  const db = await getDb();
+  if (!db || (viewerId !== targetUserId && await isBlockedEitherWay(db, viewerId, targetUserId))) return [];
+
+  return db.select({
+    id: reviews.id,
+    mediaType: reviews.mediaType,
+    mediaId: reviews.mediaId,
+    title: reviews.title,
+    posterPath: reviews.posterPath,
+    rating: reviews.rating,
+  }).from(reviews)
+    .where(eq(reviews.userId, targetUserId))
+    .orderBy(desc(reviews.rating), desc(reviews.updatedAt))
+    .limit(5);
 }
 
 export async function listFollowingIds(userId: number) {

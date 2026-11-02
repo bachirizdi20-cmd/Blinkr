@@ -13,6 +13,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { ENV } from "./env";
 import { getCsrfCookieOptions } from "./cookies";
+import { isStorageConfigured, isStorageDeletionSupported } from "../storage";
 
 const CSRF_COOKIE_NAME = "blinkr_csrf";
 const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -124,7 +125,7 @@ async function startServer() {
   });
 
   app.get("/api/health", (_req, res) => {
-    res.json({ ok: true, timestamp: Date.now() });
+    res.json({ ok: true, timestamp: Date.now(), storageConfigured: isStorageConfigured(), storageDeletionSupported: isStorageDeletionSupported() });
   });
 
   app.use(

@@ -8,7 +8,8 @@ import * as db from "./db";
 import { ENV } from "./_core/env";
 import { sdk } from "./_core/sdk";
 import { hashPassword, normalizeEmail, verifyPassword } from "./password";
-import { storagePut, storageDelete, storageKeyFromUrl } from "./storage";
+import { storagePut, storageDelete, storageKeyFromUrl, isStorageConfigured, isStorageDeletionSupported } from "./storage";
+import { AvatarImageInputError, normalizeAvatarDataUri } from "./avatar-image";
 import { assertLoginAllowed, clearLoginFailures, recordLoginFailure } from "./rate-limit";
 import { createAuthToken, consumeAuthToken, markEmailVerified, updateUserPassword } from "./db";
 import { sendAuthEmail } from "./email";
@@ -187,35 +188,54 @@ export const appRouter = router({
     }),
   }),
   account: router({
-    me: protectedProcedure.query(async ({ ctx }) => ({ user: ctx.user, data: await db.getUserData(ctx.user.id), socialStats: await db.getUserSocialStats(ctx.user.id) })),
+    me: protectedProcedure.query(async ({ ctx }) => ({ user: ctx.user, data: await db.getUserData(ctx.user.id), socialStats: await db.getUserSocialStats(ctx.user.id), storageConfigured: isStorageConfigured(), storageDeletionSupported: isStorageDeletionSupported() })),
     uploadAvatar: protectedProcedure
       .input(z.object({ dataUri: z.string().max(7_000_000) }))
       .mutation(async ({ ctx, input }) => {
-        const match = input.dataUri.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=_-]+)$/);
-        if (!match) throw new TRPCError({ code: "BAD_REQUEST", message: "Only JPEG, PNG, and WebP images are supported" });
-        const [, contentType, encoded] = match;
-        const data = Buffer.from(encoded, "base64");
-        if (data.length > 5 * 1024 * 1024) throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "Image must be smaller than 5 MB" });
+        let data: Buffer;
+        try {
+          data = await normalizeAvatarDataUri(input.dataUri);
+        } catch (error) {
+          if (!(error instanceof AvatarImageInputError)) throw error;
+          throw new TRPCError({
+            code: error.reason === "too_large" ? "PAYLOAD_TOO_LARGE" : "BAD_REQUEST",
+            message: error.reason === "too_large"
+              ? "حجم الصورة أكبر من 5 ميغابايت. اختر صورة أصغر."
+              : "الصورة غير صالحة. اختر صورة بصيغة JPEG أو PNG أو WebP.",
+          });
+        }
 
-        // Remove the previous avatar (if any) so old files don't pile up in storage.
-        const previous = await db.getUserData(ctx.user.id);
+        const stored = await storagePut(`avatars/user-${ctx.user.id}`, data, "image/jpeg");
+        return stored;
+      }),
+    discardAvatar: protectedProcedure
+      .input(z.object({ key: z.string().min(1).max(255) }))
+      .mutation(async ({ ctx, input }) => {
+        const ownedKeyPattern = new RegExp(`^avatars/user-${ctx.user.id}_[a-f0-9]{8}$`);
+        if (!ownedKeyPattern.test(input.key)) throw new TRPCError({ code: "FORBIDDEN", message: "Invalid avatar key" });
+        const currentKey = storageKeyFromUrl((await db.getUserData(ctx.user.id))?.avatarUrl ?? null);
+        if (currentKey === input.key) throw new TRPCError({ code: "FORBIDDEN", message: "Cannot delete the active avatar" });
+        const deleted = await storageDelete(input.key);
+        return { success: true, physicallyDeleted: deleted } as const;
+      }),
+    updateProfile: protectedProcedure
+      .input(z.object({ username: z.string().trim().min(2).max(64).optional(), bio: z.string().trim().max(160).optional(), avatarUrl: z.string().max(2_000_000).nullable().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const previous = input.avatarUrl === undefined ? null : await db.getUserData(ctx.user.id);
+        const updated = await db.upsertUserData(ctx.user.id, input);
         const previousKey = storageKeyFromUrl(previous?.avatarUrl ?? null);
-
-        const stored = await storagePut(`avatars/user-${ctx.user.id}`, data, contentType);
-
-        if (previousKey && previousKey !== stored.key) {
+        const nextKey = storageKeyFromUrl(input.avatarUrl ?? null);
+        const ownedKeyPattern = new RegExp(`^avatars/user-${ctx.user.id}_[a-f0-9]{8}$`);
+        if (previousKey && previousKey !== nextKey && ownedKeyPattern.test(previousKey)) {
           try {
-            await storageDelete(previousKey);
+            const deleted = await storageDelete(previousKey);
+            if (!deleted) console.warn("[Avatar] Storage backend does not support physical deletion of previous images");
           } catch (error) {
             console.error("[Avatar] Failed to delete previous avatar:", error);
           }
         }
-
-        return stored;
+        return updated;
       }),
-    updateProfile: protectedProcedure
-      .input(z.object({ username: z.string().trim().min(2).max(64).optional(), bio: z.string().trim().max(160).optional(), avatarUrl: z.string().max(2_000_000).nullable().optional() }))
-      .mutation(async ({ ctx, input }) => db.upsertUserData(ctx.user.id, input)),
     sync: protectedProcedure
       .input(z.object({ libraryJson: z.string().max(2_000_000), socialJson: z.string().max(2_000_000) }))
       .mutation(async ({ ctx, input }) => db.upsertUserData(ctx.user.id, input)),
@@ -260,6 +280,7 @@ export const appRouter = router({
     users: protectedProcedure.input(z.object({ query: z.string().trim().max(80).default("") })).query(({ ctx, input }) => db.searchUsers(ctx.user.id, input.query)),
     profile: protectedProcedure.input(z.object({ userId: z.number().int().positive() })).query(({ ctx, input }) => db.getUserProfile(ctx.user.id, input.userId)),
     userReviews: protectedProcedure.input(z.object({ userId: z.number().int().positive() })).query(({ ctx, input }) => db.listPublicUserReviews(ctx.user.id, input.userId)),
+    userTopReviews: protectedProcedure.input(z.object({ userId: z.number().int().positive() })).query(({ ctx, input }) => db.listPublicUserTopReviews(ctx.user.id, input.userId)),
     searchReviews: protectedProcedure.input(z.object({ query: z.string().trim().max(120).default("") })).query(({ ctx, input }) => db.searchReviews(ctx.user.id, input.query)),
     following: protectedProcedure.query(({ ctx }) => db.listFollowingIds(ctx.user.id)),
     followers: protectedProcedure.query(({ ctx }) => db.listFollowerIds(ctx.user.id)),

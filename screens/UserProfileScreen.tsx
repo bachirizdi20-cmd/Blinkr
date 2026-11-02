@@ -67,6 +67,7 @@ function RemoteUserProfile({
 }) {
   const profileQuery = trpc.social.profile.useQuery({ userId });
   const reviewsQuery = trpc.social.userReviews.useQuery({ userId }, { enabled: Boolean(profileQuery.data) });
+  const topReviewsQuery = trpc.social.userTopReviews.useQuery({ userId }, { enabled: Boolean(profileQuery.data) });
   const followMutation = trpc.social.toggleFollow.useMutation({
     onSuccess: () => { void profileQuery.refetch(); },
     onError: () => Alert.alert('تعذرت المتابعة', 'تحقق من اتصالك ثم حاول مرة أخرى.'),
@@ -121,6 +122,7 @@ function RemoteUserProfile({
   }
 
   const displayName = profile.name?.trim() || profile.username || 'مستخدم Blinkr';
+  const joinedDate = formatArabicDate(profile.joinedAt);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -173,7 +175,9 @@ function RemoteUserProfile({
 
         <Text style={styles.bio}>{profile.bio?.trim() || 'لم يضف هذا المستخدم نبذة شخصية بعد.'}</Text>
 
-        <View style={styles.statsRow}>
+        {joinedDate ? <Text style={styles.joinedAt}>عضو منذ {joinedDate}</Text> : null}
+
+        <View style={styles.statsGrid}>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>{(profile.followerCount ?? 0).toLocaleString('ar')}</Text>
             <Text style={styles.statLabel}>المتابعون</Text>
@@ -183,9 +187,54 @@ function RemoteUserProfile({
             <Text style={styles.statLabel}>يتابع</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>{(reviewsQuery.data?.length ?? 0).toLocaleString('ar')}</Text>
-            <Text style={styles.statLabel}>مراجعة حديثة</Text>
+            <Text style={styles.statValue}>{(profile.reviewCount ?? 0).toLocaleString('ar')}</Text>
+            <Text style={styles.statLabel}>مراجعة منشورة</Text>
           </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{profile.averageRating == null ? '—' : Number(profile.averageRating).toFixed(1)}</Text>
+            <Text style={styles.statLabel}>متوسط التقييم / 10</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{(profile.movieReviewCount ?? 0).toLocaleString('ar')}</Text>
+            <Text style={styles.statLabel}>مراجعة فيلم</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{(profile.tvReviewCount ?? 0).toLocaleString('ar')}</Text>
+            <Text style={styles.statLabel}>مراجعة مسلسل</Text>
+          </View>
+        </View>
+
+        <View style={styles.highlightSection}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={styles.sectionTitle}>الأعلى تقييمًا</Text>
+              <Text style={styles.sectionSubtitle}>أبرز اختياراته من المراجعات المنشورة</Text>
+            </View>
+            <Ionicons name="sparkles-outline" size={21} color={colors.gold} />
+          </View>
+          {topReviewsQuery.isLoading ? (
+            <View style={styles.topReviewsLoading}><ActivityIndicator color={colors.accent} /><Text style={styles.loadingText}>جارٍ تحميل الاختيارات…</Text></View>
+          ) : topReviewsQuery.isError ? (
+            <View style={styles.inlineError}><Text style={styles.emptyText}>تعذر تحميل الاختيارات.</Text><Pressable onPress={() => topReviewsQuery.refetch()}><Text style={styles.retryText}>إعادة المحاولة</Text></Pressable></View>
+          ) : topReviewsQuery.data?.length ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topReviewsRail}>
+              {topReviewsQuery.data.map((item) => {
+                const mediaType: 'movie' | 'tv' = item.mediaType === 'tv' ? 'tv' : 'movie';
+                const poster = posterUrl(item.posterPath, 'w342');
+                return (
+                  <Pressable key={item.id} style={styles.topReviewCard} onPress={() => onOpenMedia(mediaType, item.mediaId)} accessibilityRole="button">
+                    <View style={styles.topReviewPosterWrap}>
+                      {poster ? <Image source={{ uri: poster }} style={styles.topReviewPoster} contentFit="cover" /> : <View style={[styles.topReviewPoster, styles.posterFallback]}><Ionicons name="film-outline" size={26} color={colors.textFaint} /></View>}
+                      <View style={styles.topReviewRating}><Ionicons name="star" size={11} color={colors.gold} /><Text style={styles.topReviewRatingText}>{item.rating}/10</Text></View>
+                    </View>
+                    <Text style={styles.topReviewTitle} numberOfLines={2}>{item.title}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : (
+            <View style={styles.highlightEmpty}><Text style={styles.emptyText}>ستظهر هنا أعلى التقييمات بعد نشر المراجعات.</Text></View>
+          )}
         </View>
 
         <View style={styles.sectionHeader}>
@@ -281,10 +330,21 @@ const styles = StyleSheet.create({
   primaryButtonText: { color: '#04120C' },
   secondaryButtonText: { color: colors.text },
   bio: { color: colors.textDim, fontSize: fontSizes.sm, lineHeight: 22, textAlign: 'right', marginTop: spacing.sm },
-  statsRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, marginBottom: spacing.xl },
-  statCard: { flex: 1, minHeight: 68, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.sm },
+  joinedAt: { color: colors.textFaint, fontSize: fontSizes.xs, textAlign: 'right', marginTop: spacing.sm },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.lg, marginBottom: spacing.xl },
+  statCard: { width: '48%', minHeight: 68, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.sm },
   statValue: { color: colors.accent, fontSize: fontSizes.lg, fontWeight: '800' },
   statLabel: { color: colors.textFaint, fontSize: 10, fontWeight: '700', marginTop: 3, textAlign: 'center' },
+  highlightSection: { marginBottom: spacing.xl },
+  topReviewsRail: { flexDirection: 'row', gap: spacing.sm, paddingBottom: spacing.sm },
+  topReviewCard: { width: 115, gap: spacing.xs },
+  topReviewPosterWrap: { width: 115, height: 172, position: 'relative', overflow: 'hidden', borderRadius: radius.md, backgroundColor: colors.surfaceHigh },
+  topReviewPoster: { width: '100%', height: '100%' },
+  topReviewRating: { position: 'absolute', right: 6, bottom: 6, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.78)', borderRadius: radius.pill, paddingHorizontal: 7, paddingVertical: 4 },
+  topReviewRatingText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
+  topReviewTitle: { color: colors.text, fontSize: fontSizes.xs, fontWeight: '700', textAlign: 'right' },
+  topReviewsLoading: { minHeight: 90, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+  highlightEmpty: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
   sectionTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800', textAlign: 'right' },
   sectionSubtitle: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: 3, textAlign: 'right' },

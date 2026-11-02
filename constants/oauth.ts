@@ -6,6 +6,7 @@ import * as ReactNative from "react-native";
 const bundleId = "com.app.agonagent";
 const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
 const schemeFromBundleId = `manus${timestamp}`;
+const productionApiBaseUrl = "https://blinkr-5o8q.onrender.com";
 
 const env = {
   portal: process.env.EXPO_PUBLIC_OAUTH_PORTAL_URL ?? "",
@@ -45,6 +46,13 @@ export function getApiBaseUrl(): string {
     if (apiHostname !== hostname) {
       return `${protocol}//${apiHostname}`;
     }
+  }
+
+  // Release builds must resolve API-backed images and tRPC even if no base URL
+  // was supplied. Development/staging builds must provide their own URL.
+  const developmentBuild = typeof __DEV__ !== "undefined" && __DEV__;
+  if (ReactNative.Platform.OS !== "web" && !developmentBuild) {
+    return productionApiBaseUrl;
   }
 
   // Fallback to empty (will use relative URL)

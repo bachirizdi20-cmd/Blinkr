@@ -64,7 +64,12 @@ export default function ProfileScreen() {
     );
   }
 
-  const initials = (user.name || profile.username).slice(0, 2).toUpperCase();
+  const remoteProfile = accountQuery.data?.data;
+  const displayName = user.name || remoteProfile?.username || profile.username;
+  const displayedUsername = remoteProfile?.username || profile.username || 'cinephile';
+  const displayedBio = remoteProfile ? remoteProfile.bio : profile.bio;
+  const displayedAvatar = remoteProfile ? remoteProfile.avatarUrl : profile.avatarUri;
+  const initials = displayName.slice(0, 2).toUpperCase();
   const recentDiary = [...diary].sort((a, b) => b.createdAt - a.createdAt).slice(0, 5);
   const recentReviews = diary.filter((e) => !!e.review).sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
   const likeItems = Object.values(likes).sort((a, b) => b.likedAt - a.likedAt).slice(0, 8);
@@ -115,24 +120,30 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.topNav}>
-          <Pressable onPress={() => navigation.goBack()} style={styles.topNavButton} accessibilityLabel="Go back"><Ionicons name="chevron-back" size={24} color={colors.text} /></Pressable>
-          <Text style={styles.topNavTitle}>Profile</Text>
+          <Pressable onPress={() => navigation.goBack()} style={styles.topNavButton} accessibilityLabel="رجوع"><Ionicons name="chevron-back" size={24} color={colors.text} /></Pressable>
+          <Text style={styles.topNavTitle}>الملف الشخصي</Text>
           <Pressable onPress={() => setMenuVisible(true)} style={styles.topNavButton} accessibilityLabel="فتح قائمة الحساب"><Ionicons name="menu" size={25} color={colors.text} /></Pressable>
         </View>
 
         <View style={styles.profileHero}>
-          {resolveMediaUrl(profile.avatarUri) ? <Image source={{ uri: resolveMediaUrl(profile.avatarUri) }} style={styles.avatar} contentFit="cover" /> : <View style={[styles.avatar, { backgroundColor: profile.avatarColor }]}><Text style={styles.avatarText}>{initials}</Text></View>}
+          <View style={styles.avatarColumn}>
+            <Pressable onPress={() => navigation.navigate('EditProfile')} style={styles.avatarButton} accessibilityLabel="تغيير صورة الملف الشخصي">
+              {resolveMediaUrl(displayedAvatar) ? <Image source={{ uri: resolveMediaUrl(displayedAvatar) }} style={styles.avatar} contentFit="cover" /> : <View style={[styles.avatar, { backgroundColor: profile.avatarColor }]}><Text style={styles.avatarText}>{initials}</Text></View>}
+              <View style={styles.avatarCameraBadge}><Ionicons name="camera" size={13} color={colors.bg} /></View>
+            </Pressable>
+            <Text style={styles.avatarHint}>تغيير الصورة</Text>
+          </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.username}>{user.name || profile.username}</Text>
-            <Text style={styles.handle}>@{profile.username || 'member'}</Text>
+            <Text style={styles.username}>{displayName}</Text>
+            <Text style={styles.handle}>@{displayedUsername}</Text>
             <View style={styles.profileActions}>
-              <Pressable style={({ pressed }) => [styles.editButton, pressed && styles.pressed]} onPress={() => navigation.navigate('EditProfile')}><Text style={styles.editButtonText}>Edit profile</Text></Pressable>
-              <Pressable style={({ pressed }) => [styles.shareButton, pressed && styles.pressed]} onPress={() => Share.share({ message: `Check out ${user.name || profile.username} on Blinkr.` })} accessibilityLabel="Share profile"><Ionicons name="share-outline" size={19} color={colors.text} /></Pressable>
+              <Pressable style={({ pressed }) => [styles.editButton, pressed && styles.pressed]} onPress={() => navigation.navigate('EditProfile')}><Text style={styles.editButtonText}>تعديل الملف</Text></Pressable>
+              <Pressable style={({ pressed }) => [styles.shareButton, pressed && styles.pressed]} onPress={() => Share.share({ message: `تابع ${displayName} على Blinkr.` })} accessibilityLabel="مشاركة الملف"><Ionicons name="share-outline" size={19} color={colors.text} /></Pressable>
             </View>
           </View>
         </View>
-        <Text style={styles.bio} numberOfLines={3}>{profile.bio || 'Tell people what you love to watch.'}</Text>
-        <View style={styles.metaRow}><Ionicons name="location-outline" size={17} color={colors.textDim} /><Text style={styles.metaText}>Your cinematic world</Text><Ionicons name="calendar-outline" size={17} color={colors.textDim} /><Text style={styles.metaText}>Member</Text></View>
+        <Text style={styles.bio} numberOfLines={3}>{displayedBio || 'أضف نبذة قصيرة عن ذوقك السينمائي.'}</Text>
+        <View style={styles.metaRow}><Ionicons name="film-outline" size={17} color={colors.textDim} /><Text style={styles.metaText}>عالمك السينمائي</Text><Ionicons name="calendar-outline" size={17} color={colors.textDim} /><Text style={styles.metaText}>عضو في Blinkr</Text></View>
 
         <View style={styles.statsStrip}>
           <StatCard label="Films" value={stats.filmsWatched + stats.showsWatched} />
@@ -267,7 +278,11 @@ const styles = StyleSheet.create({
   authButtonText: { color: colors.bg, fontSize: fontSizes.md, fontWeight: '800' },
   authNote: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: spacing.md },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.lg },
+  avatarColumn: { alignItems: 'center', gap: 4 },
+  avatarButton: { position: 'relative' },
   avatar: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
+  avatarCameraBadge: { position: 'absolute', right: -2, bottom: -2, width: 25, height: 25, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent, borderWidth: 2, borderColor: colors.bg },
+  avatarHint: { color: colors.accent, fontSize: 9, fontWeight: '700' },
   avatarText: { color: '#04120C', fontSize: fontSizes.xl, fontWeight: '800' },
   username: { color: colors.text, fontSize: fontSizes.xl, fontWeight: '800' },
   bio: { color: colors.textDim, fontSize: fontSizes.sm, marginTop: 2 },
