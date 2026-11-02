@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Share, View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,6 +8,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import RatingStars from '../components/RatingStars';
 import EmptyState from '../components/EmptyState';
+import ApiErrorState from '../components/ApiErrorState';
 import PosterCard from '../components/PosterCard';
 import { ContentStackParamList } from '../navigation/types';
 import { useLibrary } from '../context/LibraryContext';
@@ -30,12 +31,34 @@ export default function ProfileScreen() {
   const { user, loading: authLoading, error: authError, logout, refresh } = useAuth();
   const deleteMutation = trpc.account.delete.useMutation();
   const requestVerification = trpc.auth.requestVerification.useMutation();
+  const librarySyncMutation = trpc.account.sync.useMutation();
   const accountQuery = trpc.account.me.useQuery(undefined, { enabled: !!user, retry: false });
   const remoteReviewsQuery = trpc.reviews.mine.useQuery(undefined, { enabled: !!user, retry: false });
   const remoteLibraryQuery = trpc.library.mine.useQuery(undefined, { enabled: !!user, retry: false });
   const lib = useLibrary();
   const { profile, diary, lists, likes } = lib;
   const [menuVisible, setMenuVisible] = useState(false);
+  const [librarySyncError, setLibrarySyncError] = useState(false);
+
+  useEffect(() => {
+    if (!user || !lib.loaded || accountQuery.isLoading || accountQuery.isError) return;
+    const libraryJson = JSON.stringify({
+      watchlist: lib.watchlist,
+      likes: lib.likes,
+      diary: lib.diary,
+      lists: lib.lists,
+      profile: lib.profile,
+      episodeWatched: lib.episodeWatched,
+    });
+    if (libraryJson.length > 1_900_000) { setLibrarySyncError(true); return; }
+    if (libraryJson === accountQuery.data?.data?.libraryJson) { setLibrarySyncError(false); return; }
+    const timer = setTimeout(() => {
+      void librarySyncMutation.mutateAsync({ libraryJson, socialJson: accountQuery.data?.data?.socialJson ?? '{}' })
+        .then(() => setLibrarySyncError(false))
+        .catch((error) => { setLibrarySyncError(true); console.warn('Unable to sync public profile library', error); });
+    }, 650);
+    return () => clearTimeout(timer);
+  }, [user?.id, lib.loaded, lib.watchlist, lib.likes, lib.diary, lib.lists, lib.profile, lib.episodeWatched, accountQuery.data?.data?.libraryJson, accountQuery.data?.data?.socialJson, accountQuery.isLoading, accountQuery.isError]);
 
   if (authLoading) {
     return (
@@ -56,6 +79,14 @@ export default function ProfileScreen() {
           <AuthPanel onAuthenticated={refresh} />
           <Text style={styles.authNote}>Your session is protected and synced across devices.</Text>
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (accountQuery.isError) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <ApiErrorState message="تعذر تحميل معلومات حسابك." onRetry={() => void accountQuery.refetch()} />
       </SafeAreaView>
     );
   }
@@ -226,7 +257,7 @@ export default function ProfileScreen() {
           <View style={styles.activityPanel}><View style={styles.panelHeader}><Text style={styles.panelTitle}>اليوميات</Text><Pressable onPress={() => navigation.navigate('Diary')}><Text style={styles.viewAll}>عرض الكل</Text></Pressable></View>{recentDiary.length === 0 ? <Text style={styles.emptyPanel}>ابدأ بتسجيل ما تشاهده.</Text> : recentDiary.slice(0, 3).map((entry) => <Pressable key={entry.id} style={styles.diaryRow} onPress={() => navigation.navigate('Detail', { mediaType: entry.mediaType, id: entry.mediaId })}><View style={styles.dateBadge}><Text style={styles.dateMonth}>{entry.watchedDate?.slice(0, 3) || 'سجل'}</Text><Text style={styles.dateDay}>{entry.watchedDate?.slice(-2) || '—'}</Text></View><View style={{ flex: 1 }}><Text style={styles.diaryTitle} numberOfLines={1}>{entry.title}</Text><Text style={styles.diaryDate}>{entry.watchedDate}</Text>{!!entry.rating && <RatingStars rating={entry.rating} size={12} />}</View></Pressable>)}</View>
         </View>
 
-        <View style={styles.cloudStats}><Text style={styles.cloudStatsTitle}>مزامنة بياناتك</Text><View style={styles.cloudStatsRow}><Text style={styles.cloudStatText}>{publishedReviews.length} مراجعة سحابية</Text><Text style={styles.cloudStatText}>{remoteLibraryQuery.data?.length ?? 0} عنصر في المكتبة</Text></View>{!emailVerified && user.email ? <Pressable onPress={handleRequestVerification} disabled={requestVerification.isPending} style={styles.verifyButton}><Ionicons name="mail-outline" size={15} color={colors.accent} /><Text style={styles.verifyText}>{requestVerification.isPending ? 'جارٍ الإرسال…' : 'تحقق من بريدك الإلكتروني'}</Text></Pressable> : null}</View>
+        <View style={styles.cloudStats}><Text style={styles.cloudStatsTitle}>مزامنة بياناتك</Text><View style={styles.cloudStatsRow}><Text style={styles.cloudStatText}>{publishedReviews.length} مراجعة سحابية</Text>{remoteLibraryQuery.isError ? <Pressable onPress={() => void remoteLibraryQuery.refetch()}><Text style={styles.verifyText}>تعذر تحميل المكتبة — إعادة المحاولة</Text></Pressable> : <Text style={styles.cloudStatText}>{remoteLibraryQuery.isLoading ? 'جارٍ تحميل المكتبة…' : `${remoteLibraryQuery.data?.length ?? 0} عنصر في المكتبة`}</Text>}</View>{librarySyncError ? <Text style={styles.syncErrorText}>تعذرت مزامنة اليوميات والقوائم والمفضلة إلى ملفك العام.</Text> : null}{!emailVerified && user.email ? <Pressable onPress={handleRequestVerification} disabled={requestVerification.isPending} style={styles.verifyButton}><Ionicons name="mail-outline" size={15} color={colors.accent} /><Text style={styles.verifyText}>{requestVerification.isPending ? 'جارٍ الإرسال…' : 'تحقق من بريدك الإلكتروني'}</Text></Pressable> : null}</View>
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
       <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
@@ -264,7 +295,7 @@ function MenuItem({ icon, label, onPress, danger, disabled }: { icon: React.Comp
 }
 
 function ProfileTab({ icon, label, active, onPress }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; active?: boolean; onPress?: () => void }) {
-  return <Pressable onPress={onPress} style={[styles.profileTab, active && styles.profileTabActive]}><Ionicons name={icon} size={21} color={active ? colors.accent : colors.textDim} /><Text style={[styles.profileTabLabel, active && styles.profileTabLabelActive]}>{label}</Text></Pressable>;
+  return <Pressable onPress={onPress} accessibilityRole="tab" accessibilityState={{ selected: !!active }} style={[styles.profileTab, active && styles.profileTabActive]}><Ionicons name={icon} size={21} color={active ? colors.accent : colors.textDim} /><Text style={[styles.profileTabLabel, active && styles.profileTabLabelActive]}>{label}</Text></Pressable>;
 }
 
 const styles = StyleSheet.create({
@@ -308,6 +339,7 @@ const styles = StyleSheet.create({
   cloudStats: { marginHorizontal: spacing.lg, marginTop: spacing.sm, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   cloudStatsTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '800', marginBottom: spacing.sm },
   cloudStatsRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  syncErrorText: { color: colors.danger, fontSize: fontSizes.xs, marginTop: spacing.sm, textAlign: 'right' },
   verifyButton: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.md, alignSelf: 'flex-start' as const },
   verifyText: { color: colors.accent, fontSize: fontSizes.xs, fontWeight: '800' as const },
   cloudStatText: { color: colors.textDim, fontSize: 12 },

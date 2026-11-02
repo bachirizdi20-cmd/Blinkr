@@ -139,8 +139,10 @@ export default function DetailScreen() {
     try {
       if (watched) await removeStatusMutation.mutateAsync({ mediaType, mediaId: id });
       else await setStatusMutation.mutateAsync({ mediaType, mediaId: id, title: detail.title, posterPath: detail.posterPath, status: 'watched' });
+      await myStatusQuery.refetch();
     } catch (error) {
-      Alert.alert('Sync failed', error instanceof Error ? error.message : 'Your local change was kept.');
+      lib.toggleWatchedQuick(mediaRef);
+      Alert.alert('Sync failed', error instanceof Error ? error.message : 'Your local change was rolled back.');
     }
   };
 
@@ -160,8 +162,10 @@ export default function DetailScreen() {
     try {
       if (inWatchlist) await removeStatusMutation.mutateAsync({ mediaType, mediaId: id });
       else await setStatusMutation.mutateAsync({ mediaType, mediaId: id, title: detail.title, posterPath: detail.posterPath, status: 'watchlist' });
+      await myStatusQuery.refetch();
     } catch (error) {
-      Alert.alert('Sync failed', error instanceof Error ? error.message : 'Your local change was kept.');
+      lib.toggleWatchlist(mediaRef);
+      Alert.alert('Sync failed', error instanceof Error ? error.message : 'Your local change was rolled back.');
     }
   };
 

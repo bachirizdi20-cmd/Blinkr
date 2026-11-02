@@ -87,6 +87,7 @@ export default function ConversationScreen() {
       username: item.username ?? `user${item.id}`,
       displayName: item.name ?? item.username ?? 'Blinkr user',
       bio: item.bio ?? '',
+      avatarUrl: item.avatarUrl,
       avatarColor: colors.accent,
       favoriteGenre: '',
       followsYou: false,
@@ -290,7 +291,7 @@ export default function ConversationScreen() {
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
         <Pressable style={styles.headerCenter} onPress={() => navigation.navigate('UserProfile', { userId })}>
-          <UserAvatar name={user.displayName} color={user.avatarColor} size={34} />
+          <UserAvatar name={user.displayName} color={user.avatarColor} size={34} imageUrl={user.avatarUrl ?? undefined} />
           <View>
             <Text style={styles.headerName}>{user.displayName}</Text>
             <Text style={styles.headerStatus}>{isTyping ? 'typing…' : user.followsYou ? 'Follows you' : `@${user.username}`}</Text>
@@ -308,9 +309,13 @@ export default function ConversationScreen() {
       {messageSearchOpen ? <View style={styles.messageSearchBar}><Ionicons name="search-outline" size={17} color={colors.textFaint} /><TextInput autoFocus value={messageSearch} onChangeText={setMessageSearch} placeholder="Search this conversation" placeholderTextColor={colors.textFaint} style={styles.messageSearchInput} returnKeyType="search" /><Pressable onPress={() => { setMessageSearch(''); setMessageSearchOpen(false); }} hitSlop={8}><Ionicons name="close" size={18} color={colors.textDim} /></Pressable></View> : null}
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={90}>
-        {data.length === 0 ? (
+        {messagesQuery.isLoading ? (
+          <View style={styles.center}><ActivityIndicator color={colors.accent} /><Text style={styles.loadingText}>Loading messages…</Text></View>
+        ) : messagesQuery.isError ? (
+          <View style={styles.center}><Text style={styles.loadingText}>Could not load messages.</Text><Pressable onPress={() => void messagesQuery.refetch()} accessibilityRole="button"><Text style={styles.retryAction}>Retry</Text></Pressable></View>
+        ) : data.length === 0 ? (
           <View style={{ flex: 1 }}>
-            <EmptyState icon="chatbubble-ellipses-outline" title={`Say hi to ${user.displayName}`} message={user.bio} />
+            <EmptyState icon={messageSearch.trim() ? 'search-outline' : 'chatbubble-ellipses-outline'} title={messageSearch.trim() ? 'No matching messages' : `Say hi to ${user.displayName}`} message={messageSearch.trim() ? 'Try a different search phrase.' : user.bio} />
           </View>
         ) : (
           <FlatList
@@ -428,6 +433,8 @@ const styles = StyleSheet.create({
   messageSearchBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginHorizontal: spacing.lg, marginTop: spacing.sm, paddingHorizontal: spacing.md, height: 42, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   messageSearchInput: { flex: 1, color: colors.text, fontSize: fontSizes.sm, paddingVertical: 0 },
   messagesContent: { padding: spacing.lg, gap: spacing.sm },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+  loadingText: { color: colors.textDim, fontSize: fontSizes.sm },
   bubbleRow: { marginBottom: spacing.sm, maxWidth: '80%' },
   bubbleRowMine: { alignSelf: 'flex-end', alignItems: 'flex-end' },
   bubbleRowTheirs: { alignSelf: 'flex-start', alignItems: 'flex-start' },

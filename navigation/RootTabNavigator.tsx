@@ -10,7 +10,6 @@ import NotificationsScreen from '../screens/NotificationsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import { trpc } from '../lib/trpc';
 import { useAuth } from '../hooks/use-auth';
-import { useSocial } from '../context/SocialContext';
 import { colors } from '../lib/theme';
 
 const Tab = createBottomTabNavigator();
@@ -36,8 +35,9 @@ function ProfileStackScreen() {
 }
 
 export default function RootTabNavigator() {
-  const { totalUnread } = useSocial();
   const { user } = useAuth();
+  const conversationsQuery = trpc.social.conversations.useQuery(undefined, { enabled: Boolean(user), retry: 1, refetchInterval: 5000 });
+  const totalUnread = conversationsQuery.data?.reduce((total, conversation) => total + conversation.unreadCount, 0) ?? 0;
   const notificationsQuery = trpc.social.notifications.useQuery(undefined, { enabled: Boolean(user), retry: false });
   const unreadNotifications = notificationsQuery.data?.filter((item) => !item.readAt).length ?? 0;
 

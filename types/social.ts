@@ -3,6 +3,7 @@ export interface MockUser {
   username: string;
   displayName: string;
   bio: string;
+  avatarUrl?: string | null;
   avatarColor: string;
   favoriteGenre: string;
   followsYou: boolean;

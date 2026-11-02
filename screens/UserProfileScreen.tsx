@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -8,6 +8,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import UserAvatar from '../components/UserAvatar';
 import EmptyState from '../components/EmptyState';
 import ApiErrorState from '../components/ApiErrorState';
+import PosterCard from '../components/PosterCard';
 import { ContentStackParamList } from '../navigation/types';
 import { trpc } from '../lib/trpc';
 import { posterUrl } from '../lib/tmdb';
@@ -71,6 +72,8 @@ function RemoteUserProfile({
   const profileQuery = trpc.social.profile.useQuery({ userId });
   const reviewsQuery = trpc.social.userReviews.useQuery({ userId }, { enabled: Boolean(profileQuery.data) });
   const topReviewsQuery = trpc.social.userTopReviews.useQuery({ userId }, { enabled: Boolean(profileQuery.data) });
+  const mediaStatusesQuery = trpc.social.userMediaStatuses.useQuery({ userId }, { enabled: Boolean(profileQuery.data) });
+  const publicLibraryQuery = trpc.social.userLibrary.useQuery({ userId }, { enabled: Boolean(profileQuery.data) });
   const followMutation = trpc.social.toggleFollow.useMutation({
     onSuccess: () => { void profileQuery.refetch(); },
     onError: () => Alert.alert('تعذرت المتابعة', 'تحقق من اتصالك ثم حاول مرة أخرى.'),
@@ -92,6 +95,7 @@ function RemoteUserProfile({
   });
   const [menuOpen, setMenuOpen] = useState(false);
   const [revealedSpoilers, setRevealedSpoilers] = useState<Record<number, boolean>>({});
+  const [activeProfileTab, setActiveProfileTab] = useState<'profile' | 'diary' | 'lists' | 'reviews'>('profile');
 
   const confirmBlock = () => {
     setMenuOpen(false);
@@ -171,6 +175,10 @@ function RemoteUserProfile({
                 <Ionicons name="chatbubble-outline" size={16} color={colors.text} />
                 <Text style={[styles.actionText, styles.secondaryButtonText]}>مراسلة</Text>
               </Pressable>
+              <Pressable style={[styles.actionButton, styles.secondaryButton]} onPress={() => void Share.share({ message: `تابع ${displayName} على Blinkr.` })} accessibilityRole="button" accessibilityLabel="مشاركة الملف">
+                <Ionicons name="share-outline" size={16} color={colors.text} />
+                <Text style={[styles.actionText, styles.secondaryButtonText]}>مشاركة</Text>
+              </Pressable>
             </>
           )}
         />
@@ -184,31 +192,39 @@ function RemoteUserProfile({
           tvReviews={profile.tvReviewCount ?? 0}
         />
 
-        <ProfileTopReviews
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.profileTabs}>
+          <ProfileTab icon="person-circle-outline" label="الملف" active={activeProfileTab === 'profile'} onPress={() => setActiveProfileTab('profile')} />
+          <ProfileTab icon="book-outline" label="اليوميات" active={activeProfileTab === 'diary'} onPress={() => setActiveProfileTab('diary')} />
+          <ProfileTab icon="list-outline" label="القوائم" active={activeProfileTab === 'lists'} onPress={() => setActiveProfileTab('lists')} />
+          <ProfileTab icon="star-outline" label="التقييمات" active={activeProfileTab === 'reviews'} onPress={() => setActiveProfileTab('reviews')} />
+        </ScrollView>
+
+        {(activeProfileTab === 'profile' || activeProfileTab === 'reviews') ? <ProfileTopReviews
           items={(topReviewsQuery.data ?? []).map((item) => ({ ...item, mediaType: item.mediaType === 'tv' ? 'tv' as const : 'movie' as const }))}
           loading={topReviewsQuery.isLoading}
           error={topReviewsQuery.isError}
           onRetry={() => void topReviewsQuery.refetch()}
           onOpen={onOpenMedia}
-        />
+          subtitle={`أبرز اختيارات ${displayName} من المراجعات المنشورة`}
+        /> : null}
 
-        <View style={styles.sectionHeader}>
+        {(activeProfileTab === 'profile' || activeProfileTab === 'reviews') ? <View style={styles.sectionHeader}>
           <View>
             <Text style={styles.sectionTitle}>أحدث المراجعات</Text>
             <Text style={styles.sectionSubtitle}>آراء هذا المستخدم في الأفلام والمسلسلات</Text>
           </View>
           <Ionicons name="film-outline" size={21} color={colors.accent} />
-        </View>
+        </View> : null}
 
-        {reviewsQuery.isLoading ? (
+        {reviewsQuery.isLoading && (activeProfileTab === 'profile' || activeProfileTab === 'reviews') ? (
           <View style={styles.reviewLoading}><ActivityIndicator color={colors.accent} /><Text style={styles.loadingText}>جارٍ تحميل المراجعات…</Text></View>
-        ) : reviewsQuery.isError ? (
+        ) : reviewsQuery.isError && (activeProfileTab === 'profile' || activeProfileTab === 'reviews') ? (
           <View style={styles.inlineError}><Text style={styles.emptyText}>تعذر تحميل المراجعات.</Text><Pressable onPress={() => reviewsQuery.refetch()}><Text style={styles.retryText}>إعادة المحاولة</Text></Pressable></View>
-        ) : !reviewsQuery.data?.length ? (
+        ) : (activeProfileTab === 'profile' || activeProfileTab === 'reviews') && !reviewsQuery.data?.length ? (
           <View style={styles.emptyReviews}><Ionicons name="chatbox-ellipses-outline" size={26} color={colors.textFaint} /><Text style={styles.emptyTitle}>لا توجد مراجعات بعد</Text><Text style={styles.emptyText}>ستظهر هنا المراجعات التي ينشرها هذا المستخدم.</Text></View>
-        ) : (
+        ) : (activeProfileTab === 'profile' || activeProfileTab === 'reviews') ? (
           <View style={styles.reviewsList}>
-            {reviewsQuery.data.map((item) => {
+            {(reviewsQuery.data ?? []).map((item) => {
               const review = item.review;
               const mediaType: 'movie' | 'tv' = review.mediaType === 'tv' ? 'tv' : 'movie';
               const poster = posterUrl(review.posterPath, 'w200');
@@ -250,9 +266,121 @@ function RemoteUserProfile({
               );
             })}
           </View>
-        )}
+        ) : null}
+
+        {(activeProfileTab === 'profile' || activeProfileTab === 'diary' || activeProfileTab === 'lists') ? (
+          <PublicMediaSection
+            tab={activeProfileTab}
+            displayName={displayName}
+            items={mediaStatusesQuery.data ?? []}
+            library={publicLibraryQuery.data ?? { likes: [], watchlist: [], diary: [], lists: [] }}
+            loading={mediaStatusesQuery.isLoading || publicLibraryQuery.isLoading}
+            error={mediaStatusesQuery.isError || publicLibraryQuery.isError}
+            onRetry={() => { void mediaStatusesQuery.refetch(); void publicLibraryQuery.refetch(); }}
+            onOpen={onOpenMedia}
+          />
+        ) : null}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+type PublicMediaItem = {
+  mediaType: string;
+  mediaId: number;
+  title: string;
+  posterPath: string | null;
+  status?: string;
+  updatedAt?: Date | string;
+  rating?: number | null;
+  review?: string;
+  watchedDate?: string | null;
+};
+
+type PublicUserLibrary = {
+  likes: PublicMediaItem[];
+  watchlist: PublicMediaItem[];
+  diary: PublicMediaItem[];
+  lists: Array<{ id: string; name: string; description: string; items: PublicMediaItem[] }>;
+};
+
+function ProfileTab({ icon, label, active, onPress }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
+      style={[styles.profileTab, active && styles.profileTabActive]}
+    >
+      <Ionicons name={icon} size={21} color={active ? colors.accent : colors.textDim} />
+      <Text style={[styles.profileTabLabel, active && styles.profileTabLabelActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function PublicMediaSection({
+  tab,
+  displayName,
+  items,
+  library,
+  loading,
+  error,
+  onRetry,
+  onOpen,
+}: {
+  tab: 'profile' | 'diary' | 'lists';
+  displayName: string;
+  items: Array<PublicMediaItem & { status: string }>;
+  library: PublicUserLibrary;
+  loading: boolean;
+  error: boolean;
+  onRetry: () => void;
+  onOpen: (mediaType: 'movie' | 'tv', mediaId: number) => void;
+}) {
+  const watched = items.filter((item) => item.status === 'watched');
+  const watchlist = items.filter((item) => item.status === 'watchlist' || item.status === 'watching');
+  const diaryEntries = library.diary.length ? library.diary : watched;
+  const sections = tab === 'diary'
+    ? [{ title: 'اليوميات', subtitle: `سجل المشاهدة وملاحظات ${displayName}`, values: diaryEntries }]
+    : tab === 'lists'
+      ? (library.lists.length
+          ? library.lists.map((list) => ({ title: list.name, subtitle: list.description || `قائمة أنشأها ${displayName}`, values: list.items }))
+          : [{ title: 'قائمة المشاهدة', subtitle: `العناوين المحفوظة لدى ${displayName}`, values: library.watchlist.length ? library.watchlist : watchlist }])
+      : [
+          ...(library.likes.length ? [{ title: 'المفضلة', subtitle: `العناوين التي أحبها ${displayName}`, values: library.likes.slice(0, 8) }] : []),
+          { title: 'أفلام ومسلسلات شاهدها', subtitle: `آخر ما سجله ${displayName} كمُشاهَد`, values: watched.slice(0, 8) },
+          { title: 'قائمة المشاهدة', subtitle: `عناوين يريد ${displayName} مشاهدتها`, values: (library.watchlist.length ? library.watchlist : watchlist).slice(0, 8) },
+        ];
+
+  if (loading) return <View style={styles.reviewLoading}><ActivityIndicator color={colors.accent} /><Text style={styles.loadingText}>جارٍ تحميل مكتبة المشاهدة…</Text></View>;
+  if (error) return <View style={styles.inlineError}><Text style={styles.emptyText}>تعذر تحميل مكتبة المشاهدة.</Text><Pressable onPress={onRetry}><Text style={styles.retryText}>إعادة المحاولة</Text></Pressable></View>;
+
+  return (
+    <View>
+      {sections.map((section) => (
+        <View key={section.title} style={styles.mediaSection}>
+          <View style={styles.sectionHeader}>
+            <View><Text style={styles.sectionTitle}>{section.title}</Text><Text style={styles.sectionSubtitle}>{section.subtitle}</Text></View>
+            <Ionicons name={section.title.includes('قائمة') ? 'bookmark-outline' : 'eye-outline'} size={21} color={colors.accent} />
+          </View>
+          {section.values.length ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mediaRail}>
+              {section.values.map((item) => {
+                const mediaType = item.mediaType === 'tv' ? 'tv' : 'movie';
+                return (
+                  <View key={`${mediaType}-${item.mediaId}`} style={styles.publicMediaCard}>
+                    <PosterCard item={{ id: item.mediaId, mediaType, title: item.title, posterPath: item.posterPath, date: undefined, voteAverage: 0 }} width={112} onPress={() => onOpen(mediaType, item.mediaId)} />
+                    {item.rating != null ? <Text style={styles.diaryRating}>تقييم {item.rating}/5</Text> : null}
+                    {item.watchedDate ? <Text style={styles.diaryDate}>{formatArabicDate(item.watchedDate)}</Text> : null}
+                    {item.review ? <Text style={styles.diaryReview} numberOfLines={4}>{item.review}</Text> : null}
+                  </View>
+                );
+              })}
+            </ScrollView>
+          ) : <View style={styles.emptyReviews}><Text style={styles.emptyTitle}>{tab === 'diary' ? 'لا يوجد سجل مشاهدة بعد' : section.title.includes('قائمة') ? 'لا توجد عناوين في القائمة بعد' : 'لا توجد عناوين مسجلة هنا بعد'}</Text><Text style={styles.emptyText}>ستظهر العناوين التي يضيفها المستخدم إلى مكتبته هنا.</Text></View>}
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -267,6 +395,11 @@ const styles = StyleSheet.create({
   header: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border },
   headerTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800' },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
+  profileTabs: { alignSelf: 'stretch', gap: spacing.xs, borderBottomWidth: 1, borderBottomColor: colors.border, marginTop: spacing.lg, marginBottom: spacing.xl },
+  profileTab: { minWidth: 86, alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: spacing.sm, paddingVertical: spacing.md, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  profileTabActive: { borderBottomColor: colors.accent },
+  profileTabLabel: { color: colors.textDim, fontSize: 11, fontWeight: '700' },
+  profileTabLabelActive: { color: colors.accent },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   loadingText: { color: colors.textDim, fontSize: fontSizes.sm },
   followsYouTag: { backgroundColor: colors.surfaceHigh, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 4 },
@@ -281,6 +414,12 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
   sectionTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800', textAlign: 'right' },
   sectionSubtitle: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: 3, textAlign: 'right' },
+  mediaSection: { marginBottom: spacing.xl },
+  mediaRail: { gap: spacing.sm, paddingVertical: spacing.xs },
+  publicMediaCard: { width: 112 },
+  diaryRating: { color: colors.gold, fontSize: 11, fontWeight: '800', marginTop: spacing.xs, textAlign: 'right' },
+  diaryDate: { color: colors.textFaint, fontSize: 10, marginTop: 2, textAlign: 'right' },
+  diaryReview: { color: colors.textDim, fontSize: 11, lineHeight: 16, marginTop: spacing.xs, textAlign: 'right' },
   reviewLoading: { minHeight: 100, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   inlineError: { alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.lg },
   retryText: { color: colors.accent, fontSize: fontSizes.sm, fontWeight: '800' },

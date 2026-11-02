@@ -72,38 +72,25 @@ export default function HomeScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setError(null);
     setLoading(true);
-    try {
-      const [t, mp, mt, mu, mn, tp, tt, ta, at, am] = await Promise.all([
-        fetchTrendingAll(1),
-        fetchMovieList('popular', 1),
-        fetchMovieList('top_rated', 1),
-        fetchMovieList('upcoming', 1),
-        fetchMovieList('now_playing', 1),
-        fetchTVList('popular', 1),
-        fetchTVList('top_rated', 1),
-        fetchTVList('airing_today', 1),
-        fetchAnime('tv', 1),
-        fetchAnime('movie', 1),
-      ]);
-      setTrending(t.results);
-      setMoviePopular(mp.results);
-      setMovieTop(mt.results);
-      setMovieUpcoming(mu.results);
-      setMovieNowPlaying(mn.results);
-      setTvPopular(tp.results);
-      setTvTop(tt.results);
-      setTvAiring(ta.results);
-      setAnimeTv(at.results);
-      setAnimeMovie(am.results);
-    } catch (err) {
-      console.warn(err);
-      setError(err instanceof Error ? err.message : 'Unable to reach TMDB right now.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+    setError(null);
+    const tasks: Array<[() => Promise<any>, (results: NormalizedItem[]) => void]> = [
+      [() => fetchTrendingAll(1), (v) => setTrending(v)],
+      [() => fetchMovieList('popular', 1), (v) => setMoviePopular(v)],
+      [() => fetchMovieList('top_rated', 1), (v) => setMovieTop(v)],
+      [() => fetchMovieList('upcoming', 1), (v) => setMovieUpcoming(v)],
+      [() => fetchMovieList('now_playing', 1), (v) => setMovieNowPlaying(v)],
+      [() => fetchTVList('popular', 1), (v) => setTvPopular(v)],
+      [() => fetchTVList('top_rated', 1), (v) => setTvTop(v)],
+      [() => fetchTVList('airing_today', 1), (v) => setTvAiring(v)],
+      [() => fetchAnime('tv', 1), (v) => setAnimeTv(v)],
+      [() => fetchAnime('movie', 1), (v) => setAnimeMovie(v)],
+    ];
+    const outcomes = await Promise.allSettled(tasks.map(async ([fetch, apply]) => apply((await fetch()).results)));
+    if (outcomes.every((item) => item.status === 'rejected')) setError('Unable to reach TMDB right now. Pull to retry.');
+    else if (outcomes.some((item) => item.status === 'rejected')) console.warn('Some home sections could not be loaded.');
+    setLoading(false);
+    setRefreshing(false);
   }, []);
 
   useEffect(() => {
@@ -215,18 +202,18 @@ export default function HomeScreen() {
             <Text style={styles.tagline}>Track every story you watch</Text>
           </View>
           <View style={styles.headerActions}>
-            <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Notifications')}>
+            <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Notifications')} accessibilityRole="button" accessibilityLabel={unreadNotifications ? `Notifications, ${unreadNotifications} unread` : 'Notifications'}>
               <Ionicons name="notifications-outline" size={20} color={colors.text} />
               {unreadNotifications > 0 ? <View style={styles.notificationDot}><Text style={styles.notificationCount}>{unreadNotifications > 9 ? '9+' : unreadNotifications}</Text></View> : null}
             </Pressable>
-            <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Search')}>
+            <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Search')} accessibilityRole="button" accessibilityLabel="Search">
               <Ionicons name="search" size={20} color={colors.text} />
             </Pressable>
           </View>
         </View>
 
         {hero && (
-          <Pressable style={styles.hero} onPress={() => openDetail(hero)}>
+          <Pressable style={styles.hero} onPress={() => openDetail(hero)} accessibilityRole="button" accessibilityLabel={`Trending today: ${hero.title}`}>
             <Image source={{ uri: backdropUrl(hero.backdropPath, 'w1280') ?? undefined }} style={StyleSheet.absoluteFill} contentFit="cover" />
             <LinearGradient colors={['transparent', 'rgba(6,8,11,0.55)', colors.bg]} style={StyleSheet.absoluteFill} />
             <View style={styles.heroContent}>
@@ -252,6 +239,9 @@ export default function HomeScreen() {
             <Pressable
               key={c}
               onPress={() => setCategory(c)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: category === c }}
+              accessibilityLabel={c === 'all' ? 'All categories' : c === 'movie' ? 'Movies' : c === 'tv' ? 'TV' : 'Anime'}
               style={[styles.categoryPill, category === c && styles.categoryPillActive]}
             >
               <Text style={[styles.categoryText, category === c && styles.categoryTextActive]}>

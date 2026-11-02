@@ -59,7 +59,7 @@ export default function CategoryListScreen() {
   }, [feed, loadPage]);
 
   const handleEnd = () => {
-    if (loadingMore || loading || page >= totalPages) return;
+    if (error || loadingMore || loading || page >= totalPages) return;
     setLoadingMore(true);
     loadPage(page + 1, false);
   };
@@ -71,7 +71,7 @@ export default function CategoryListScreen() {
           <ActivityIndicator size="large" color={colors.accent} />
         </View>
       ) : error && items.length === 0 ? (
-        <GeneralErrorState message={error} onRetry={() => { setLoading(true); loadPage(1, true); }} />
+        <GeneralErrorState message={error} onRetry={() => { setLoading(true); setError(null); loadPage(1, true); }} />
       ) : items.length === 0 ? (
         <EmptyState icon="film-outline" title="No results" message="Nothing to show here yet." />
       ) : (
@@ -91,7 +91,7 @@ export default function CategoryListScreen() {
           )}
           onEndReachedThreshold={0.5}
           onEndReached={handleEnd}
-          ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: spacing.lg }} color={colors.accent} /> : error ? <GeneralErrorState title="More results unavailable" message={error} retryLabel="Retry" onRetry={() => { setLoadingMore(true); loadPage(page + 1, false); }} /> : null}
+          ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: spacing.lg }} color={colors.accent} /> : error ? <GeneralErrorState title="More results unavailable" message={error} retryLabel="Retry" onRetry={() => { setLoadingMore(true); setError(null); loadPage(page + 1, false); }} /> : null}
         />
       )}
     </SafeAreaView>
