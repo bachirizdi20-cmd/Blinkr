@@ -18,6 +18,10 @@ import { trpc } from '../lib/trpc';
 import { ProfileSkeleton, ReviewsSkeleton } from '../components/Skeleton';
 import { resolveMediaUrl } from '../lib/media-url';
 import { clearAccountLibraryStorage } from '../lib/library-storage';
+import { ProfileIdentity } from '../components/ProfileIdentity';
+import { ProfileStatsGrid } from '../components/ProfileStatsGrid';
+import { ProfileTopReviews } from '../components/ProfileTopReviews';
+import { posterUrl } from '../lib/tmdb';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 
@@ -30,7 +34,7 @@ export default function ProfileScreen() {
   const remoteReviewsQuery = trpc.reviews.mine.useQuery(undefined, { enabled: !!user, retry: false });
   const remoteLibraryQuery = trpc.library.mine.useQuery(undefined, { enabled: !!user, retry: false });
   const lib = useLibrary();
-  const { profile, stats, diary, lists, likes } = lib;
+  const { profile, diary, lists, likes } = lib;
   const [menuVisible, setMenuVisible] = useState(false);
 
   if (authLoading) {
@@ -72,6 +76,19 @@ export default function ProfileScreen() {
   const initials = displayName.slice(0, 2).toUpperCase();
   const recentDiary = [...diary].sort((a, b) => b.createdAt - a.createdAt).slice(0, 5);
   const recentReviews = diary.filter((e) => !!e.review).sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
+  const publishedReviews = remoteReviewsQuery.data ?? [];
+  const ratedReviews = publishedReviews.filter((review) => review.rating != null);
+  const movieReviewCount = publishedReviews.filter((review) => review.mediaType === 'movie').length;
+  const tvReviewCount = publishedReviews.filter((review) => review.mediaType === 'tv').length;
+  const averageReviewRating = ratedReviews.length
+    ? ratedReviews.reduce((total, review) => total + Number(review.rating), 0) / ratedReviews.length
+    : null;
+  const topReviews = [...ratedReviews]
+    .sort((a, b) => Number(b.rating) - Number(a.rating) || new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, 5)
+    .map((review) => ({ ...review, mediaType: review.mediaType === 'tv' ? 'tv' as const : 'movie' as const }));
+  const latestPublishedReviews = [...publishedReviews].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 3);
+  const joinedDate = formatProfileDate(accountQuery.data?.user.createdAt ?? profile.joinedAt);
   const likeItems = Object.values(likes).sort((a, b) => b.likedAt - a.likedAt).slice(0, 8);
 
   const emailVerified = Boolean((accountQuery.data?.user as { emailVerifiedAt?: Date | null } | undefined)?.emailVerifiedAt);
@@ -118,58 +135,98 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      <View style={styles.topNav}>
+        <Pressable onPress={() => navigation.goBack()} style={styles.topNavButton} accessibilityLabel="رجوع"><Ionicons name="chevron-back" size={24} color={colors.text} /></Pressable>
+        <Text style={styles.topNavTitle}>الملف الشخصي</Text>
+        <Pressable onPress={() => setMenuVisible(true)} style={styles.topNavButton} accessibilityLabel="فتح قائمة الحساب"><Ionicons name="menu" size={25} color={colors.text} /></Pressable>
+      </View>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.topNav}>
-          <Pressable onPress={() => navigation.goBack()} style={styles.topNavButton} accessibilityLabel="رجوع"><Ionicons name="chevron-back" size={24} color={colors.text} /></Pressable>
-          <Text style={styles.topNavTitle}>الملف الشخصي</Text>
-          <Pressable onPress={() => setMenuVisible(true)} style={styles.topNavButton} accessibilityLabel="فتح قائمة الحساب"><Ionicons name="menu" size={25} color={colors.text} /></Pressable>
-        </View>
-
-        <View style={styles.profileHero}>
-          <View style={styles.avatarColumn}>
+        <View style={styles.commonProfileContent}>
+        <ProfileIdentity
+          name={displayName}
+          username={displayedUsername}
+          bio={displayedBio}
+          joinedAt={joinedDate}
+          bioFallback="أضف نبذة قصيرة عن ذوقك السينمائي."
+          avatar={(
             <Pressable onPress={() => navigation.navigate('EditProfile')} style={styles.avatarButton} accessibilityLabel="تغيير صورة الملف الشخصي">
               {resolveMediaUrl(displayedAvatar) ? <Image source={{ uri: resolveMediaUrl(displayedAvatar) }} style={styles.avatar} contentFit="cover" /> : <View style={[styles.avatar, { backgroundColor: profile.avatarColor }]}><Text style={styles.avatarText}>{initials}</Text></View>}
               <View style={styles.avatarCameraBadge}><Ionicons name="camera" size={13} color={colors.bg} /></View>
             </Pressable>
-            <Text style={styles.avatarHint}>تغيير الصورة</Text>
-          </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.username}>{displayName}</Text>
-            <Text style={styles.handle}>@{displayedUsername}</Text>
-            <View style={styles.profileActions}>
-              <Pressable style={({ pressed }) => [styles.editButton, pressed && styles.pressed]} onPress={() => navigation.navigate('EditProfile')}><Text style={styles.editButtonText}>تعديل الملف</Text></Pressable>
-              <Pressable style={({ pressed }) => [styles.shareButton, pressed && styles.pressed]} onPress={() => Share.share({ message: `تابع ${displayName} على Blinkr.` })} accessibilityLabel="مشاركة الملف"><Ionicons name="share-outline" size={19} color={colors.text} /></Pressable>
-            </View>
-          </View>
-        </View>
-        <Text style={styles.bio} numberOfLines={3}>{displayedBio || 'أضف نبذة قصيرة عن ذوقك السينمائي.'}</Text>
-        <View style={styles.metaRow}><Ionicons name="film-outline" size={17} color={colors.textDim} /><Text style={styles.metaText}>عالمك السينمائي</Text><Ionicons name="calendar-outline" size={17} color={colors.textDim} /><Text style={styles.metaText}>عضو في Blinkr</Text></View>
+          )}
+          actions={(
+            <>
+              <Pressable style={({ pressed }) => [styles.identityAction, styles.identityPrimary, pressed && styles.pressed]} onPress={() => navigation.navigate('EditProfile')}><Text style={styles.identityPrimaryText}>تعديل الملف</Text></Pressable>
+              <Pressable style={({ pressed }) => [styles.identityAction, styles.identitySecondary, pressed && styles.pressed]} onPress={() => Share.share({ message: `تابع ${displayName} على Blinkr.` })} accessibilityLabel="مشاركة الملف"><Ionicons name="share-outline" size={17} color={colors.text} /><Text style={styles.identitySecondaryText}>مشاركة</Text></Pressable>
+            </>
+          )}
+        />
 
-        <View style={styles.statsStrip}>
-          <StatCard label="Films" value={stats.filmsWatched + stats.showsWatched} />
-          <StatCard label="This year" value={stats.thisYear} />
-          <StatCard label="Lists" value={lists.length} />
-          <Pressable style={styles.statCard} onPress={() => navigation.navigate('People', { initialFilter: 'following' })}><Text style={styles.statValue}>{accountQuery.data?.socialStats.followingCount ?? 0}</Text><Text style={styles.statLabel}>Following</Text></Pressable>
-          <Pressable style={styles.statCard} onPress={() => navigation.navigate('People', { initialFilter: 'followers' })}><Text style={styles.statValue}>{accountQuery.data?.socialStats.followerCount ?? 0}</Text><Text style={styles.statLabel}>Followers</Text></Pressable>
+        <ProfileStatsGrid
+          followers={accountQuery.data?.socialStats.followerCount ?? 0}
+          following={accountQuery.data?.socialStats.followingCount ?? 0}
+          reviews={publishedReviews.length}
+          averageRating={averageReviewRating}
+          movieReviews={movieReviewCount}
+          tvReviews={tvReviewCount}
+          onFollowersPress={() => navigation.navigate('People', { initialFilter: 'followers' })}
+          onFollowingPress={() => navigation.navigate('People', { initialFilter: 'following' })}
+        />
+
+        <ProfileTopReviews
+          items={topReviews}
+          loading={remoteReviewsQuery.isLoading}
+          error={remoteReviewsQuery.isError}
+          onRetry={() => void remoteReviewsQuery.refetch()}
+          onOpen={(mediaType, id) => navigation.navigate('Detail', { mediaType, id })}
+          subtitle="أبرز اختياراتك من المراجعات المنشورة"
+        />
+
+        <View style={styles.publishedReviewsSection}>
+          <View style={styles.sectionHeading}>
+            <View><Text style={styles.sectionHeadingTitle}>أحدث المراجعات</Text><Text style={styles.sectionHeadingSubtitle}>آراؤك المنشورة في الأفلام والمسلسلات</Text></View>
+            <Ionicons name="film-outline" size={21} color={colors.accent} />
+          </View>
+          {remoteReviewsQuery.isLoading ? <View style={styles.publishedReviewsState}><ActivityIndicator color={colors.accent} /><Text style={styles.publishedReviewsHint}>جارٍ تحميل المراجعات…</Text></View> : remoteReviewsQuery.isError ? (
+            <View style={styles.publishedReviewsEmpty}><Text style={styles.publishedReviewsHint}>تعذر تحميل المراجعات.</Text><Pressable onPress={() => void remoteReviewsQuery.refetch()}><Text style={styles.verifyText}>إعادة المحاولة</Text></Pressable></View>
+          ) : latestPublishedReviews.length === 0 ? (
+            <View style={styles.publishedReviewsEmpty}><Text style={styles.publishedReviewsHint}>ستظهر هنا المراجعات التي تنشرها.</Text></View>
+          ) : latestPublishedReviews.map((review) => {
+            const poster = posterUrl(review.posterPath, 'w200');
+            const mediaType = review.mediaType === 'tv' ? 'tv' : 'movie';
+            return (
+              <Pressable key={review.id} style={styles.publishedReviewCard} onPress={() => navigation.navigate('Detail', { mediaType, id: review.mediaId })}>
+                {poster ? <Image source={{ uri: poster }} style={styles.publishedReviewPoster} contentFit="cover" /> : <View style={[styles.publishedReviewPoster, styles.publishedPosterFallback]}><Ionicons name="film-outline" size={22} color={colors.textFaint} /></View>}
+                <View style={styles.publishedReviewInfo}>
+                  <Text style={styles.publishedReviewTitle} numberOfLines={2}>{review.title}</Text>
+                  {review.rating != null ? <View style={styles.publishedRating}><Ionicons name="star" size={12} color={colors.gold} /><Text style={styles.publishedRatingText}>{review.rating}/10</Text></View> : null}
+                  <Text style={styles.publishedReviewDate}>{formatProfileDate(review.updatedAt)}</Text>
+                  <Text style={styles.publishedReviewBody} numberOfLines={3}>{review.review || 'قيّمت هذا العنوان دون إضافة تعليق مكتوب.'}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
+              </Pressable>
+            );
+          })}
+        </View>
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.profileTabs}>
-          <ProfileTab icon="person-circle-outline" label="Profile" active />
-          <ProfileTab icon="book-outline" label="Diary" onPress={() => navigation.navigate('Diary')} />
-          <ProfileTab icon="list-outline" label="Lists" onPress={() => navigation.navigate('Lists')} />
-          <ProfileTab icon="star-outline" label="Ratings" onPress={() => navigation.navigate('Reviews')} />
+          <ProfileTab icon="person-circle-outline" label="الملف" active />
+          <ProfileTab icon="book-outline" label="اليوميات" onPress={() => navigation.navigate('Diary')} />
+          <ProfileTab icon="list-outline" label="القوائم" onPress={() => navigation.navigate('Lists')} />
+          <ProfileTab icon="star-outline" label="التقييمات" onPress={() => navigation.navigate('Reviews')} />
         </ScrollView>
 
-        <View style={styles.section}><View style={styles.referenceSectionHeader}><Text style={styles.referenceSectionTitle}>Favorite films</Text><Pressable onPress={() => navigation.navigate('Likes')}><Text style={styles.viewAll}>View all</Text></Pressable></View>
-          {likeItems.length === 0 ? <EmptyState icon="heart-outline" title="No favorites yet" message="Tap the heart on a title to save it here." /> : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.posterRail}>{likeItems.slice(0, 8).map((item) => <View key={`${item.mediaType}-${item.mediaId}`} style={styles.favoriteItem}><PosterCard item={{ id: item.mediaId, mediaType: item.mediaType, title: item.title, posterPath: item.posterPath, date: item.date, voteAverage: item.voteAverage }} width={112} onPress={() => navigation.navigate('Detail', { mediaType: item.mediaType, id: item.mediaId })} /><Pressable accessibilityLabel={`Remove ${item.title} from favorites`} style={styles.removeFavorite} onPress={() => lib.toggleLike(item)}><Ionicons name="heart" size={14} color={colors.bg} /></Pressable></View>)}</ScrollView>}
+        <View style={styles.section}><View style={styles.referenceSectionHeader}><Text style={styles.referenceSectionTitle}>أفلامك المفضلة</Text><Pressable onPress={() => navigation.navigate('Likes')}><Text style={styles.viewAll}>عرض الكل</Text></Pressable></View>
+          {likeItems.length === 0 ? <EmptyState icon="heart-outline" title="لا توجد مفضلات بعد" message="اضغط على القلب في أي عنوان لإضافته هنا." /> : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.posterRail}>{likeItems.slice(0, 8).map((item) => <View key={`${item.mediaType}-${item.mediaId}`} style={styles.favoriteItem}><PosterCard item={{ id: item.mediaId, mediaType: item.mediaType, title: item.title, posterPath: item.posterPath, date: item.date, voteAverage: item.voteAverage }} width={112} onPress={() => navigation.navigate('Detail', { mediaType: item.mediaType, id: item.mediaId })} /><Pressable accessibilityLabel={`إزالة ${item.title} من المفضلة`} style={styles.removeFavorite} onPress={() => lib.toggleLike(item)}><Ionicons name="heart" size={14} color={colors.bg} /></Pressable></View>)}</ScrollView>}
         </View>
 
         <View style={styles.contentColumns}>
-          <View style={styles.activityPanel}><View style={styles.panelHeader}><Text style={styles.panelTitle}>Activity</Text><Ionicons name="pulse-outline" size={18} color={colors.accent} /></View>{recentReviews.length === 0 ? <Text style={styles.emptyPanel}>Your ratings and reviews will appear here.</Text> : recentReviews.slice(0, 3).map((entry) => <Pressable key={entry.id} style={styles.activityRow} onPress={() => navigation.navigate('Detail', { mediaType: entry.mediaType, id: entry.mediaId })}><View style={styles.activityAvatar}><Text style={styles.activityInitial}>{initials.slice(0, 1)}</Text></View><View style={{ flex: 1 }}><Text style={styles.activityText}>{user.name || profile.username} rated</Text><Text style={styles.activityTitle} numberOfLines={1}>{entry.title}</Text>{!!entry.rating && <RatingStars rating={entry.rating} size={12} />}</View></Pressable>)}</View>
-          <View style={styles.activityPanel}><View style={styles.panelHeader}><Text style={styles.panelTitle}>Diary</Text><Pressable onPress={() => navigation.navigate('Diary')}><Text style={styles.viewAll}>View all</Text></Pressable></View>{recentDiary.length === 0 ? <Text style={styles.emptyPanel}>Start logging what you watch.</Text> : recentDiary.slice(0, 3).map((entry) => <Pressable key={entry.id} style={styles.diaryRow} onPress={() => navigation.navigate('Detail', { mediaType: entry.mediaType, id: entry.mediaId })}><View style={styles.dateBadge}><Text style={styles.dateMonth}>{entry.watchedDate?.slice(0, 3) || 'LOG'}</Text><Text style={styles.dateDay}>{entry.watchedDate?.slice(-2) || '—'}</Text></View><View style={{ flex: 1 }}><Text style={styles.diaryTitle} numberOfLines={1}>{entry.title}</Text><Text style={styles.diaryDate}>{entry.watchedDate}</Text>{!!entry.rating && <RatingStars rating={entry.rating} size={12} />}</View></Pressable>)}</View>
+          <View style={styles.activityPanel}><View style={styles.panelHeader}><Text style={styles.panelTitle}>النشاط</Text><Ionicons name="pulse-outline" size={18} color={colors.accent} /></View>{recentReviews.length === 0 ? <Text style={styles.emptyPanel}>ستظهر تقييماتك ومراجعاتك هنا.</Text> : recentReviews.slice(0, 3).map((entry) => <Pressable key={entry.id} style={styles.activityRow} onPress={() => navigation.navigate('Detail', { mediaType: entry.mediaType, id: entry.mediaId })}><View style={styles.activityAvatar}><Text style={styles.activityInitial}>{initials.slice(0, 1)}</Text></View><View style={{ flex: 1 }}><Text style={styles.activityText}>{user.name || profile.username} قيّم</Text><Text style={styles.activityTitle} numberOfLines={1}>{entry.title}</Text>{!!entry.rating && <RatingStars rating={entry.rating} size={12} />}</View></Pressable>)}</View>
+          <View style={styles.activityPanel}><View style={styles.panelHeader}><Text style={styles.panelTitle}>اليوميات</Text><Pressable onPress={() => navigation.navigate('Diary')}><Text style={styles.viewAll}>عرض الكل</Text></Pressable></View>{recentDiary.length === 0 ? <Text style={styles.emptyPanel}>ابدأ بتسجيل ما تشاهده.</Text> : recentDiary.slice(0, 3).map((entry) => <Pressable key={entry.id} style={styles.diaryRow} onPress={() => navigation.navigate('Detail', { mediaType: entry.mediaType, id: entry.mediaId })}><View style={styles.dateBadge}><Text style={styles.dateMonth}>{entry.watchedDate?.slice(0, 3) || 'سجل'}</Text><Text style={styles.dateDay}>{entry.watchedDate?.slice(-2) || '—'}</Text></View><View style={{ flex: 1 }}><Text style={styles.diaryTitle} numberOfLines={1}>{entry.title}</Text><Text style={styles.diaryDate}>{entry.watchedDate}</Text>{!!entry.rating && <RatingStars rating={entry.rating} size={12} />}</View></Pressable>)}</View>
         </View>
 
-        <View style={styles.cloudStats}><Text style={styles.cloudStatsTitle}>Synced across devices</Text><View style={styles.cloudStatsRow}><Text style={styles.cloudStatText}>{remoteReviewsQuery.data?.length ?? 0} cloud reviews</Text><Text style={styles.cloudStatText}>{remoteLibraryQuery.data?.length ?? 0} library items</Text></View>{!emailVerified && user.email ? <Pressable onPress={handleRequestVerification} disabled={requestVerification.isPending} style={styles.verifyButton}><Ionicons name="mail-outline" size={15} color={colors.accent} /><Text style={styles.verifyText}>{requestVerification.isPending ? 'Sending...' : 'Verify your email'}</Text></Pressable> : null}</View>
+        <View style={styles.cloudStats}><Text style={styles.cloudStatsTitle}>مزامنة بياناتك</Text><View style={styles.cloudStatsRow}><Text style={styles.cloudStatText}>{publishedReviews.length} مراجعة سحابية</Text><Text style={styles.cloudStatText}>{remoteLibraryQuery.data?.length ?? 0} عنصر في المكتبة</Text></View>{!emailVerified && user.email ? <Pressable onPress={handleRequestVerification} disabled={requestVerification.isPending} style={styles.verifyButton}><Ionicons name="mail-outline" size={15} color={colors.accent} /><Text style={styles.verifyText}>{requestVerification.isPending ? 'جارٍ الإرسال…' : 'تحقق من بريدك الإلكتروني'}</Text></Pressable> : null}</View>
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
       <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
@@ -190,6 +247,13 @@ export default function ProfileScreen() {
   );
 }
 
+function formatProfileDate(value: Date | string | number | null | undefined) {
+  if (value == null) return '';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('ar', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
 function MenuItem({ icon, label, onPress, danger, disabled }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; onPress: () => void; danger?: boolean; disabled?: boolean }) {
   return (
     <Pressable onPress={onPress} disabled={disabled} style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed, disabled && { opacity: 0.55 }]} accessibilityRole="button">
@@ -203,31 +267,18 @@ function ProfileTab({ icon, label, active, onPress }: { icon: React.ComponentPro
   return <Pressable onPress={onPress} style={[styles.profileTab, active && styles.profileTabActive]}><Ionicons name={icon} size={21} color={active ? colors.accent : colors.textDim} /><Text style={[styles.profileTabLabel, active && styles.profileTabLabelActive]}>{label}</Text></Pressable>;
 }
 
-function StatCard({ label, value }: { label: string; value: number | string }) {
-  return (
-    <View style={styles.statCard}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   topNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
   topNavButton: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
-  topNavTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800' },
-  profileHero: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, paddingHorizontal: spacing.lg, paddingTop: spacing.xl, paddingBottom: spacing.md },
-  profileInfo: { flex: 1, gap: 4 },
-  handle: { color: colors.textDim, fontSize: fontSizes.md },
-  profileActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
-  editButton: { height: 42, paddingHorizontal: spacing.lg, borderRadius: radius.md, backgroundColor: colors.surfaceHigh, alignItems: 'center', justifyContent: 'center' },
-  editButtonText: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '800' },
-  shareButton: { width: 42, height: 42, borderRadius: radius.md, backgroundColor: colors.surfaceHigh, alignItems: 'center', justifyContent: 'center' },
+  topNavTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800' },
+  commonProfileContent: { paddingHorizontal: spacing.lg },
+  identityAction: { minHeight: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: spacing.md, borderRadius: radius.md },
+  identityPrimary: { backgroundColor: colors.accent },
+  identityPrimaryText: { color: '#04120C', fontSize: fontSizes.xs, fontWeight: '800' },
+  identitySecondary: { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border },
+  identitySecondaryText: { color: colors.text, fontSize: fontSizes.xs, fontWeight: '800' },
   pressed: { opacity: 0.72, transform: [{ scale: 0.97 }] },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.lg, marginBottom: spacing.lg },
-  metaText: { color: colors.textDim, fontSize: 12, marginRight: spacing.sm },
-  statsStrip: { flexDirection: 'row', paddingHorizontal: spacing.lg, marginBottom: spacing.lg, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border, paddingVertical: spacing.md },
   profileTabs: { paddingHorizontal: spacing.md, gap: spacing.xs, borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: spacing.xl },
   profileTab: { minWidth: 86, alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: spacing.sm, paddingVertical: spacing.md, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   profileTabActive: { borderBottomColor: colors.accent },
@@ -260,6 +311,22 @@ const styles = StyleSheet.create({
   verifyButton: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.md, alignSelf: 'flex-start' as const },
   verifyText: { color: colors.accent, fontSize: fontSizes.xs, fontWeight: '800' as const },
   cloudStatText: { color: colors.textDim, fontSize: 12 },
+  publishedReviewsSection: { marginBottom: spacing.xl },
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
+  sectionHeadingTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800', textAlign: 'right' },
+  sectionHeadingSubtitle: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: 3, textAlign: 'right' },
+  publishedReviewCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginBottom: spacing.md },
+  publishedReviewPoster: { width: 58, height: 82, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh },
+  publishedPosterFallback: { alignItems: 'center', justifyContent: 'center' },
+  publishedReviewInfo: { flex: 1, alignItems: 'flex-end', gap: 5 },
+  publishedReviewTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800', textAlign: 'right' },
+  publishedRating: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.surfaceHigh, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 4 },
+  publishedRatingText: { color: colors.text, fontSize: fontSizes.xs, fontWeight: '800' },
+  publishedReviewDate: { color: colors.textFaint, fontSize: 10 },
+  publishedReviewBody: { color: colors.textDim, fontSize: fontSizes.xs, lineHeight: 18, textAlign: 'right', alignSelf: 'stretch' },
+  publishedReviewsState: { minHeight: 90, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+  publishedReviewsEmpty: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
+  publishedReviewsHint: { color: colors.textDim, fontSize: fontSizes.sm, textAlign: 'center' },
   menuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'flex-end', paddingTop: 62, paddingHorizontal: spacing.md },
   menuCard: { width: 280, backgroundColor: colors.bgElevated, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.sm, elevation: 12 },
   menuTitle: { color: colors.textDim, fontSize: fontSizes.xs, fontWeight: '700', textAlign: 'right', writingDirection: 'rtl', paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xs },
@@ -278,34 +345,10 @@ const styles = StyleSheet.create({
   authButtonText: { color: colors.bg, fontSize: fontSizes.md, fontWeight: '800' },
   authNote: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: spacing.md },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.lg },
-  avatarColumn: { alignItems: 'center', gap: 4 },
   avatarButton: { position: 'relative' },
-  avatar: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 92, height: 92, borderRadius: 46, alignItems: 'center', justifyContent: 'center' },
   avatarCameraBadge: { position: 'absolute', right: -2, bottom: -2, width: 25, height: 25, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent, borderWidth: 2, borderColor: colors.bg },
-  avatarHint: { color: colors.accent, fontSize: 9, fontWeight: '700' },
   avatarText: { color: '#04120C', fontSize: fontSizes.xl, fontWeight: '800' },
-  username: { color: colors.text, fontSize: fontSizes.xl, fontWeight: '800' },
-  bio: { color: colors.textDim, fontSize: fontSizes.sm, marginTop: 2 },
-  editBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border },
-  socialRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: spacing.lg,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.lg,
-    paddingVertical: spacing.sm,
-  },
-  socialCard: { flex: 1, alignItems: 'center' },
-  socialDivider: { width: 1, height: 28, backgroundColor: colors.border },
-  socialValue: { color: colors.accent3, fontSize: fontSizes.lg, fontWeight: '800' },
-  socialLabel: { color: colors.textFaint, fontSize: 10, fontWeight: '700', marginTop: 2, textTransform: 'uppercase' },
-  statsGrid: { flexDirection: 'row', paddingHorizontal: spacing.lg, gap: spacing.sm, marginBottom: spacing.xl },
-  statCard: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
-  statValue: { color: colors.accent, fontSize: fontSizes.lg, fontWeight: '800' },
-  statLabel: { color: colors.textFaint, fontSize: 10, fontWeight: '700', marginTop: 2, textTransform: 'uppercase' },
   section: { marginBottom: spacing.xl },
   diaryRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.sm, borderWidth: 1, borderColor: colors.border },
   diaryPoster: { width: 46, height: 66, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh },

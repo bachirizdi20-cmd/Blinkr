@@ -12,6 +12,9 @@ import { ContentStackParamList } from '../navigation/types';
 import { trpc } from '../lib/trpc';
 import { posterUrl } from '../lib/tmdb';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
+import { ProfileIdentity } from '../components/ProfileIdentity';
+import { ProfileStatsGrid } from '../components/ProfileStatsGrid';
+import { ProfileTopReviews } from '../components/ProfileTopReviews';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type RouteT = RouteProp<ContentStackParamList, 'UserProfile'>;
@@ -143,99 +146,51 @@ function RemoteUserProfile({
       ) : null}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        <View style={styles.profileHero}>
-          <UserAvatar name={displayName} color={colors.accent} size={92} imageUrl={profile.avatarUrl ?? undefined} />
-          <View style={styles.profileInfo}>
-            <View style={styles.nameLine}>
-              <Text style={styles.name} numberOfLines={2}>{displayName}</Text>
-              {profile.followsYou ? <View style={styles.followsYouTag}><Text style={styles.followsYouText}>يتابعك</Text></View> : null}
-            </View>
-            <Text style={styles.username}>@{profile.username || `user${userId}`}</Text>
-            {profile.isSelf ? <Text style={styles.selfLabel}>هذا ملفك الشخصي</Text> : (
-              <View style={styles.actionsRow}>
-                <Pressable
-                  style={[styles.actionButton, profile.isFollowing ? styles.secondaryButton : styles.primaryButton]}
-                  disabled={followMutation.isPending}
-                  onPress={() => followMutation.mutate({ userId })}
-                  accessibilityRole="button"
-                >
-                  <Ionicons name={profile.isFollowing ? 'checkmark' : 'person-add-outline'} size={16} color={profile.isFollowing ? colors.text : '#04120C'} />
-                  <Text style={[styles.actionText, profile.isFollowing ? styles.secondaryButtonText : styles.primaryButtonText]}>
-                    {profile.isFollowing ? 'تتابعه' : 'متابعة'}
-                  </Text>
-                </Pressable>
-                <Pressable style={[styles.actionButton, styles.secondaryButton]} onPress={onMessage} accessibilityRole="button">
-                  <Ionicons name="chatbubble-outline" size={16} color={colors.text} />
-                  <Text style={[styles.actionText, styles.secondaryButtonText]}>مراسلة</Text>
-                </Pressable>
-              </View>
-            )}
-          </View>
-        </View>
-
-        <Text style={styles.bio}>{profile.bio?.trim() || 'لم يضف هذا المستخدم نبذة شخصية بعد.'}</Text>
-
-        {joinedDate ? <Text style={styles.joinedAt}>عضو منذ {joinedDate}</Text> : null}
-
-        <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{(profile.followerCount ?? 0).toLocaleString('ar')}</Text>
-            <Text style={styles.statLabel}>المتابعون</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{(profile.followingCount ?? 0).toLocaleString('ar')}</Text>
-            <Text style={styles.statLabel}>يتابع</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{(profile.reviewCount ?? 0).toLocaleString('ar')}</Text>
-            <Text style={styles.statLabel}>مراجعة منشورة</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{profile.averageRating == null ? '—' : Number(profile.averageRating).toFixed(1)}</Text>
-            <Text style={styles.statLabel}>متوسط التقييم / 10</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{(profile.movieReviewCount ?? 0).toLocaleString('ar')}</Text>
-            <Text style={styles.statLabel}>مراجعة فيلم</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{(profile.tvReviewCount ?? 0).toLocaleString('ar')}</Text>
-            <Text style={styles.statLabel}>مراجعة مسلسل</Text>
-          </View>
-        </View>
-
-        <View style={styles.highlightSection}>
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={styles.sectionTitle}>الأعلى تقييمًا</Text>
-              <Text style={styles.sectionSubtitle}>أبرز اختياراته من المراجعات المنشورة</Text>
-            </View>
-            <Ionicons name="sparkles-outline" size={21} color={colors.gold} />
-          </View>
-          {topReviewsQuery.isLoading ? (
-            <View style={styles.topReviewsLoading}><ActivityIndicator color={colors.accent} /><Text style={styles.loadingText}>جارٍ تحميل الاختيارات…</Text></View>
-          ) : topReviewsQuery.isError ? (
-            <View style={styles.inlineError}><Text style={styles.emptyText}>تعذر تحميل الاختيارات.</Text><Pressable onPress={() => topReviewsQuery.refetch()}><Text style={styles.retryText}>إعادة المحاولة</Text></Pressable></View>
-          ) : topReviewsQuery.data?.length ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topReviewsRail}>
-              {topReviewsQuery.data.map((item) => {
-                const mediaType: 'movie' | 'tv' = item.mediaType === 'tv' ? 'tv' : 'movie';
-                const poster = posterUrl(item.posterPath, 'w342');
-                return (
-                  <Pressable key={item.id} style={styles.topReviewCard} onPress={() => onOpenMedia(mediaType, item.mediaId)} accessibilityRole="button">
-                    <View style={styles.topReviewPosterWrap}>
-                      {poster ? <Image source={{ uri: poster }} style={styles.topReviewPoster} contentFit="cover" /> : <View style={[styles.topReviewPoster, styles.posterFallback]}><Ionicons name="film-outline" size={26} color={colors.textFaint} /></View>}
-                      <View style={styles.topReviewRating}><Ionicons name="star" size={11} color={colors.gold} /><Text style={styles.topReviewRatingText}>{item.rating}/10</Text></View>
-                    </View>
-                    <Text style={styles.topReviewTitle} numberOfLines={2}>{item.title}</Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          ) : (
-            <View style={styles.highlightEmpty}><Text style={styles.emptyText}>ستظهر هنا أعلى التقييمات بعد نشر المراجعات.</Text></View>
+        <ProfileIdentity
+          name={displayName}
+          username={profile.username || `user${userId}`}
+          bio={profile.bio}
+          joinedAt={joinedDate || null}
+          bioFallback="لم يضف هذا المستخدم نبذة شخصية بعد."
+          avatar={<UserAvatar name={displayName} color={colors.accent} size={92} imageUrl={profile.avatarUrl ?? undefined} />}
+          badge={profile.followsYou ? <View style={styles.followsYouTag}><Text style={styles.followsYouText}>يتابعك</Text></View> : undefined}
+          actions={profile.isSelf ? <Text style={styles.selfLabel}>هذا ملفك الشخصي</Text> : (
+            <>
+              <Pressable
+                style={[styles.actionButton, profile.isFollowing ? styles.secondaryButton : styles.primaryButton]}
+                disabled={followMutation.isPending}
+                onPress={() => followMutation.mutate({ userId })}
+                accessibilityRole="button"
+              >
+                <Ionicons name={profile.isFollowing ? 'checkmark' : 'person-add-outline'} size={16} color={profile.isFollowing ? colors.text : '#04120C'} />
+                <Text style={[styles.actionText, profile.isFollowing ? styles.secondaryButtonText : styles.primaryButtonText]}>
+                  {profile.isFollowing ? 'تتابعه' : 'متابعة'}
+                </Text>
+              </Pressable>
+              <Pressable style={[styles.actionButton, styles.secondaryButton]} onPress={onMessage} accessibilityRole="button">
+                <Ionicons name="chatbubble-outline" size={16} color={colors.text} />
+                <Text style={[styles.actionText, styles.secondaryButtonText]}>مراسلة</Text>
+              </Pressable>
+            </>
           )}
-        </View>
+        />
+
+        <ProfileStatsGrid
+          followers={profile.followerCount ?? 0}
+          following={profile.followingCount ?? 0}
+          reviews={profile.reviewCount ?? 0}
+          averageRating={profile.averageRating == null ? null : Number(profile.averageRating)}
+          movieReviews={profile.movieReviewCount ?? 0}
+          tvReviews={profile.tvReviewCount ?? 0}
+        />
+
+        <ProfileTopReviews
+          items={(topReviewsQuery.data ?? []).map((item) => ({ ...item, mediaType: item.mediaType === 'tv' ? 'tv' as const : 'movie' as const }))}
+          loading={topReviewsQuery.isLoading}
+          error={topReviewsQuery.isError}
+          onRetry={() => void topReviewsQuery.refetch()}
+          onOpen={onOpenMedia}
+        />
 
         <View style={styles.sectionHeader}>
           <View>
@@ -314,37 +269,15 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   loadingText: { color: colors.textDim, fontSize: fontSizes.sm },
-  profileHero: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, paddingTop: spacing.xl, paddingBottom: spacing.md },
-  profileInfo: { flex: 1, minWidth: 0, gap: 5 },
-  nameLine: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm },
-  name: { color: colors.text, fontSize: fontSizes.xl, fontWeight: '800', flexShrink: 1 },
   followsYouTag: { backgroundColor: colors.surfaceHigh, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 4 },
   followsYouText: { color: colors.textDim, fontSize: 10, fontWeight: '700' },
-  username: { color: colors.textFaint, fontSize: fontSizes.sm, textAlign: 'right' },
   selfLabel: { color: colors.textDim, fontSize: fontSizes.xs, fontWeight: '700', marginTop: spacing.xs, textAlign: 'right' },
-  actionsRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   actionButton: { minHeight: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: spacing.md, borderRadius: radius.md },
   primaryButton: { backgroundColor: colors.accent },
   secondaryButton: { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border },
   actionText: { fontSize: fontSizes.xs, fontWeight: '800' },
   primaryButtonText: { color: '#04120C' },
   secondaryButtonText: { color: colors.text },
-  bio: { color: colors.textDim, fontSize: fontSizes.sm, lineHeight: 22, textAlign: 'right', marginTop: spacing.sm },
-  joinedAt: { color: colors.textFaint, fontSize: fontSizes.xs, textAlign: 'right', marginTop: spacing.sm },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.lg, marginBottom: spacing.xl },
-  statCard: { width: '48%', minHeight: 68, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.sm },
-  statValue: { color: colors.accent, fontSize: fontSizes.lg, fontWeight: '800' },
-  statLabel: { color: colors.textFaint, fontSize: 10, fontWeight: '700', marginTop: 3, textAlign: 'center' },
-  highlightSection: { marginBottom: spacing.xl },
-  topReviewsRail: { flexDirection: 'row', gap: spacing.sm, paddingBottom: spacing.sm },
-  topReviewCard: { width: 115, gap: spacing.xs },
-  topReviewPosterWrap: { width: 115, height: 172, position: 'relative', overflow: 'hidden', borderRadius: radius.md, backgroundColor: colors.surfaceHigh },
-  topReviewPoster: { width: '100%', height: '100%' },
-  topReviewRating: { position: 'absolute', right: 6, bottom: 6, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.78)', borderRadius: radius.pill, paddingHorizontal: 7, paddingVertical: 4 },
-  topReviewRatingText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
-  topReviewTitle: { color: colors.text, fontSize: fontSizes.xs, fontWeight: '700', textAlign: 'right' },
-  topReviewsLoading: { minHeight: 90, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
-  highlightEmpty: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
   sectionTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800', textAlign: 'right' },
   sectionSubtitle: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: 3, textAlign: 'right' },
