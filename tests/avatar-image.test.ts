@@ -3,7 +3,7 @@ import sharp from "sharp";
 import { normalizeAvatarDataUri } from "../server/avatar-image";
 
 describe("profile avatar image sanitization", () => {
-  it("decodes and re-encodes a valid image as a square JPEG", async () => {
+  it("decodes and re-encodes a valid image as a square JPEG under the storage limit", async () => {
     const png = await sharp({
       create: { width: 640, height: 800, channels: 3, background: { r: 42, g: 96, b: 148 } },
     }).png().toBuffer();
@@ -14,6 +14,25 @@ describe("profile avatar image sanitization", () => {
     expect(metadata.format).toBe("jpeg");
     expect(metadata.width).toBe(512);
     expect(metadata.height).toBe(512);
+    expect(result.byteLength).toBeLessThanOrEqual(150 * 1024);
+  });
+
+  it("reduces a detailed image until it fits the database payload limit", async () => {
+    const width = 512;
+    const height = 512;
+    const pixels = Buffer.alloc(width * height * 3);
+    let state = 7;
+    for (let i = 0; i < pixels.length; i += 1) {
+      state = (state * 48271) % 0x7fffffff;
+      pixels[i] = state & 0xff;
+    }
+    const jpeg = await sharp(pixels, { raw: { width, height, channels: 3 } }).jpeg({ quality: 100 }).toBuffer();
+    const result = await normalizeAvatarDataUri(`data:image/jpeg;base64,${jpeg.toString("base64")}`);
+    const metadata = await sharp(result).metadata();
+
+    expect(result.byteLength).toBeLessThanOrEqual(150 * 1024);
+    expect(metadata.width).toBeLessThanOrEqual(512);
+    expect(metadata.height).toBeLessThanOrEqual(512);
   });
 
   it("rejects a valid image declared as a different format", async () => {

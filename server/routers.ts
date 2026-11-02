@@ -211,7 +211,7 @@ export const appRouter = router({
     discardAvatar: protectedProcedure
       .input(z.object({ key: z.string().min(1).max(255) }))
       .mutation(async ({ ctx, input }) => {
-        const ownedKeyPattern = new RegExp(`^avatars/user-${ctx.user.id}_[a-f0-9]{8}$`);
+        const ownedKeyPattern = new RegExp(`^avatars/(?:db/)?user-${ctx.user.id}_[a-f0-9]{8}$`);
         if (!ownedKeyPattern.test(input.key)) throw new TRPCError({ code: "FORBIDDEN", message: "Invalid avatar key" });
         const currentKey = storageKeyFromUrl((await db.getUserData(ctx.user.id))?.avatarUrl ?? null);
         if (currentKey === input.key) throw new TRPCError({ code: "FORBIDDEN", message: "Cannot delete the active avatar" });
@@ -225,7 +225,7 @@ export const appRouter = router({
         const updated = await db.upsertUserData(ctx.user.id, input);
         const previousKey = storageKeyFromUrl(previous?.avatarUrl ?? null);
         const nextKey = storageKeyFromUrl(input.avatarUrl ?? null);
-        const ownedKeyPattern = new RegExp(`^avatars/user-${ctx.user.id}_[a-f0-9]{8}$`);
+        const ownedKeyPattern = new RegExp(`^avatars/(?:db/)?user-${ctx.user.id}_[a-f0-9]{8}$`);
         if (previousKey && previousKey !== nextKey && ownedKeyPattern.test(previousKey)) {
           try {
             const deleted = await storageDelete(previousKey);

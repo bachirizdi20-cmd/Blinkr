@@ -1,8 +1,5 @@
-// Storage helpers for Blinkr.
-//
-// Production/self-hosted deployments use any S3-compatible object store
-// (OCI Object Storage or Cloudflare R2). The Manus Forge path remains as a
-// compatibility fallback so the WebDev preview keeps working.
+// Storage helpers for Blinkr. Avatars can fall back to the application's
+// persistent MySQL database when no object-storage provider is configured.
 import { randomUUID } from "node:crypto";
 import {
   DeleteObjectCommand,
@@ -49,30 +46,14 @@ function hasForgeConfig() {
   return Boolean(ENV.forgeApiUrl && ENV.forgeApiKey);
 }
 
-/** Exposes only whether a storage backend is configured, never its credentials. */
-export function isStorageConfigured() {
-  return hasS3Config() || hasForgeConfig();
-}
-
-/** The managed Forge runtime has no delete endpoint; S3-compatible stores do. */
-export function isStorageDeletionSupported() {
-  return hasS3Config();
-}
-
-function getForgeConfig() {
-  if (!hasForgeConfig()) {
-    throw new Error(
-      "Storage config missing: configure S3 or BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY",
-    );
-  }
-  return {
-    forgeUrl: ENV.forgeApiUrl.replace(/\/+$/, ""),
-    forgeKey: ENV.forgeApiKey,
-  };
-}
-
 function normalizeKey(relKey: string) {
   return relKey.replace(/^\/+/, "");
+}
+
+function databaseAvatarKey(relKey: string) {
+  const key = normalizeKey(relKey);
+  const match = /^avatars\/db\/user-(\d+)_([a-f0-9]{8})$/.exec(key);
+  return match ? { key, userId: Number(match[1]) } : null;
 }
 
 function appendHashSuffix(relKey: string) {
@@ -80,6 +61,16 @@ function appendHashSuffix(relKey: string) {
   const lastDot = relKey.lastIndexOf(".");
   if (lastDot === -1) return `${relKey}_${hash}`;
   return `${relKey.slice(0, lastDot)}_${hash}${relKey.slice(lastDot)}`;
+}
+
+/** Reports whether profile-avatar storage is configured, without exposing secrets. */
+export function isStorageConfigured() {
+  return hasS3Config() || hasForgeConfig() || Boolean(ENV.databaseUrl);
+}
+
+/** Avatars stored in MySQL or S3 can be physically deleted; Forge cannot. */
+export function isStorageDeletionSupported() {
+  return hasS3Config() || Boolean(ENV.databaseUrl);
 }
 
 export async function storagePut(
@@ -103,27 +94,42 @@ export async function storagePut(
     return { key, url: `/manus-storage/${key}` };
   }
 
-  const { forgeUrl, forgeKey } = getForgeConfig();
-  const presignUrl = new URL("v1/storage/presign/put", `${forgeUrl}/`);
-  presignUrl.searchParams.set("path", key);
-  const presignResp = await fetch(presignUrl, {
-    headers: { Authorization: `Bearer ${forgeKey}` },
-  });
-  if (!presignResp.ok) {
-    const msg = await presignResp.text().catch(() => presignResp.statusText);
-    throw new Error(`Storage presign failed (${presignResp.status}): ${msg}`);
+  if (hasForgeConfig()) {
+    const forgeUrl = ENV.forgeApiUrl.replace(/\/+$/, "");
+    const presignUrl = new URL("v1/storage/presign/put", `${forgeUrl}/`);
+    presignUrl.searchParams.set("path", key);
+    const presignResp = await fetch(presignUrl, {
+      headers: { Authorization: `Bearer ${ENV.forgeApiKey}` },
+    });
+    if (!presignResp.ok) {
+      const msg = await presignResp.text().catch(() => presignResp.statusText);
+      throw new Error(`Storage presign failed (${presignResp.status}): ${msg}`);
+    }
+    const { url: uploadUrl } = (await presignResp.json()) as { url?: string };
+    if (!uploadUrl) throw new Error("Storage backend returned an empty presign URL");
+    const uploadResp = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": contentType },
+      body,
+    });
+    if (!uploadResp.ok) throw new Error(`Storage upload failed (${uploadResp.status})`);
+    return { key, url: `/manus-storage/${key}` };
   }
-  const { url: uploadUrl } = (await presignResp.json()) as { url?: string };
-  if (!uploadUrl) throw new Error("Storage backend returned an empty presign URL");
-  const uploadResp = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": contentType },
-    body,
-  });
-  if (!uploadResp.ok) {
-    throw new Error(`Storage upload failed (${uploadResp.status})`);
+
+  const avatarMatch = /^avatars\/user-(\d+)_([a-f0-9]{8})$/.exec(key);
+  if (ENV.databaseUrl && contentType === "image/jpeg" && avatarMatch && body.byteLength <= 150 * 1024) {
+    const databaseKey = `avatars/db/user-${avatarMatch[1]}_${avatarMatch[2]}`;
+    const { saveAvatarBlob } = await import("./db");
+    await saveAvatarBlob({
+      key: databaseKey,
+      userId: Number(avatarMatch[1]),
+      data: body,
+      contentType: "image/jpeg",
+    });
+    return { key: databaseKey, url: `/manus-storage/${databaseKey}` };
   }
-  return { key, url: `/manus-storage/${key}` };
+
+  throw new Error("Storage config missing: configure S3-compatible storage for non-avatar uploads");
 }
 
 export async function storageGet(relKey: string): Promise<{ key: string; url: string }> {
@@ -142,11 +148,12 @@ export async function storageGetSignedUrl(relKey: string) {
     );
   }
 
-  const { forgeUrl, forgeKey } = getForgeConfig();
+  if (!hasForgeConfig()) throw new Error("External storage is not configured for this key");
+  const forgeUrl = ENV.forgeApiUrl.replace(/\/+$/, "");
   const getUrl = new URL("v1/storage/presign/get", `${forgeUrl}/`);
   getUrl.searchParams.set("path", key);
   const response = await fetch(getUrl, {
-    headers: { Authorization: `Bearer ${forgeKey}` },
+    headers: { Authorization: `Bearer ${ENV.forgeApiKey}` },
   });
   if (!response.ok) {
     const msg = await response.text().catch(() => response.statusText);
@@ -158,12 +165,30 @@ export async function storageGetSignedUrl(relKey: string) {
 }
 
 export async function storageDelete(relKey: string): Promise<boolean> {
+  const databaseKey = databaseAvatarKey(relKey);
+  if (databaseKey) {
+    if (!ENV.databaseUrl) return false;
+    const { deleteAvatarBlob } = await import("./db");
+    return deleteAvatarBlob(databaseKey.key, databaseKey.userId);
+  }
+
   if (!hasS3Config()) return false;
   const { client, bucket } = getS3Config();
   await client.send(
     new DeleteObjectCommand({ Bucket: bucket, Key: normalizeKey(relKey) }),
   );
   return true;
+}
+
+export function isDatabaseAvatarKey(relKey: string) {
+  return databaseAvatarKey(relKey) !== null;
+}
+
+export async function readDatabaseAvatar(relKey: string) {
+  const databaseKey = databaseAvatarKey(relKey);
+  if (!databaseKey) return null;
+  const { readAvatarBlob } = await import("./db");
+  return readAvatarBlob(databaseKey.key);
 }
 
 /** Extract a storage key from a URL returned by storagePut. */

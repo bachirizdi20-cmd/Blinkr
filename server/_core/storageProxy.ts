@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { storageGetSignedUrl } from "../storage";
+import { isDatabaseAvatarKey, readDatabaseAvatar, storageGetSignedUrl } from "../storage";
 
 export function registerStorageProxy(app: Express) {
   app.get("/manus-storage/*", async (req, res) => {
@@ -10,6 +10,22 @@ export function registerStorageProxy(app: Express) {
     }
 
     try {
+      if (isDatabaseAvatarKey(rawKey)) {
+        const avatar = await readDatabaseAvatar(rawKey);
+        if (!avatar) {
+          res.status(404).send("Avatar not found");
+          return;
+        }
+        res
+          .status(200)
+          .set("Content-Type", avatar.contentType)
+          .set("Content-Length", String(avatar.data.byteLength))
+          .set("X-Content-Type-Options", "nosniff")
+          .set("Cache-Control", "public, max-age=31536000, immutable")
+          .send(avatar.data);
+        return;
+      }
+
       const signedUrl = await storageGetSignedUrl(rawKey);
       res.set("Cache-Control", "private, max-age=300");
       res.redirect(307, signedUrl);

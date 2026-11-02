@@ -3,7 +3,7 @@ import sharp from "sharp";
 const MAX_INPUT_BYTES = 5 * 1024 * 1024;
 const MAX_INPUT_PIXELS = 20_000_000;
 const MAX_BASE64_LENGTH = Math.ceil(MAX_INPUT_BYTES / 3) * 4;
-const OUTPUT_SIZE = 512;
+const MAX_OUTPUT_BYTES = 150 * 1024;
 
 export class AvatarImageInputError extends Error {
   constructor(readonly reason: "invalid" | "too_large") {
@@ -49,13 +49,25 @@ export async function normalizeAvatarDataUri(dataUri: string): Promise<Buffer> {
     throw new AvatarImageInputError("invalid");
   }
 
+  const encodings = [
+    { size: 512, quality: 80 },
+    { size: 512, quality: 72 },
+    { size: 384, quality: 72 },
+    { size: 256, quality: 64 },
+  ];
+
   try {
-    return await sharp(input, { failOn: "error", limitInputPixels: MAX_INPUT_PIXELS })
-      .rotate()
-      .resize(OUTPUT_SIZE, OUTPUT_SIZE, { fit: "cover", position: "centre", withoutEnlargement: true })
-      .jpeg({ quality: 84 })
-      .toBuffer();
+    for (const encoding of encodings) {
+      const result = await sharp(input, { failOn: "error", limitInputPixels: MAX_INPUT_PIXELS })
+        .rotate()
+        .resize(encoding.size, encoding.size, { fit: "cover", position: "centre", withoutEnlargement: true })
+        .jpeg({ quality: encoding.quality, mozjpeg: true })
+        .toBuffer();
+      if (result.byteLength <= MAX_OUTPUT_BYTES) return result;
+    }
   } catch {
     throw new AvatarImageInputError("invalid");
   }
+
+  throw new AvatarImageInputError("too_large");
 }

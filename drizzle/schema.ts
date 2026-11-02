@@ -1,4 +1,8 @@
-import { boolean, int, longtext, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { boolean, customType, index, int, longtext, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+
+const mediumblob = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => "mediumblob",
+});
 
 /**
  * Core user table backing auth flow.
@@ -44,6 +48,18 @@ export const userData = mysqlTable("user_data", {
 
 export type UserData = typeof userData.$inferSelect;
 export type InsertUserData = typeof userData.$inferInsert;
+
+export const avatarBlobs = mysqlTable("avatar_blobs", {
+  key: varchar("key", { length: 255 }).primaryKey(),
+  userId: int("userId").notNull(),
+  contentType: varchar("contentType", { length: 64 }).notNull().default("image/jpeg"),
+  data: mediumblob("data").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("avatar_blobs_user_id_idx").on(table.userId),
+}));
+
+export type AvatarBlob = typeof avatarBlobs.$inferSelect;
 
 export const authTokens = mysqlTable("auth_tokens", {
   id: int("id").autoincrement().primaryKey(),

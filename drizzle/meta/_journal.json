@@ -78,6 +78,13 @@
       "when": 1791322579513,
       "tag": "0010_dashing_thunderbolt_ross",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1793645442694,
+      "tag": "0011_avatar_blob_storage",
+      "breakpoints": true
     }
   ]
 }

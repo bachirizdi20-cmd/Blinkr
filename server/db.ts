@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, avg, count, eq, desc, isNull, gt, or, not, inArray, like } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertMediaStatus, InsertReview, InsertUser, InsertUserData, MediaStatus, Review, authTokens, blocks, follows, followRequests, notifications, reports, reviewComments, reviewLikes, mediaStatuses, reviews, UserData, userData, users, conversations, chatMessages, InsertChatMessage } from "../drizzle/schema";
+import { InsertMediaStatus, InsertReview, InsertUser, InsertUserData, MediaStatus, Review, authTokens, avatarBlobs, blocks, follows, followRequests, notifications, reports, reviewComments, reviewLikes, mediaStatuses, reviews, UserData, userData, users, conversations, chatMessages, InsertChatMessage } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { randomBytes, createHash } from "node:crypto";
 import { storageDelete, storageKeyFromUrl } from "./storage";
@@ -43,6 +43,35 @@ export async function getDb() {
     }
   }
   return _db;
+}
+
+export async function saveAvatarBlob(input: { key: string; userId: number; data: Buffer; contentType: "image/jpeg" }) {
+  if (input.data.byteLength > 150 * 1024) throw new Error("Avatar exceeds the database storage limit");
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(avatarBlobs).values(input);
+}
+
+export async function readAvatarBlob(key: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const rows = await db.select({ contentType: avatarBlobs.contentType, data: avatarBlobs.data })
+    .from(avatarBlobs).where(eq(avatarBlobs.key, key)).limit(1);
+  const row = rows[0];
+  return row ? { contentType: row.contentType, data: Buffer.from(row.data) } : null;
+}
+
+export async function deleteAvatarBlob(key: string, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(avatarBlobs).where(and(eq(avatarBlobs.key, key), eq(avatarBlobs.userId, userId)));
+  return true;
+}
+
+export async function deleteAvatarBlobsByUser(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(avatarBlobs).where(eq(avatarBlobs.userId, userId));
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
@@ -711,6 +740,11 @@ export async function deleteUserAccount(userId: number) {
     } catch (error) {
       console.error("[Account] Failed to delete avatar during account deletion:", error);
     }
+  }
+  try {
+    await deleteAvatarBlobsByUser(userId);
+  } catch (error) {
+    console.error("[Account] Failed to delete stored avatar blobs:", error);
   }
 
   // Conversations this user is part of, so we can also drop their messages.
