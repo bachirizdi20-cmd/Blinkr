@@ -28,6 +28,7 @@ export default function ChatsScreen() {
       username: item.username ?? `user${item.id}`,
       displayName: item.name ?? item.username ?? 'Blinkr user',
       bio: item.bio ?? '',
+      avatarUrl: item.avatarUrl,
       avatarColor: colors.accent,
       favoriteGenre: '',
       followsYou: false,
@@ -48,6 +49,7 @@ export default function ChatsScreen() {
         username: item.otherUser.username ?? `user${item.otherUserId}`,
         displayName: item.otherUser.name ?? item.otherUser.username ?? 'Blinkr user',
         bio: item.otherUser.bio ?? '',
+        avatarUrl: item.otherUser.avatarUrl,
         avatarColor: colors.accent,
         favoriteGenre: '',
         followsYou: false,
@@ -143,7 +145,7 @@ export default function ChatsScreen() {
                   contentContainerStyle={{ gap: spacing.lg }}
                   renderItem={({ item }) => (
                     <Pressable style={styles.startCard} onPress={() => openConversation(item)}>
-                      <UserAvatar name={item.displayName} color={item.avatarColor} size={56} />
+                      <UserAvatar name={item.displayName} color={item.avatarColor} size={56} imageUrl={item.avatarUrl ?? undefined} />
                       <Text numberOfLines={1} style={styles.startName}>{item.displayName}</Text>
                     </Pressable>
                   )}
@@ -168,7 +170,7 @@ export default function ChatsScreen() {
           const preview = isTyping ? 'typing…' : `${item.lastMessage?.sender === 'me' ? 'You: ' : ''}${item.lastMessage?.text ?? ''}`;
           return (
             <Pressable style={styles.chatRow} onPress={() => openConversation(item.user)}>
-              <UserAvatar name={item.user.displayName} color={item.user.avatarColor} size={52} />
+              <UserAvatar name={item.user.displayName} color={item.user.avatarColor} size={52} imageUrl={item.user.avatarUrl ?? undefined} />
               <View style={{ flex: 1 }}>
                 <View style={styles.chatRowTop}>
                   <Text style={styles.chatName} numberOfLines={1}>{item.user.displayName}</Text>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -32,6 +32,8 @@ export default function SearchScreen() {
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const recentSearchesRef = useRef<string[]>([]);
+  const setRecent = (items: string[]) => { recentSearchesRef.current = items; setRecentSearches(items); };
   const [searchFocused, setSearchFocused] = useState(false);
   const trimmed = query.trim();
   const shouldSearch = trimmed.length >= 2;
@@ -41,24 +43,24 @@ export default function SearchScreen() {
 
   useEffect(() => {
     let active = true;
-    if (!recentStorageKey) { setRecentSearches([]); return; }
+    if (!recentStorageKey) { setRecent([]); return; }
     AsyncStorage.getItem(recentStorageKey).then((stored) => {
       if (!active || !stored) return;
-      try { const parsed = JSON.parse(stored); if (Array.isArray(parsed)) setRecentSearches(parsed.filter((item): item is string => typeof item === 'string').slice(0, 8)); } catch { setRecentSearches([]); }
+      try { const parsed = JSON.parse(stored); if (Array.isArray(parsed)) setRecent(parsed.filter((item): item is string => typeof item === 'string').slice(0, 8)); } catch { setRecent([]); }
     }).catch(() => undefined);
     return () => { active = false; };
   }, [recentStorageKey]);
 
   const persistRecentSearches = (next: string[]) => {
-    setRecentSearches(next);
+    setRecent(next);
     if (recentStorageKey) void AsyncStorage.setItem(recentStorageKey, JSON.stringify(next));
   };
   const commitSearch = (value: string) => {
     const normalized = value.trim().replace(/\s+/g, ' ');
     if (!normalized || normalized.length < 2) return;
-    persistRecentSearches([normalized, ...recentSearches.filter((item) => item.toLowerCase() !== normalized.toLowerCase())].slice(0, 8));
+    persistRecentSearches([normalized, ...recentSearchesRef.current.filter((item) => item.toLowerCase() !== normalized.toLowerCase())].slice(0, 8));
   };
-  const removeRecentSearch = (value: string) => persistRecentSearches(recentSearches.filter((item) => item !== value));
+  const removeRecentSearch = (value: string) => persistRecentSearches(recentSearchesRef.current.filter((item) => item !== value));
   const clearRecentSearches = () => persistRecentSearches([]);
 
   useEffect(() => {
@@ -75,11 +77,22 @@ export default function SearchScreen() {
     return () => { active = false; };
   }, [trimmed, tab, shouldSearch]);
 
-  const media = mediaResults.filter((item) => tab === 'all' || tab === 'movies' ? item.mediaType === 'movie' : tab === 'tv' ? item.mediaType === 'tv' : true);
+  const media = mediaResults.filter((item) => tab === 'movies' ? item.mediaType === 'movie' : tab === 'tv' ? item.mediaType === 'tv' : true);
   const people = peopleQuery.data ?? [];
   const reviews = reviewsQuery.data ?? [];
   const isLoading = tab === 'people' ? peopleQuery.isLoading : tab === 'reviews' ? reviewsQuery.isLoading : mediaLoading;
-  const hasError = tab === 'people' ? peopleQuery.error : tab === 'reviews' ? reviewsQuery.error : mediaError;
+  const hasError = tab === 'people' ? peopleQuery.error : tab === 'reviews' ? reviewsQuery.error : tab === 'all' ? mediaError || peopleQuery.error || reviewsQuery.error : mediaError;
+  const hasAnySearchResults = media.length > 0 || people.length > 0 || reviews.length > 0;
+  const fatalSearchError = Boolean(hasError) && !(tab === 'all' && hasAnySearchResults);
+  const retrySearch = () => {
+    if (tab === 'people') void peopleQuery.refetch();
+    else if (tab === 'reviews') void reviewsQuery.refetch();
+    else {
+      if (tab === 'all') { void peopleQuery.refetch(); void reviewsQuery.refetch(); }
+      setMediaLoading(true); setMediaError(null);
+      searchMulti(trimmed, 1).then((data) => setMediaResults(data.results.filter((item) => item.mediaType === 'movie' || item.mediaType === 'tv'))).catch((err) => setMediaError(err instanceof Error ? err.message : 'Unable to search titles right now.')).finally(() => setMediaLoading(false));
+    }
+  };
 
 
   return (
@@ -90,12 +103,13 @@ export default function SearchScreen() {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
         {tabs.map((item) => <Pressable key={item.key} onPress={() => setTab(item.key)} style={[styles.tab, tab === item.key && styles.tabActive]}><Text style={[styles.tabText, tab === item.key && styles.tabTextActive]}>{item.label}</Text></Pressable>)}
       </ScrollView>
-      {!shouldSearch ? <EmptyState icon="search-outline" title="Search your movie circle" message="Find people, reviews, movies, and shows in one place." /> : isLoading ? <View style={styles.center}><ActivityIndicator color={colors.accent} size="large" /><Text style={styles.loadingText}>Searching Blinkr…</Text></View> : hasError ? <ApiErrorState message={hasError instanceof Error ? hasError.message : 'Search is temporarily unavailable.'} onRetry={() => { peopleQuery.refetch(); reviewsQuery.refetch(); }} /> : (
+      {!shouldSearch ? <EmptyState icon="search-outline" title="Search your movie circle" message="Find people, reviews, movies, and shows in one place." /> : isLoading ? <View style={styles.center}><ActivityIndicator color={colors.accent} size="large" /><Text style={styles.loadingText}>Searching Blinkr…</Text></View> : fatalSearchError ? <ApiErrorState message={hasError instanceof Error ? hasError.message : 'Search is temporarily unavailable.'} onRetry={retrySearch} /> : (
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          {hasError && tab === 'all' ? <View style={styles.partialError}><Text style={styles.partialErrorText}>Some search results could not be loaded.</Text><Pressable onPress={retrySearch} accessibilityRole="button"><Text style={styles.partialRetry}>Retry</Text></Pressable></View> : null}
           {(tab === 'all' || tab === 'people') && people.length > 0 ? <Section title="People" action={() => setTab('people')}><View>{people.slice(0, tab === 'people' ? 50 : 5).map((person: any) => <Pressable key={person.id} style={styles.personRow} onPress={() => navigation.navigate('UserProfile', { userId: String(person.id) })}><UserAvatar name={person.name || person.username} color={colors.accent} size={42} /><View style={styles.resultCopy}><Text style={styles.resultTitle}>{person.name || person.username}</Text><Text style={styles.resultMeta}>@{person.username}</Text>{person.bio ? <Text style={styles.resultSub} numberOfLines={1}>{person.bio}</Text> : null}</View><Ionicons name="chevron-forward" size={18} color={colors.textFaint} /></Pressable>)}</View></Section> : null}
           {(tab === 'all' || tab === 'movies' || tab === 'tv') && media.length > 0 ? <Section title={tab === 'all' ? 'Movies & TV' : tab === 'movies' ? 'Movies' : 'TV shows'} action={() => setTab(tab === 'tv' ? 'tv' : 'movies')}><View style={styles.mediaGrid}>{media.slice(0, tab === 'all' ? 6 : 30).map((item) => <PosterCard key={`${item.mediaType}-${item.id}`} item={item} width={108} onPress={() => navigation.navigate('Detail', { mediaType: item.mediaType, id: item.id })} />)}</View></Section> : null}
           {(tab === 'all' || tab === 'reviews') && reviews.length > 0 ? <Section title="Reviews" action={() => setTab('reviews')}><View>{reviews.slice(0, tab === 'all' ? 5 : 50).map((row: any) => <Pressable key={row.review.id} style={styles.reviewRow} onPress={() => navigation.navigate('Detail', { mediaType: row.review.mediaType === 'tv' ? 'tv' : 'movie', id: row.review.mediaId })}><UserAvatar name={row.displayName || row.username} color={colors.accent} size={38} /><View style={styles.resultCopy}><Text style={styles.reviewAuthor}>{row.displayName || row.username} <Text style={styles.reviewMuted}>reviewed</Text></Text><Text style={styles.resultTitle} numberOfLines={1}>{row.review.title}</Text><Text style={styles.reviewText} numberOfLines={2}>{row.review.review}</Text><Text style={styles.rating}>★ {row.review.rating.toFixed(1)}</Text></View></Pressable>)}</View></Section> : null}
-          {people.length === 0 && media.length === 0 && reviews.length === 0 ? <EmptyState icon="search-outline" title="No results found" message="Try a different name, title, author, or review phrase." /> : null}
+          {people.length === 0 && media.length === 0 && reviews.length === 0 && !(tab === 'all' && (peopleQuery.isError || reviewsQuery.isError || mediaError)) ? <EmptyState icon="search-outline" title="No results found" message="Try a different name, title, author, or review phrase." /> : null}
         </ScrollView>
       )}
     </SafeAreaView>
@@ -108,5 +122,5 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg }, header: { color: colors.text, fontSize: fontSizes.xxl, fontWeight: '900', paddingHorizontal: spacing.lg, marginBottom: spacing.md },
   searchBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginHorizontal: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.pill, paddingHorizontal: spacing.md, height: 48, borderWidth: 1, borderColor: colors.border }, input: { flex: 1, color: colors.text, fontSize: fontSizes.md }, recentPanel: { marginHorizontal: spacing.lg, marginTop: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, recentHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: spacing.xs }, recentTitle: { color: colors.text, fontSize: 13, fontWeight: '900' }, clearRecent: { color: colors.accent, fontSize: 12, fontWeight: '800' }, recentRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 38, borderTopWidth: 1, borderTopColor: colors.border }, recentSelect: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 8 }, recentText: { flex: 1, color: colors.textDim, fontSize: 13 },
   tabs: { gap: spacing.xs, paddingHorizontal: spacing.lg, paddingVertical: spacing.md }, tab: { paddingHorizontal: 15, paddingVertical: 9, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }, tabActive: { backgroundColor: colors.accent, borderColor: colors.accent }, tabText: { color: colors.textDim, fontSize: 12, fontWeight: '800' }, tabTextActive: { color: colors.bg },
-  content: { paddingHorizontal: spacing.lg, paddingBottom: 36 }, section: { marginBottom: spacing.lg }, sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }, sectionTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '900' }, seeAll: { color: colors.accent, fontSize: 12, fontWeight: '800' }, personRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }, resultCopy: { flex: 1, minWidth: 0 }, resultTitle: { color: colors.text, fontSize: 14, fontWeight: '800' }, resultMeta: { color: colors.textDim, fontSize: 12, marginTop: 3 }, resultSub: { color: colors.textFaint, fontSize: 11, marginTop: 3 }, mediaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }, reviewRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }, reviewAuthor: { color: colors.text, fontSize: 13, fontWeight: '800' }, reviewMuted: { color: colors.textDim, fontWeight: '500' }, reviewText: { color: colors.textDim, fontSize: 12, lineHeight: 18, marginTop: 3 }, rating: { color: colors.gold, fontSize: 12, fontWeight: '800', marginTop: 3 }, center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm }, loadingText: { color: colors.textDim, fontSize: 12 },
+  content: { paddingHorizontal: spacing.lg, paddingBottom: 36 }, partialError: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.sm, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border }, partialErrorText: { color: colors.textDim, fontSize: 12, flex: 1 }, partialRetry: { color: colors.accent, fontSize: 12, fontWeight: '800', paddingHorizontal: spacing.sm }, section: { marginBottom: spacing.lg }, sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }, sectionTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '900' }, seeAll: { color: colors.accent, fontSize: 12, fontWeight: '800' }, personRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }, resultCopy: { flex: 1, minWidth: 0 }, resultTitle: { color: colors.text, fontSize: 14, fontWeight: '800' }, resultMeta: { color: colors.textDim, fontSize: 12, marginTop: 3 }, resultSub: { color: colors.textFaint, fontSize: 11, marginTop: 3 }, mediaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }, reviewRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }, reviewAuthor: { color: colors.text, fontSize: 13, fontWeight: '800' }, reviewMuted: { color: colors.textDim, fontWeight: '500' }, reviewText: { color: colors.textDim, fontSize: 12, lineHeight: 18, marginTop: 3 }, rating: { color: colors.gold, fontSize: 12, fontWeight: '800', marginTop: 3 }, center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm }, loadingText: { color: colors.textDim, fontSize: 12 },
 });

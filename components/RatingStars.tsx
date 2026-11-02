@@ -32,6 +32,9 @@ export default function RatingStars({ rating, size = 20, interactive = false, on
           <Pressable
             key={i}
             disabled={!interactive}
+            accessibilityRole={interactive ? 'button' : 'image'}
+            accessibilityLabel={interactive ? `Rate ${i + 1} star${i ? 's' : ''}` : `${rating} out of 5 stars`}
+            accessibilityState={interactive ? { disabled: false, selected: rating >= i + 0.5 } : undefined}
             onPress={(e) => handlePress(i, e)}
             hitSlop={4}
             style={{ paddingHorizontal: 1 }}

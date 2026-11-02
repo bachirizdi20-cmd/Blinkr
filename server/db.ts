@@ -443,6 +443,81 @@ export async function listPublicUserTopReviews(viewerId: number, targetUserId: n
     .limit(5);
 }
 
+export async function listPublicUserMediaStatuses(viewerId: number, targetUserId: number) {
+  const db = await getDb();
+  if (!db || (viewerId !== targetUserId && await isBlockedEitherWay(db, viewerId, targetUserId))) return [];
+
+  return db.select({
+    mediaType: mediaStatuses.mediaType,
+    mediaId: mediaStatuses.mediaId,
+    title: mediaStatuses.title,
+    posterPath: mediaStatuses.posterPath,
+    status: mediaStatuses.status,
+    updatedAt: mediaStatuses.updatedAt,
+  }).from(mediaStatuses)
+    .where(eq(mediaStatuses.userId, targetUserId))
+    .orderBy(desc(mediaStatuses.updatedAt))
+    .limit(50);
+}
+
+function publicMediaItems(value: unknown, limit: number) {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is Record<string, unknown> => {
+    if (!item || typeof item !== "object") return false;
+    const media = item as Record<string, unknown>;
+    return (media.mediaType === "movie" || media.mediaType === "tv")
+      && Number.isSafeInteger(Number(media.mediaId))
+      && Number(media.mediaId) > 0
+      && typeof media.title === "string";
+  }).slice(0, limit).map((item) => ({
+    mediaType: item.mediaType as "movie" | "tv",
+    mediaId: Number(item.mediaId),
+    title: String(item.title).slice(0, 255),
+    posterPath: typeof item.posterPath === "string" ? item.posterPath.slice(0, 255) : null,
+    date: typeof item.date === "string" ? item.date.slice(0, 32) : null,
+    rating: Number.isFinite(Number(item.rating)) ? Number(item.rating) : null,
+    review: typeof item.review === "string" ? item.review.slice(0, 2000) : "",
+    watchedDate: typeof item.watchedDate === "string" ? item.watchedDate.slice(0, 32) : null,
+    createdAt: Number.isFinite(Number(item.createdAt)) ? Number(item.createdAt) : null,
+  }));
+}
+
+export async function getPublicUserLibrary(viewerId: number, targetUserId: number) {
+  const db = await getDb();
+  if (!db || (viewerId !== targetUserId && await isBlockedEitherWay(db, viewerId, targetUserId))) return null;
+  const rows = await db.select({ libraryJson: userData.libraryJson }).from(userData).where(eq(userData.userId, targetUserId)).limit(1);
+  let library: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = rows[0]?.libraryJson ? JSON.parse(rows[0].libraryJson) : {};
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) library = parsed as Record<string, unknown>;
+  } catch {
+    library = {};
+  }
+
+  const likesValue = library.likes && typeof library.likes === "object" ? Object.values(library.likes as Record<string, unknown>) : [];
+  const watchlistValue = library.watchlist && typeof library.watchlist === "object" ? Object.values(library.watchlist as Record<string, unknown>) : [];
+  const diary = publicMediaItems(library.diary, 50);
+  const lists = Array.isArray(library.lists) ? library.lists.slice(0, 20).flatMap((value) => {
+    if (!value || typeof value !== "object") return [];
+    const list = value as Record<string, unknown>;
+    if (typeof list.name !== "string") return [];
+    return [{
+      id: typeof list.id === "string" ? list.id.slice(0, 100) : "",
+      name: list.name.slice(0, 100),
+      description: typeof list.description === "string" ? list.description.slice(0, 300) : "",
+      items: publicMediaItems(list.items, 30),
+      createdAt: Number.isFinite(Number(list.createdAt)) ? Number(list.createdAt) : null,
+    }];
+  }) : [];
+
+  return {
+    likes: publicMediaItems(likesValue, 30),
+    watchlist: publicMediaItems(watchlistValue, 50),
+    diary,
+    lists,
+  };
+}
+
 export async function listFollowingIds(userId: number) {
   const db = await getDb();
   if (!db) return [];
