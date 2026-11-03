@@ -9,6 +9,7 @@ import {
 } from '../types/tmdb';
 import { createTRPCClient } from '@/lib/trpc';
 import { resolveMediaUrl } from './media-url';
+import { isAnimeItem, TMDB_ANIME_GENRE_ID } from './media-categories';
 
 const tmdbClient = createTRPCClient();
 export const IMG_BASE = 'https://image.tmdb.org/t/p/';
@@ -28,12 +29,6 @@ export const profileUrl = (path: string | null, size: 'w185' = 'w185') =>
 
 async function tmdbGet<T = any>(path: string, params: Record<string, string | number | boolean> = {}): Promise<T> {
   return (await tmdbClient.tmdb.get.query({ path, params })) as T;
-}
-
-const ANIME_GENRE_ID = 16;
-
-function isAnimeItem(genreIds: number[], originalLanguage: string) {
-  return genreIds.includes(ANIME_GENRE_ID) && originalLanguage === 'ja';
 }
 
 export function normalizeMovie(m: RawMovie): NormalizedItem {
@@ -121,7 +116,7 @@ export async function fetchTVList(
 export async function fetchAnime(kind: 'movie' | 'tv', page = 1): Promise<FeedPage> {
   const data = await tmdbGet(`/discover/${kind}`, {
     page,
-    with_genres: ANIME_GENRE_ID,
+    with_genres: TMDB_ANIME_GENRE_ID,
     with_original_language: 'ja',
     sort_by: 'popularity.desc',
   });

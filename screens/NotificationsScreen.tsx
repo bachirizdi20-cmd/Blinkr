@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Easing, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
@@ -12,6 +12,7 @@ import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { resolveMediaUrl } from '../lib/media-url';
 import { matchesNotificationFilter, NOTIFICATION_COPY, type NotificationFilter, type NotificationKind } from '../lib/notification-utils';
 import GeneralErrorState from '../components/GeneralErrorState';
+import { PlatformAlert as Alert } from '../lib/platform-alert';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type FilterMode = NotificationFilter;
@@ -29,40 +30,45 @@ type NotificationItem = {
   actorAvatarUrl: string | null;
   reviewTitle: string | null;
   reviewPosterPath: string | null;
+  reviewMediaType: string | null;
+  reviewMediaId: number | null;
   reviewRating: number | null;
 };
 
 const FILTERS: { key: FilterMode; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'mentions', label: 'Mentions' },
-  { key: 'likes', label: 'Likes' },
-  { key: 'comments', label: 'Comments' },
-  { key: 'follows', label: 'Follows' },
-  { key: 'messages', label: 'Messages' },
+  { key: 'all', label: 'الكل' },
+  { key: 'likes', label: 'الإعجابات' },
+  { key: 'comments', label: 'التعليقات' },
+  { key: 'follows', label: 'المتابعات' },
+  { key: 'messages', label: 'الرسائل' },
 ];
 
 function actorLabel(item: NotificationItem) {
-  return item.actorName || item.actorUsername || 'Someone';
+  return item.actorName || item.actorUsername || 'مستخدم';
 }
 
 function relativeTime(value: Date | string) {
-  const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
-  if (seconds < 60) return `${Math.max(1, seconds)}s`;
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return '';
+  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+  if (seconds < 60) return 'الآن';
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 60) return `قبل ${minutes.toLocaleString('ar')} دقيقة`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
+  if (hours < 24) return `قبل ${hours.toLocaleString('ar')} ساعة`;
   const days = Math.floor(hours / 24);
-  if (days === 1) return 'Yesterday';
-  if (days < 7) return `${days}d`;
-  return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  if (days < 7) return `قبل ${days.toLocaleString('ar')} يوم`;
+  return new Date(value).toLocaleDateString('ar', { month: 'long', day: 'numeric' });
 }
 
 function dayGroup(value: Date | string) {
   const date = new Date(value);
   const now = new Date();
-  const sameDay = date.toDateString() === now.toDateString();
-  return sameDay ? 'Today' : 'Yesterday';
+  const startOfDay = (item: Date) => new Date(item.getFullYear(), item.getMonth(), item.getDate()).getTime();
+  const dayDifference = Math.round((startOfDay(now) - startOfDay(date)) / 86_400_000);
+  if (dayDifference === 0) return 'اليوم';
+  if (dayDifference === 1) return 'أمس';
+  return date.toLocaleDateString('ar', { year: date.getFullYear() === now.getFullYear() ? undefined : 'numeric', month: 'long', day: 'numeric' });
 }
 
 function posterUri(path: string | null) {
@@ -82,7 +88,6 @@ export default function NotificationsScreen() {
   const previousCount = useRef<number | null>(null);
   const [newNotificationId, setNewNotificationId] = useState<number | null>(null);
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const arrivalProgress = useRef(new Animated.Value(1)).current;
   const bellProgress = useRef(new Animated.Value(1)).current;
 
@@ -108,8 +113,9 @@ export default function NotificationsScreen() {
   const handleNotificationPress = (item: NotificationItem) => {
     if (!item.readAt) markOneRead.mutate({ notificationId: item.id });
     if (item.kind === 'message' && item.actorId) navigation.navigate('Conversation', { userId: `remote-${item.actorId}` });
-    else if (item.kind === 'follow') navigation.navigate('People');
-    else if (item.reviewId) navigation.navigate('Reviews');
+    else if (item.kind === 'follow' && item.actorId) navigation.navigate('UserProfile', { userId: `remote-${item.actorId}` });
+    else if (item.reviewMediaType === 'book' && item.reviewMediaId) navigation.navigate('BookDetail', { workId: item.reviewMediaId, book: { workId: item.reviewMediaId, title: item.reviewTitle ?? 'كتاب', coverUrl: item.reviewPosterPath } });
+    else if ((item.reviewMediaType === 'movie' || item.reviewMediaType === 'tv') && item.reviewMediaId) navigation.navigate('Detail', { mediaType: item.reviewMediaType, id: item.reviewMediaId });
   };
 
   const handleFollowBack = (actorId: number | null) => {
@@ -118,14 +124,11 @@ export default function NotificationsScreen() {
   };
 
   const showSettings = () => {
-    Alert.alert('Notification settings', 'Choose how Blinkr should show your social activity.', [
-      { text: notificationsEnabled ? 'Turn off notifications' : 'Turn on notifications', onPress: () => setNotificationsEnabled((value) => !value) },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+    Alert.alert('إعدادات الإشعارات', 'تعرض هذه الشاشة إشعارات نشاطك داخل Blinkr. إعدادات إشعارات الجهاز غير متاحة حاليًا.', [{ text: 'حسنًا' }]);
   };
 
   if (query.isLoading) return <SafeAreaView style={styles.safe}><ActivityIndicator color={colors.accent} style={styles.loader} /></SafeAreaView>;
-  if (query.isError) return <SafeAreaView style={styles.safe}><GeneralErrorState title="Unable to load notifications" message={query.error.message} onRetry={() => query.refetch()} /></SafeAreaView>;
+  if (query.isError) return <SafeAreaView style={styles.safe}><GeneralErrorState title="تعذر تحميل الإشعارات" message="تحقق من اتصالك بالإنترنت ثم أعد المحاولة." onRetry={() => query.refetch()} /></SafeAreaView>;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -136,12 +139,12 @@ export default function NotificationsScreen() {
         contentContainerStyle={filteredNotifications.length === 0 ? styles.emptyList : styles.list}
         ListHeaderComponent={<>
           <View style={styles.header}>
-            <View style={styles.headingBlock}><Text style={styles.title}>Notifications</Text><Text style={styles.subtitle}>Stay updated with your movie circle</Text></View>
-            <View style={styles.headerActions}><Pressable onPress={() => markRead.mutate()} disabled={markRead.isPending || unreadCount === 0} style={({ pressed }) => [styles.markAllButton, (pressed || unreadCount === 0) && styles.mutedAction]}><Text style={styles.markAll}>{markRead.isPending ? 'Updating…' : 'Mark all as read'}</Text></Pressable><Animated.View style={{ transform: [{ scale: bellProgress }] }}><Pressable onPress={showSettings} style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]} accessibilityLabel="Notification settings"><Ionicons name="settings-outline" size={24} color={colors.text} /></Pressable></Animated.View></View>
+            <View style={styles.headingBlock}><Text style={styles.title}>الإشعارات</Text><Text style={styles.subtitle}>آخر تفاعلات مجتمع Blinkr</Text></View>
+            <View style={styles.headerActions}><Pressable onPress={() => markRead.mutate()} disabled={markRead.isPending || unreadCount === 0} style={({ pressed }) => [styles.markAllButton, (pressed || unreadCount === 0) && styles.mutedAction]}><Text style={styles.markAll}>{markRead.isPending ? 'جارٍ التحديث…' : 'تحديد الكل كمقروء'}</Text></Pressable><Animated.View style={{ transform: [{ scale: bellProgress }] }}><Pressable onPress={showSettings} style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]} accessibilityLabel="إعدادات الإشعارات"><Ionicons name="settings-outline" size={24} color={colors.text} /></Pressable></Animated.View></View>
           </View>
           <View style={styles.filters}>{FILTERS.map((filter) => <Pressable key={filter.key} onPress={() => setFilterMode(filter.key)} style={({ pressed }) => [styles.filterChip, filterMode === filter.key && styles.filterChipActive, pressed && styles.pressed]}><Text style={[styles.filterText, filterMode === filter.key && styles.filterTextActive]}>{filter.label}</Text></Pressable>)}</View>
         </>}
-        ListEmptyComponent={<View style={styles.empty}><View style={styles.emptyOrb}><Ionicons name="notifications-outline" size={42} color={colors.accent} /></View><Text style={styles.emptyTitle}>{filterMode === 'all' ? 'Your social story starts here' : 'Nothing here yet'}</Text><Text style={styles.emptyText}>{filterMode === 'all' ? 'When someone follows you, likes a review, or leaves a comment, it will appear here.' : 'New activity matching this filter will appear here.'}</Text></View>}
+        ListEmptyComponent={<View style={styles.empty}><View style={styles.emptyOrb}><Ionicons name="notifications-outline" size={42} color={colors.accent} /></View><Text style={styles.emptyTitle}>{filterMode === 'all' ? 'لا توجد إشعارات بعد' : 'لا توجد إشعارات من هذا النوع'}</Text><Text style={styles.emptyText}>{filterMode === 'all' ? 'ستظهر هنا المتابعات والإعجابات والتعليقات والرسائل الجديدة.' : 'ستظهر هنا الإشعارات الجديدة المطابقة لهذا التصنيف.'}</Text></View>}
         renderItem={({ item, index }) => {
           const isNew = item.id === newNotificationId;
           const animatedStyle = isNew ? { opacity: arrivalProgress, transform: [{ translateY: arrivalProgress.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) }] } : undefined;
@@ -154,9 +157,9 @@ export default function NotificationsScreen() {
             <View style={[styles.row, !item.readAt && styles.unread]}>
               <Pressable onPress={() => handleNotificationPress(item)} style={({ pressed }) => [styles.rowMain, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={`${actor} ${NOTIFICATION_COPY[item.kind]}`}>
                 {resolveMediaUrl(item.actorAvatarUrl) ? <Image source={{ uri: resolveMediaUrl(item.actorAvatarUrl) }} style={styles.avatar} contentFit="cover" /> : <View style={styles.avatarPlaceholder}><Ionicons name={item.kind === 'follow' ? 'person-add-outline' : item.kind === 'like' ? 'heart' : item.kind === 'message' ? 'chatbubble-ellipses' : 'chatbubble'} size={20} color={colors.text} /></View>}
-                <View style={styles.copy}><Text style={styles.message}><Text style={styles.actor}>{actor}</Text> {NOTIFICATION_COPY[item.kind]}</Text><Text style={styles.detail} numberOfLines={2}>{item.kind === 'follow' ? `@${item.actorUsername ?? 'blinkr_user'}` : item.kind === 'message' ? 'Open conversation' : item.reviewTitle ?? 'Your review'}</Text><Text style={styles.time}>{relativeTime(item.createdAt)}</Text></View>
+                <View style={styles.copy}><Text style={styles.message}><Text style={styles.actor}>{actor}</Text> {NOTIFICATION_COPY[item.kind]}</Text><Text style={styles.detail} numberOfLines={2}>{item.kind === 'follow' ? `@${item.actorUsername ?? 'مستخدم'}` : item.kind === 'message' ? 'افتح المحادثة' : item.reviewTitle ?? 'مراجعتك'}</Text><Text style={styles.time}>{relativeTime(item.createdAt)}</Text></View>
               </Pressable>
-              <View style={styles.trailing}>{item.kind === 'follow' && item.actorId ? <Pressable onPress={() => handleFollowBack(item.actorId)} disabled={isFollowing || followBackMutation.isPending} style={({ pressed }) => [styles.followButton, isFollowing && styles.followingButton, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={isFollowing ? 'Following' : 'Follow back'}>{followBackMutation.isPending && !isFollowing ? <ActivityIndicator size="small" color={colors.accent} /> : <Text style={styles.followButtonText}>{isFollowing ? 'Following' : 'Follow back'}</Text>}</Pressable> : poster ? <Image source={{ uri: poster }} style={styles.poster} contentFit="cover" /> : <View style={styles.posterPlaceholder}><Ionicons name={item.kind === 'like' ? 'heart-outline' : 'chatbubble-outline'} size={19} color={colors.textDim} /></View>}{!item.readAt ? <View style={styles.unreadDot} /> : null}</View>
+              <View style={styles.trailing}>{item.kind === 'follow' && item.actorId ? <Pressable onPress={() => handleFollowBack(item.actorId)} disabled={isFollowing || followBackMutation.isPending} style={({ pressed }) => [styles.followButton, isFollowing && styles.followingButton, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={isFollowing ? 'تتابعه' : 'متابعة بالمثل'}>{followBackMutation.isPending && !isFollowing ? <ActivityIndicator size="small" color={colors.accent} /> : <Text style={styles.followButtonText}>{isFollowing ? 'تتابعه' : 'متابعة بالمثل'}</Text>}</Pressable> : poster ? <Image source={{ uri: poster }} style={styles.poster} contentFit="cover" /> : <View style={styles.posterPlaceholder}><Ionicons name={item.kind === 'like' ? 'heart-outline' : 'chatbubble-outline'} size={19} color={colors.textDim} /></View>}{!item.readAt ? <View style={styles.unreadDot} /> : null}</View>
             </View>
           </Animated.View>;
         }}

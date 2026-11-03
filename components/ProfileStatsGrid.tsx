@@ -9,6 +9,7 @@ type ProfileStatsGridProps = {
   averageRating: number | null;
   movieReviews: number;
   tvReviews: number;
+  bookReviews: number;
   onFollowersPress?: () => void;
   onFollowingPress?: () => void;
 };
@@ -20,6 +21,7 @@ export function ProfileStatsGrid({
   averageRating,
   movieReviews,
   tvReviews,
+  bookReviews,
   onFollowersPress,
   onFollowingPress,
 }: ProfileStatsGridProps) {
@@ -30,6 +32,7 @@ export function ProfileStatsGrid({
     { label: 'متوسط التقييم / 10', value: averageRating == null ? '—' : averageRating.toFixed(1) },
     { label: 'مراجعة فيلم', value: movieReviews },
     { label: 'مراجعة مسلسل', value: tvReviews },
+    { label: 'مراجعة كتاب', value: bookReviews },
   ];
 
   return (

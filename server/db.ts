@@ -393,6 +393,7 @@ export async function getUserProfile(viewerId: number, targetUserId: number) {
     averageRating: reviewSummary?.average == null ? null : Math.round(Number(reviewSummary.average) * 10) / 10,
     movieReviewCount: mediaReviewCount("movie"),
     tvReviewCount: mediaReviewCount("tv"),
+    bookReviewCount: mediaReviewCount("book"),
   };
 }
 
@@ -619,6 +620,8 @@ export async function listNotifications(userId: number) {
     actorId: notifications.actorId,
     kind: notifications.kind,
     reviewId: notifications.reviewId,
+    reviewMediaType: reviews.mediaType,
+    reviewMediaId: reviews.mediaId,
     conversationId: notifications.conversationId,
     readAt: notifications.readAt,
     createdAt: notifications.createdAt,

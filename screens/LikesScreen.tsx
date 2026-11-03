@@ -7,6 +7,7 @@ import PosterCard from '../components/PosterCard';
 import EmptyState from '../components/EmptyState';
 import { ContentStackParamList } from '../navigation/types';
 import { useLibrary } from '../context/LibraryContext';
+import { openCatalogItem } from '../lib/catalog-navigation';
 import { colors, fontSizes, spacing } from '../lib/theme';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
@@ -23,9 +24,9 @@ export default function LikesScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <Text style={styles.header}>Likes</Text>
+      <Text style={styles.header}>المفضلة</Text>
       {items.length === 0 ? (
-        <EmptyState icon="heart-outline" title="No likes yet" message="Tap the heart icon on any title to like it." />
+        <EmptyState icon="heart-outline" title="لا توجد عناصر مفضلة بعد" message="اضغط على رمز القلب في أي عنوان لإضافته إلى المفضلة." />
       ) : (
         <FlatList
           data={items}
@@ -38,7 +39,7 @@ export default function LikesScreen() {
             <PosterCard
               item={{ id: item.mediaId, mediaType: item.mediaType, title: item.title, posterPath: item.posterPath, date: item.date, voteAverage: item.voteAverage }}
               width={CARD_WIDTH}
-              onPress={() => navigation.navigate('Detail', { mediaType: item.mediaType, id: item.mediaId })}
+              onPress={() => openCatalogItem(navigation, item)}
             />
           )}
         />

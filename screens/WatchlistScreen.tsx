@@ -8,10 +8,11 @@ import PosterCard from '../components/PosterCard';
 import EmptyState from '../components/EmptyState';
 import { ContentStackParamList } from '../navigation/types';
 import { useLibrary } from '../context/LibraryContext';
+import { openCatalogItem } from '../lib/catalog-navigation';
 import { colors, fontSizes, spacing } from '../lib/theme';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
-type Filter = 'all' | 'movie' | 'tv';
+type Filter = 'all' | 'movie' | 'tv' | 'book';
 
 const { width } = Dimensions.get('window');
 const NUM_COLUMNS = 3;
@@ -30,22 +31,22 @@ export default function WatchlistScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.headerRow}>
-        <Text style={styles.header}>Watchlist</Text>
+        <Text style={styles.header}>قائمة المشاهدة والقراءة</Text>
         <Text style={styles.count}>{Object.values(lib.watchlist).length}</Text>
       </View>
 
       <View style={styles.filterRow}>
-        {(['all', 'movie', 'tv'] as Filter[]).map((f) => (
+        {(['all', 'movie', 'tv', 'book'] as Filter[]).map((f) => (
           <Pressable key={f} onPress={() => setFilter(f)} style={[styles.pill, filter === f && styles.pillActive]}>
             <Text style={[styles.pillText, filter === f && styles.pillTextActive]}>
-              {f === 'all' ? 'All' : f === 'movie' ? 'Movies' : 'TV'}
+              {f === 'all' ? 'الكل' : f === 'movie' ? 'أفلام' : f === 'tv' ? 'مسلسلات' : 'كتب'}
             </Text>
           </Pressable>
         ))}
       </View>
 
       {items.length === 0 ? (
-        <EmptyState icon="bookmark-outline" title="Your watchlist is empty" message="Save movies, shows, and anime you want to watch later." />
+        <EmptyState icon="bookmark-outline" title="قائمة القراءة فارغة" message="أضف أفلامًا أو مسلسلات أو كتبًا للعودة إليها لاحقًا." />
       ) : (
         <FlatList
           data={items}
@@ -59,7 +60,7 @@ export default function WatchlistScreen() {
               <PosterCard
                 item={{ id: item.mediaId, mediaType: item.mediaType, title: item.title, posterPath: item.posterPath, date: item.date, voteAverage: item.voteAverage }}
                 width={CARD_WIDTH}
-                onPress={() => navigation.navigate('Detail', { mediaType: item.mediaType, id: item.mediaId })}
+                onPress={() => openCatalogItem(navigation, item)}
               />
               <Pressable
                 style={styles.removeBtn}

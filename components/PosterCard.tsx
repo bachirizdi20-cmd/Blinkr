@@ -4,10 +4,11 @@ import { Image } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { posterUrl } from '../lib/tmdb';
 import { colors, radius, fontSizes, spacing } from '../lib/theme';
+import { ReviewMediaType } from '../types/tmdb';
 
 interface PosterItem {
   id: number;
-  mediaType: 'movie' | 'tv';
+  mediaType: ReviewMediaType;
   title: string;
   posterPath: string | null;
   date?: string;
@@ -25,7 +26,9 @@ interface Props {
 
 export default function PosterCard({ item, onPress, width, showRating = true }: Props) {
   const cardWidth = width ?? 108;
-  const uri = posterUrl(item.posterPath, 'w342');
+  const uri = item.mediaType === 'book'
+    ? (item.posterPath?.startsWith('https://covers.openlibrary.org/') ? item.posterPath : null)
+    : posterUrl(item.posterPath, 'w342');
   const year = item.date ? item.date.slice(0, 4) : '';
 
   return (
@@ -35,7 +38,7 @@ export default function PosterCard({ item, onPress, width, showRating = true }: 
           <Image source={{ uri }} style={styles.poster} contentFit="cover" transition={150} />
         ) : (
           <View style={[styles.poster, styles.posterFallback]}>
-            <Ionicons name="film-outline" size={28} color={colors.textFaint} />
+            <Ionicons name={item.mediaType === 'book' ? 'book-outline' : 'film-outline'} size={28} color={colors.textFaint} />
           </View>
         )}
         {item.isAnime && (

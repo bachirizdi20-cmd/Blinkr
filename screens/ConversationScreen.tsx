@@ -8,7 +8,6 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   ActivityIndicator,
   Image,
   Modal,
@@ -20,16 +19,19 @@ import { searchGiphy, GiphyGif } from '../lib/giphy';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import UserAvatar from '../components/UserAvatar';
 import EmptyState from '../components/EmptyState';
+import ApiErrorState from '../components/ApiErrorState';
 import { ContentStackParamList } from '../navigation/types';
 import { ChatMessage, MockUser } from '../types/social';
 import { formatMessageTime } from '../lib/format';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { resolveMediaUrl } from '../lib/media-url';
+import { catalogPosterUrl, normalizeReviewMediaType, openCatalogItem } from '../lib/catalog-navigation';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { createAudioPlayer, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
 import { trpc } from '../lib/trpc';
 import { useAuth } from '../hooks/use-auth';
+import { PlatformAlert as Alert } from '../lib/platform-alert';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type RouteT = RouteProp<ContentStackParamList, 'Conversation'>;
@@ -40,7 +42,7 @@ async function readUriAsBase64(uri: string): Promise<string> {
     return FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
   }
   const response = await fetch(uri);
-  if (!response.ok) throw new Error(`Could not read attachment (${response.status})`);
+  if (!response.ok) throw new Error(`تعذرت قراءة المرفق (${response.status})`);
   const bytes = new Uint8Array(await response.arrayBuffer());
   let binary = '';
   const chunkSize = 0x8000;
@@ -58,7 +60,7 @@ export default function ConversationScreen() {
   const numericOtherUserId = Number.isInteger(parsedOtherUserId) && parsedOtherUserId > 0 ? parsedOtherUserId : 0;
   const isRemoteConversation = numericOtherUserId > 0 && String(userId).startsWith('remote-');
   const { user: authUser } = useAuth();
-  const remoteUsersQuery = trpc.social.users.useQuery({ query: '' }, { enabled: Boolean(authUser && isRemoteConversation), retry: 1 });
+  const remoteProfileQuery = trpc.social.profile.useQuery({ userId: numericOtherUserId }, { enabled: Boolean(authUser && isRemoteConversation), retry: 1 });
   const messagesQuery = trpc.social.messages.useQuery({ otherUserId: numericOtherUserId }, { enabled: Boolean(authUser && isRemoteConversation), retry: 1, refetchInterval: 3000 });
   const sendMessageMutation = trpc.social.sendMessage.useMutation({ onSuccess: () => messagesQuery.refetch() });
   const sendImageMutation = trpc.social.sendImage.useMutation({ onSuccess: () => messagesQuery.refetch() });
@@ -80,19 +82,19 @@ export default function ConversationScreen() {
   const [cardSearch, setCardSearch] = useState('');
   const cardSearchQuery = trpc.tmdb.get.useQuery({ path: '/search/multi', params: { query: cardSearch, include_adult: false } }, { enabled: cardPickerOpen && cardSearch.trim().length >= 2, retry: 1 });
   const remoteUser = useMemo<MockUser | undefined>(() => {
-    const item = (remoteUsersQuery.data ?? []).find((candidate) => candidate.id === numericOtherUserId);
+    const item = remoteProfileQuery.data;
     if (!item) return undefined;
     return {
       id: `remote-${item.id}`,
       username: item.username ?? `user${item.id}`,
-      displayName: item.name ?? item.username ?? 'Blinkr user',
+      displayName: item.name ?? item.username ?? 'مستخدم Blinkr',
       bio: item.bio ?? '',
       avatarUrl: item.avatarUrl,
       avatarColor: colors.accent,
       favoriteGenre: '',
-      followsYou: false,
+      followsYou: Boolean(item.followsYou),
     };
-  }, [remoteUsersQuery.data, numericOtherUserId]);
+  }, [remoteProfileQuery.data]);
   const user = remoteUser;
   const isTyping = false;
   const [text, setText] = useState('');
@@ -112,8 +114,18 @@ export default function ConversationScreen() {
 
   if (!user) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <EmptyState icon="alert-circle-outline" title="User not found" />
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        <View style={styles.header}>
+          <Pressable onPress={() => navigation.goBack()} hitSlop={8} accessibilityLabel="رجوع"><Ionicons name="chevron-back" size={24} color={colors.text} /></Pressable>
+          <Text style={styles.headerName}>المحادثة</Text>
+        </View>
+        {remoteProfileQuery.isLoading ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm }}><ActivityIndicator color={colors.accent} /><Text style={{ color: colors.textDim, fontSize: fontSizes.sm }}>جارٍ تحميل الملف…</Text></View>
+        ) : remoteProfileQuery.isError ? (
+          <ApiErrorState message="تعذر تحميل بيانات المستخدم." onRetry={() => void remoteProfileQuery.refetch()} />
+        ) : (
+          <EmptyState icon="alert-circle-outline" title="المستخدم غير متاح" message="قد يكون الحساب قد حُذف أو لم يعد متاحًا." />
+        )}
       </SafeAreaView>
     );
   }
@@ -124,24 +136,24 @@ export default function ConversationScreen() {
       if (!authUser || !isRemoteConversation) return;
       await sendMessageMutation.mutateAsync({ otherUserId: numericOtherUserId, text: text.trim() });
       setText('');
-    } catch { Alert.alert('Could not send message', 'Please try again.'); }
+    } catch { Alert.alert('تعذر إرسال الرسالة', 'حاول مرة أخرى.'); }
   };
 
   const handlePickImage = async (fromCamera: boolean) => {
     try {
       if (fromCamera) {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
-        if (permission.status !== 'granted') { Alert.alert('Camera permission needed', 'Allow camera access to take a photo.'); return; }
+        if (permission.status !== 'granted') { Alert.alert('إذن الكاميرا مطلوب', 'اسمح باستخدام الكاميرا لالتقاط صورة.'); return; }
       }
       const result = fromCamera
         ? await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.72 })
         : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.72 });
       if (result.canceled || !result.assets[0]) return;
       const asset = result.assets[0];
-      if (asset.fileSize && asset.fileSize > 8_000_000) { Alert.alert('Image too large', 'Choose an image smaller than 8 MB.'); return; }
-      if (!authUser) { Alert.alert('Sign in required', 'Sign in to send photos.'); return; }
+      if (asset.fileSize && asset.fileSize > 8_000_000) { Alert.alert('الصورة كبيرة جدًا', 'اختر صورة يقل حجمها عن 8 ميغابايت.'); return; }
+      if (!authUser) { Alert.alert('يلزم تسجيل الدخول', 'سجّل الدخول لإرسال الصور.'); return; }
       setPendingImage(asset);
-    } catch { Alert.alert('Could not select image', 'Please try again.'); }
+    } catch { Alert.alert('تعذر اختيار الصورة', 'حاول مرة أخرى.'); }
   };
 
   const loadGifs = async (query = gifSearch, offset = 0, replace = true) => {
@@ -153,7 +165,7 @@ export default function ConversationScreen() {
       setGifResults((current) => replace ? results : [...current, ...results]);
       setGifOffset(offset + results.length);
     } catch (error) {
-      setGifError(error instanceof Error ? error.message : 'Could not load GIFs');
+      setGifError(error instanceof Error ? error.message : 'تعذر تحميل صور GIF.');
     } finally {
       setGifLoading(false);
     }
@@ -174,7 +186,7 @@ export default function ConversationScreen() {
 
   const handleSelectGiphy = async (gif: GiphyGif) => {
     if (!authUser || !isRemoteConversation) {
-      Alert.alert('Choose a real Blinkr user', 'Open this conversation from Discover People to send GIFs.');
+      Alert.alert('اختر مستخدمًا من Blinkr', 'افتح المحادثة من صفحة اكتشاف الأشخاص لإرسال GIF.');
       return;
     }
     if (sendAttachmentMutation.isPending) return;
@@ -184,29 +196,29 @@ export default function ConversationScreen() {
       await sendAttachmentMutation.mutateAsync({ otherUserId: numericOtherUserId, externalUrl: gif.images.original.url, mediaType: 'gif', mimeType: 'image/gif', size: 0 });
       setGifPickerOpen(false);
     } catch {
-      setAttachmentError('Could not send GIF. Tap Retry to try again.');
+      setAttachmentError('تعذر إرسال GIF. اضغط لإعادة المحاولة.');
       setFailedGif(gif);
     }
   };
 
   const handlePickLocalGif = async () => {
-    if (!authUser) { Alert.alert('Sign in required', 'Sign in to send GIFs.'); return; }
-    if (!isRemoteConversation) { Alert.alert('Choose a real Blinkr user', 'Open this conversation from Discover People to send GIFs.'); return; }
+    if (!authUser) { Alert.alert('يلزم تسجيل الدخول', 'سجّل الدخول لإرسال صور GIF.'); return; }
+    if (!isRemoteConversation) { Alert.alert('اختر مستخدمًا من Blinkr', 'افتح المحادثة من صفحة اكتشاف الأشخاص لإرسال GIF.'); return; }
     try {
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 1 });
       if (result.canceled || !result.assets[0]) return;
       const asset = result.assets[0];
       const mimeType = asset.mimeType ?? (asset.fileName?.toLowerCase().endsWith('.gif') ? 'image/gif' : '');
-      if (mimeType !== 'image/gif') { Alert.alert('GIF required', 'Choose an animated GIF file from your library.'); return; }
-      if (asset.fileSize && asset.fileSize > 10_000_000) { Alert.alert('GIF too large', 'Choose a GIF smaller than 10 MB.'); return; }
+      if (mimeType !== 'image/gif') { Alert.alert('اختر صورة GIF', 'اختر ملف GIF متحركًا من مكتبة الصور.'); return; }
+      if (asset.fileSize && asset.fileSize > 10_000_000) { Alert.alert('ملف GIF كبير جدًا', 'اختر ملفًا يقل حجمه عن 10 ميغابايت.'); return; }
       const base64 = await readUriAsBase64(asset.uri);
       await sendAttachmentMutation.mutateAsync({ otherUserId: numericOtherUserId, base64, mediaType: 'gif', mimeType: 'image/gif', size: asset.fileSize ?? base64.length });
-    } catch { Alert.alert('Could not send GIF', 'Please try again.'); }
+    } catch { Alert.alert('تعذر إرسال GIF', 'حاول مرة أخرى.'); }
   };
 
   const handleRecordToggle = async () => {
-    if (!authUser) { Alert.alert('Sign in required', 'Sign in to send voice messages.'); return; }
-    if (!isRemoteConversation) { Alert.alert('Choose a real Blinkr user', 'Open this conversation from Discover People to send voice messages.'); return; }
+    if (!authUser) { Alert.alert('يلزم تسجيل الدخول', 'سجّل الدخول لإرسال الرسائل الصوتية.'); return; }
+    if (!isRemoteConversation) { Alert.alert('اختر مستخدمًا من Blinkr', 'افتح المحادثة من صفحة اكتشاف الأشخاص لإرسال الرسائل الصوتية.'); return; }
     try {
       if (recorderState.isRecording) {
         await audioRecorder.stop();
@@ -221,27 +233,27 @@ export default function ConversationScreen() {
           setFailedAudio(null);
         } catch {
           setFailedAudio(draft);
-          setAttachmentError('Could not send voice message. Tap Retry to try again.');
+          setAttachmentError('تعذر إرسال الرسالة الصوتية. اضغط لإعادة المحاولة.');
         }
         return;
       }
       const permission = await requestRecordingPermissionsAsync();
-      if (!permission.granted) { Alert.alert('Microphone permission needed', 'Allow microphone access to record a voice message.'); return; }
+      if (!permission.granted) { Alert.alert('إذن الميكروفون مطلوب', 'اسمح باستخدام الميكروفون لتسجيل رسالة صوتية.'); return; }
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
-    } catch { Alert.alert('Could not record voice message', 'Please check microphone permission and try again.'); }
+    } catch { Alert.alert('تعذر تسجيل الرسالة الصوتية', 'تحقق من إذن الميكروفون ثم حاول مرة أخرى.'); }
   };
 
   const handlePlayAudio = (url: string) => {
     try {
       const resolvedUrl = resolveMediaUrl(url);
-      if (!resolvedUrl) throw new Error('Media URL is unavailable');
+      if (!resolvedUrl) throw new Error('رابط الملف غير متاح');
       audioPlayerRef.current?.remove?.();
       const player = createAudioPlayer(resolvedUrl);
       audioPlayerRef.current = player;
       player.play();
-    } catch { Alert.alert('Could not play audio', 'Please try again.'); }
+    } catch { Alert.alert('تعذر تشغيل الصوت', 'حاول مرة أخرى.'); }
   };
 
   const handleSendImage = async () => {
@@ -252,7 +264,7 @@ export default function ConversationScreen() {
       await sendImageMutation.mutateAsync({ otherUserId: numericOtherUserId, base64, mimeType: pendingImage.mimeType === 'image/png' ? 'image/png' : 'image/jpeg', size: pendingImage.fileSize ?? base64.length });
       setPendingImage(null);
       setAttachmentError(null);
-    } catch { setAttachmentError('Could not send image. Tap Retry to try again.'); }
+    } catch { setAttachmentError('تعذر إرسال الصورة. اضغط لإعادة المحاولة.'); }
   };
 
   const handleRetryAudio = async () => {
@@ -262,15 +274,15 @@ export default function ConversationScreen() {
       await sendAttachmentMutation.mutateAsync({ otherUserId: numericOtherUserId, ...failedAudio, mediaType: 'audio' });
       setFailedAudio(null);
     } catch {
-      setAttachmentError('Could not send voice message. Tap Retry to try again.');
+      setAttachmentError('تعذر إرسال الرسالة الصوتية. اضغط لإعادة المحاولة.');
     }
   };
 
   const handleDelete = () => {
-    Alert.alert('Delete conversation', `Remove your chat with ${user.displayName}?`, [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert('حذف المحادثة', `هل تريد حذف محادثتك مع ${user.displayName}؟`, [
+      { text: 'إلغاء', style: 'cancel' },
       {
-        text: 'Delete',
+        text: 'حذف',
         style: 'destructive',
         onPress: () => {
           deleteConversationMutation.mutate({ otherUserId: numericOtherUserId });
@@ -291,31 +303,31 @@ export default function ConversationScreen() {
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
         <Pressable style={styles.headerCenter} onPress={() => navigation.navigate('UserProfile', { userId })}>
-          <UserAvatar name={user.displayName} color={user.avatarColor} size={34} imageUrl={user.avatarUrl ?? undefined} />
+          <UserAvatar name={user.displayName} color={user.avatarColor} size={34} imageUrl={remoteProfileQuery.data?.avatarUrl ?? user.avatarUrl ?? undefined} />
           <View>
             <Text style={styles.headerName}>{user.displayName}</Text>
-            <Text style={styles.headerStatus}>{isTyping ? 'typing…' : user.followsYou ? 'Follows you' : `@${user.username}`}</Text>
+            <Text style={styles.headerStatus}>{isTyping ? 'يكتب الآن…' : user.followsYou ? 'يتابعك' : `@${user.username}`}</Text>
           </View>
         </Pressable>
         <View style={styles.headerActions}>
-          <Pressable onPress={() => setMessageSearchOpen((open) => !open)} hitSlop={8} accessibilityLabel="Search messages">
+          <Pressable onPress={() => setMessageSearchOpen((open) => !open)} hitSlop={8} accessibilityLabel="البحث في الرسائل">
             <Ionicons name="search-outline" size={20} color={colors.textDim} />
           </Pressable>
-          <Pressable onPress={() => Alert.alert('Conversation options', undefined, [{ text: 'Delete conversation', style: 'destructive', onPress: handleDelete }, { text: 'Cancel', style: 'cancel' }])} hitSlop={8} accessibilityLabel="Conversation options">
+          <Pressable onPress={() => Alert.alert('خيارات المحادثة', undefined, [{ text: 'حذف المحادثة', style: 'destructive', onPress: handleDelete }, { text: 'إلغاء', style: 'cancel' }])} hitSlop={8} accessibilityLabel="خيارات المحادثة">
             <Ionicons name="ellipsis-vertical" size={20} color={colors.textDim} />
           </Pressable>
         </View>
       </View>
-      {messageSearchOpen ? <View style={styles.messageSearchBar}><Ionicons name="search-outline" size={17} color={colors.textFaint} /><TextInput autoFocus value={messageSearch} onChangeText={setMessageSearch} placeholder="Search this conversation" placeholderTextColor={colors.textFaint} style={styles.messageSearchInput} returnKeyType="search" /><Pressable onPress={() => { setMessageSearch(''); setMessageSearchOpen(false); }} hitSlop={8}><Ionicons name="close" size={18} color={colors.textDim} /></Pressable></View> : null}
+      {messageSearchOpen ? <View style={styles.messageSearchBar}><Ionicons name="search-outline" size={17} color={colors.textFaint} /><TextInput autoFocus value={messageSearch} onChangeText={setMessageSearch} placeholder="ابحث في هذه المحادثة" placeholderTextColor={colors.textFaint} style={styles.messageSearchInput} returnKeyType="search" /><Pressable onPress={() => { setMessageSearch(''); setMessageSearchOpen(false); }} hitSlop={8}><Ionicons name="close" size={18} color={colors.textDim} /></Pressable></View> : null}
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={90}>
         {messagesQuery.isLoading ? (
-          <View style={styles.center}><ActivityIndicator color={colors.accent} /><Text style={styles.loadingText}>Loading messages…</Text></View>
-        ) : messagesQuery.isError ? (
-          <View style={styles.center}><Text style={styles.loadingText}>Could not load messages.</Text><Pressable onPress={() => void messagesQuery.refetch()} accessibilityRole="button"><Text style={styles.retryAction}>Retry</Text></Pressable></View>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm }}><ActivityIndicator color={colors.accent} /><Text style={{ color: colors.textDim, fontSize: fontSizes.sm }}>جارٍ تحميل الرسائل…</Text></View>
+        ) : messagesQuery.isError && !messagesQuery.data ? (
+          <ApiErrorState message="تعذر تحميل الرسائل." onRetry={() => void messagesQuery.refetch()} />
         ) : data.length === 0 ? (
           <View style={{ flex: 1 }}>
-            <EmptyState icon={messageSearch.trim() ? 'search-outline' : 'chatbubble-ellipses-outline'} title={messageSearch.trim() ? 'No matching messages' : `Say hi to ${user.displayName}`} message={messageSearch.trim() ? 'Try a different search phrase.' : user.bio} />
+            <EmptyState icon={messageSearch.trim() ? 'search-outline' : 'chatbubble-ellipses-outline'} title={messageSearch.trim() ? 'لا توجد رسائل مطابقة' : `ابدأ المحادثة مع ${user.displayName}`} message={messageSearch.trim() ? 'جرّب كلمات بحث مختلفة.' : user.bio || 'أرسل أول رسالة لبدء الحديث.'} />
           </View>
         ) : (
           <FlatList
@@ -329,8 +341,8 @@ export default function ConversationScreen() {
               return (
                 <View style={[styles.bubbleRow, mine ? styles.bubbleRowMine : styles.bubbleRowTheirs]}>
                   <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-                    {!!(item as any).sharedMediaId && <Pressable style={styles.mediaCard} onPress={() => navigation.navigate('Detail', { mediaType: (item as any).sharedMediaType, id: Number((item as any).sharedMediaId) })}><Image source={{ uri: (item as any).sharedPosterPath ? `https://image.tmdb.org/t/p/w300${(item as any).sharedPosterPath}` : undefined }} style={styles.cardPoster} resizeMode="cover" /><View style={styles.cardCopy}><Text style={styles.cardLabel}>Shared from TMDB</Text><Text style={styles.cardTitle} numberOfLines={2}>{(item as any).sharedTitle}</Text><Text style={styles.cardRating}>★ {(((item as any).sharedRating ?? 0) / 10).toFixed(1)}</Text></View></Pressable>}
-                    {!!(item as any).mediaUrl && (item as any).mediaType === 'audio' ? <Pressable style={styles.audioMessage} onPress={() => handlePlayAudio((item as any).mediaUrl)}><Ionicons name="play" size={18} color={mine ? '#04120C' : colors.accent} /><View style={styles.audioWave}><View style={styles.audioLine} /><View style={[styles.audioLine, styles.audioLineLong]} /><View style={styles.audioLine} /></View><Text style={[styles.audioLabel, mine && styles.bubbleTextMine]}>Voice message</Text></Pressable> : null}
+                    {!!(item as any).sharedMediaId && <Pressable style={styles.mediaCard} onPress={() => openCatalogItem(navigation, { mediaType: normalizeReviewMediaType((item as any).sharedMediaType), mediaId: Number((item as any).sharedMediaId), title: (item as any).sharedTitle, posterPath: (item as any).sharedPosterPath })}><Image source={{ uri: catalogPosterUrl(normalizeReviewMediaType((item as any).sharedMediaType), (item as any).sharedPosterPath, 'w342') ?? undefined }} style={styles.cardPoster} resizeMode="cover" /><View style={styles.cardCopy}><Text style={styles.cardLabel}>{(item as any).sharedMediaType === 'book' ? 'كتاب من Open Library' : 'عنوان من TMDB'}</Text><Text style={styles.cardTitle} numberOfLines={2}>{(item as any).sharedTitle}</Text><Text style={styles.cardRating}>★ {(((item as any).sharedRating ?? 0) / 10).toFixed(1)}</Text></View></Pressable>}
+                    {!!(item as any).mediaUrl && (item as any).mediaType === 'audio' ? <Pressable style={styles.audioMessage} onPress={() => handlePlayAudio((item as any).mediaUrl)}><Ionicons name="play" size={18} color={mine ? '#04120C' : colors.accent} /><View style={styles.audioWave}><View style={styles.audioLine} /><View style={[styles.audioLine, styles.audioLineLong]} /><View style={styles.audioLine} /></View><Text style={[styles.audioLabel, mine && styles.bubbleTextMine]}>رسالة صوتية</Text></Pressable> : null}
                     {!!(item as any).mediaUrl && (item as any).mediaType === 'gif' && resolveMediaUrl((item as any).mediaUrl) ? <Image source={{ uri: resolveMediaUrl((item as any).mediaUrl) }} style={styles.messageGif} resizeMode="cover" /> : null}
                     {!!(item as any).mediaUrl && (item as any).mediaType !== 'audio' && (item as any).mediaType !== 'gif' && resolveMediaUrl((item as any).mediaUrl) ? <Image source={{ uri: resolveMediaUrl((item as any).mediaUrl) }} style={styles.messageImage} resizeMode="cover" /> : null}
                     {!!item.text && <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.text}</Text>}
@@ -353,17 +365,17 @@ export default function ConversationScreen() {
           />
         )}
 
-        {attachmentError ? <View style={styles.attachmentError}><Ionicons name="warning-outline" size={16} color="#FF8A4C" /><Text style={styles.attachmentErrorText}>{attachmentError}</Text><Pressable onPress={() => failedAudio ? handleRetryAudio() : pendingImage ? handleSendImage() : failedGif ? handleSelectGiphy(failedGif) : undefined} disabled={sendImageMutation.isPending || sendAttachmentMutation.isPending}><Text style={styles.retryAction}>Retry</Text></Pressable></View> : null}
-        {pendingImage ? <View style={styles.previewBar}><Image source={{ uri: pendingImage.uri }} style={styles.previewImage} /><View style={styles.previewCopy}><Text style={styles.previewTitle}>Ready to send</Text><Text style={styles.previewMeta}>{pendingImage.width} × {pendingImage.height}</Text></View><Pressable onPress={() => { setPendingImage(null); setAttachmentError(null); }} style={styles.previewCancel}><Ionicons name="close" size={19} color={colors.textDim} /></Pressable><Pressable onPress={handleSendImage} style={styles.previewSend} disabled={sendImageMutation.isPending}><Ionicons name="send" size={16} color="#04120C" /></Pressable></View> : null}
+        {attachmentError ? <View style={styles.attachmentError}><Ionicons name="warning-outline" size={16} color="#FF8A4C" /><Text style={styles.attachmentErrorText}>{attachmentError}</Text><Pressable onPress={() => failedAudio ? handleRetryAudio() : pendingImage ? handleSendImage() : failedGif ? handleSelectGiphy(failedGif) : undefined} disabled={sendImageMutation.isPending || sendAttachmentMutation.isPending}><Text style={styles.retryAction}>إعادة المحاولة</Text></Pressable></View> : null}
+        {pendingImage ? <View style={styles.previewBar}><Image source={{ uri: pendingImage.uri }} style={styles.previewImage} /><View style={styles.previewCopy}><Text style={styles.previewTitle}>جاهزة للإرسال</Text><Text style={styles.previewMeta}>{pendingImage.width} × {pendingImage.height}</Text></View><Pressable onPress={() => { setPendingImage(null); setAttachmentError(null); }} style={styles.previewCancel}><Ionicons name="close" size={19} color={colors.textDim} /></Pressable><Pressable onPress={handleSendImage} style={styles.previewSend} disabled={sendImageMutation.isPending}><Ionicons name="send" size={16} color="#04120C" /></Pressable></View> : null}
         <View style={styles.inputBar}>
-          <Pressable style={({ pressed }) => [styles.attachBtn, pressed && styles.iconBtnPressed]} onPress={() => setAttachmentOpen(true)} accessibilityLabel="Open attachment menu">
+          <Pressable style={({ pressed }) => [styles.attachBtn, pressed && styles.iconBtnPressed]} onPress={() => setAttachmentOpen(true)} accessibilityLabel="فتح قائمة المرفقات">
             <Ionicons name="add" size={24} color={colors.textDim} />
           </Pressable>
           <TextInput
             style={styles.input}
             value={text}
             onChangeText={setText}
-            placeholder={`Message ${user.displayName}`}
+            placeholder={`راسل ${user.displayName}`}
             placeholderTextColor={colors.textFaint}
             selectionColor={colors.accent}
             cursorColor={colors.accent}
@@ -371,42 +383,42 @@ export default function ConversationScreen() {
             returnKeyType="send"
             onSubmitEditing={handleSend}
           />
-          <Pressable style={({ pressed }) => [styles.emojiBtn, pressed && styles.iconBtnPressed]} onPress={() => setText((current) => `${current}${current ? ' ' : ''}😊`)} accessibilityLabel="Add emoji">
+          <Pressable style={({ pressed }) => [styles.emojiBtn, pressed && styles.iconBtnPressed]} onPress={() => setText((current) => `${current}${current ? ' ' : ''}😊`)} accessibilityLabel="إضافة رمز تعبيري">
             <Ionicons name="happy-outline" size={20} color={colors.textDim} />
           </Pressable>
-          {text.trim() ? <Pressable style={({ pressed }) => [styles.sendBtn, pressed && styles.sendBtnPressed]} onPress={handleSend} accessibilityLabel="Send message">
+          {text.trim() ? <Pressable style={({ pressed }) => [styles.sendBtn, pressed && styles.sendBtnPressed]} onPress={handleSend} accessibilityLabel="إرسال الرسالة">
             <Ionicons name="arrow-up" size={19} color="#04120C" />
-          </Pressable> : <Pressable style={({ pressed }) => [styles.voiceBtn, pressed && styles.sendBtnPressed]} onPress={handleRecordToggle} accessibilityLabel={recorderState.isRecording ? 'Stop recording' : 'Voice message'}>
+          </Pressable> : <Pressable style={({ pressed }) => [styles.voiceBtn, pressed && styles.sendBtnPressed]} onPress={handleRecordToggle} accessibilityLabel={recorderState.isRecording ? 'إيقاف التسجيل' : 'رسالة صوتية'}>
             <Ionicons name="mic" size={19} color={colors.bg} />
           </Pressable>}
         </View>
       </KeyboardAvoidingView>
       <Modal visible={cardPickerOpen} animationType="slide" transparent onRequestClose={() => setCardPickerOpen(false)}>
-        <View style={styles.modalBackdrop}><View style={styles.cardPicker}><View style={styles.modalHeader}><Text style={styles.modalTitle}>Share a film or series</Text><Pressable onPress={() => setCardPickerOpen(false)}><Ionicons name="close" size={22} color={colors.text} /></Pressable></View><TextInput autoFocus selectionColor={colors.accent} cursorColor={colors.accent} value={cardSearch} onChangeText={setCardSearch} placeholder="Search TMDB..." placeholderTextColor={colors.textFaint} style={styles.cardSearchInput} />{failedCard ? <View style={styles.retryRow}><Text style={styles.retryText}>Could not share the card.</Text><Pressable onPress={() => shareMediaMutation.mutate(failedCard)} disabled={shareMediaMutation.isPending}><Text style={styles.retryAction}>Retry</Text></Pressable></View> : null}{cardSearchQuery.isLoading ? <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.lg }} /> : <FlatList data={(((cardSearchQuery.data as any)?.results ?? [])).filter((r: any) => r.media_type === 'movie' || r.media_type === 'tv')} keyExtractor={(item: any) => `${item.media_type}-${item.id}`} contentContainerStyle={{ paddingBottom: spacing.lg }} ListEmptyComponent={cardSearch.length >= 2 ? <EmptyState icon="search-outline" title="No titles found" message="Try another title." /> : <EmptyState icon="film-outline" title="Search for a title" message="Find a movie or series to share." />} renderItem={({ item }: { item: any }) => <Pressable style={styles.cardResult} disabled={shareMediaMutation.isPending} onPress={() => shareMediaMutation.mutate({ otherUserId: numericOtherUserId, mediaType: item.media_type, mediaId: item.id, title: item.title, posterPath: item.posterPath, rating: item.voteAverage ?? 0, overview: item.overview ?? null })}><Image source={{ uri: item.posterPath ? `https://image.tmdb.org/t/p/w200${item.posterPath}` : undefined }} style={styles.resultPoster} /><View style={styles.resultCopy}><Text style={styles.resultTitle} numberOfLines={2}>{item.title}</Text><Text style={styles.resultMeta}>{item.media_type === 'tv' ? 'Series' : 'Film'} · ★ {(item.voteAverage ?? 0).toFixed(1)}</Text></View>{shareMediaMutation.isPending ? <ActivityIndicator color={colors.accent} /> : <Ionicons name="paper-plane-outline" size={18} color={colors.accent} />}</Pressable>} />}</View></View>
+        <View style={styles.modalBackdrop}><View style={styles.cardPicker}><View style={styles.modalHeader}><Text style={styles.modalTitle}>مشاركة فيلم أو مسلسل</Text><Pressable onPress={() => setCardPickerOpen(false)}><Ionicons name="close" size={22} color={colors.text} /></Pressable></View><TextInput autoFocus selectionColor={colors.accent} cursorColor={colors.accent} value={cardSearch} onChangeText={setCardSearch} placeholder="ابحث في TMDB…" placeholderTextColor={colors.textFaint} style={styles.cardSearchInput} />{failedCard ? <View style={styles.retryRow}><Text style={styles.retryText}>تعذرت مشاركة العنوان.</Text><Pressable onPress={() => shareMediaMutation.mutate(failedCard)} disabled={shareMediaMutation.isPending}><Text style={styles.retryAction}>إعادة المحاولة</Text></Pressable></View> : null}{cardSearchQuery.isLoading ? <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.lg }} /> : <FlatList data={(((cardSearchQuery.data as any)?.results ?? [])).filter((r: any) => r.media_type === 'movie' || r.media_type === 'tv')} keyExtractor={(item: any) => `${item.media_type}-${item.id}`} contentContainerStyle={{ paddingBottom: spacing.lg }} ListEmptyComponent={cardSearch.length >= 2 ? <EmptyState icon="search-outline" title="لم نعثر على عناوين" message="جرّب عنوانًا آخر." /> : <EmptyState icon="film-outline" title="ابحث عن عنوان" message="اعثر على فيلم أو مسلسل لمشاركته." />} renderItem={({ item }: { item: any }) => <Pressable style={styles.cardResult} disabled={shareMediaMutation.isPending} onPress={() => shareMediaMutation.mutate({ otherUserId: numericOtherUserId, mediaType: item.media_type, mediaId: item.id, title: item.title, posterPath: item.posterPath, rating: item.voteAverage ?? 0, overview: item.overview ?? null })}><Image source={{ uri: item.posterPath ? `https://image.tmdb.org/t/p/w200${item.posterPath}` : undefined }} style={styles.resultPoster} /><View style={styles.resultCopy}><Text style={styles.resultTitle} numberOfLines={2}>{item.title}</Text><Text style={styles.resultMeta}>{item.media_type === 'tv' ? 'مسلسل' : 'فيلم'} · ★ {(item.voteAverage ?? 0).toFixed(1)}</Text></View>{shareMediaMutation.isPending ? <ActivityIndicator color={colors.accent} /> : <Ionicons name="paper-plane-outline" size={18} color={colors.accent} />}</Pressable>} />}</View></View>
       </Modal>
       <Modal visible={gifPickerOpen} transparent animationType="slide" onRequestClose={() => setGifPickerOpen(false)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.gifPicker}>
-            <View style={styles.modalHeader}><Text style={styles.modalTitle}>Find a GIF</Text><Pressable onPress={() => setGifPickerOpen(false)}><Ionicons name="close" size={22} color={colors.text} /></Pressable></View>
-            <View style={styles.gifSearchRow}><TextInput autoFocus selectionColor={colors.accent} cursorColor={colors.accent} value={gifSearch} onChangeText={setGifSearch} onSubmitEditing={handleSearchGifs} placeholder="Search GIPHY..." placeholderTextColor={colors.textFaint} style={styles.gifSearchInput} returnKeyType="search" /><Pressable style={styles.gifSearchButton} onPress={handleSearchGifs}><Ionicons name="search" size={18} color="#04120C" /></Pressable></View>
-            {gifError ? <View style={styles.retryRow}><Text style={styles.retryText}>Could not load GIFs.</Text><Pressable onPress={() => loadGifs(gifSearch, 0, true)}><Text style={styles.retryAction}>Retry</Text></Pressable></View> : null}
-            {failedGif ? <View style={styles.retryRow}><Text style={styles.retryText}>Could not send this GIF.</Text><Pressable onPress={() => handleSelectGiphy(failedGif)} disabled={sendAttachmentMutation.isPending}><Text style={styles.retryAction}>{sendAttachmentMutation.isPending ? 'Sending…' : 'Retry'}</Text></Pressable></View> : null}
-            {gifResults.length === 0 && gifLoading ? <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.lg }} /> : <FlatList data={gifResults} numColumns={2} keyExtractor={(item) => item.id} columnWrapperStyle={styles.gifColumns} contentContainerStyle={styles.gifGrid} onEndReached={() => { if (!gifLoading && gifResults.length > 0) void loadGifs(gifSearch, gifOffset, false); }} onEndReachedThreshold={0.5} ListEmptyComponent={!gifLoading ? <EmptyState icon="images-outline" title="No GIFs found" message="Try another search." /> : null} renderItem={({ item }) => <Pressable style={styles.gifResult} onPress={() => handleSelectGiphy(item)} disabled={sendAttachmentMutation.isPending}><Image source={{ uri: item.images.fixed_width.url }} style={styles.gifThumb} resizeMode="cover" />{sendAttachmentMutation.isPending ? <View style={styles.gifSending}><ActivityIndicator color={colors.accent} /></View> : null}</Pressable>} ListFooterComponent={gifLoading && gifResults.length > 0 ? <ActivityIndicator color={colors.accent} style={{ paddingVertical: spacing.md }} /> : null} />}
-            <Text style={styles.giphyAttribution}>Powered by GIPHY</Text>
+            <View style={styles.modalHeader}><Text style={styles.modalTitle}>ابحث عن GIF</Text><Pressable onPress={() => setGifPickerOpen(false)}><Ionicons name="close" size={22} color={colors.text} /></Pressable></View>
+            <View style={styles.gifSearchRow}><TextInput autoFocus selectionColor={colors.accent} cursorColor={colors.accent} value={gifSearch} onChangeText={setGifSearch} onSubmitEditing={handleSearchGifs} placeholder="ابحث في GIPHY…" placeholderTextColor={colors.textFaint} style={styles.gifSearchInput} returnKeyType="search" /><Pressable style={styles.gifSearchButton} onPress={handleSearchGifs}><Ionicons name="search" size={18} color="#04120C" /></Pressable></View>
+            {gifError ? <View style={styles.retryRow}><Text style={styles.retryText}>تعذر تحميل صور GIF.</Text><Pressable onPress={() => loadGifs(gifSearch, 0, true)}><Text style={styles.retryAction}>إعادة المحاولة</Text></Pressable></View> : null}
+            {failedGif ? <View style={styles.retryRow}><Text style={styles.retryText}>تعذر إرسال صورة GIF.</Text><Pressable onPress={() => handleSelectGiphy(failedGif)} disabled={sendAttachmentMutation.isPending}><Text style={styles.retryAction}>{sendAttachmentMutation.isPending ? 'جارٍ الإرسال…' : 'إعادة المحاولة'}</Text></Pressable></View> : null}
+            {gifResults.length === 0 && gifLoading ? <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.lg }} /> : <FlatList data={gifResults} numColumns={2} keyExtractor={(item) => item.id} columnWrapperStyle={styles.gifColumns} contentContainerStyle={styles.gifGrid} onEndReached={() => { if (!gifLoading && gifResults.length > 0) void loadGifs(gifSearch, gifOffset, false); }} onEndReachedThreshold={0.5} ListEmptyComponent={!gifLoading ? <EmptyState icon="images-outline" title="لم نعثر على صور GIF" message="جرّب عبارة بحث أخرى." /> : null} renderItem={({ item }) => <Pressable style={styles.gifResult} onPress={() => handleSelectGiphy(item)} disabled={sendAttachmentMutation.isPending}><Image source={{ uri: item.images.fixed_width.url }} style={styles.gifThumb} resizeMode="cover" />{sendAttachmentMutation.isPending ? <View style={styles.gifSending}><ActivityIndicator color={colors.accent} /></View> : null}</Pressable>} ListFooterComponent={gifLoading && gifResults.length > 0 ? <ActivityIndicator color={colors.accent} style={{ paddingVertical: spacing.md }} /> : null} />}
+            <Text style={styles.giphyAttribution}>بدعم من GIPHY</Text>
           </View>
         </View>
       </Modal>
       <Modal visible={attachmentOpen} transparent animationType="slide" onRequestClose={() => setAttachmentOpen(false)}>
         <View style={styles.attachmentBackdrop}>
-          <Pressable style={styles.attachmentDismiss} onPress={() => setAttachmentOpen(false)} accessibilityLabel="Close attachment menu" />
+          <Pressable style={styles.attachmentDismiss} onPress={() => setAttachmentOpen(false)} accessibilityLabel="إغلاق قائمة المرفقات" />
           <View style={styles.attachmentSheet}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Share something</Text>
+            <Text style={styles.sheetTitle}>شارك شيئًا</Text>
             <View style={styles.attachmentGrid}>
-              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); setCardPickerOpen(true); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(53, 211, 153, 0.16)' }]}><Ionicons name="film" size={22} color={colors.accent} /></View><Text style={styles.attachmentLabel}>Share a movie</Text></Pressable>
-              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('Send photo', 'Choose a source', [{ text: 'Camera', onPress: () => handlePickImage(true) }, { text: 'Photo library', onPress: () => handlePickImage(false) }, { text: 'Cancel', style: 'cancel' }]); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(91, 178, 255, 0.16)' }]}><Ionicons name="image" size={22} color="#62B2FF" /></View><Text style={styles.attachmentLabel}>Send photo</Text></Pressable>
-              <Pressable style={styles.attachmentItem} onPress={openGifPicker}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(146, 91, 255, 0.18)' }]}><Text style={styles.gifLabel}>GIF</Text></View><Text style={styles.attachmentLabel}>Find GIF</Text></Pressable>
-              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); handleRecordToggle(); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(255, 126, 58, 0.16)' }]}><Ionicons name="mic" size={22} color="#FF8A4C" /></View><Text style={styles.attachmentLabel}>{recorderState.isRecording ? 'Stop recording' : 'Voice message'}</Text></Pressable>
+              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); setCardPickerOpen(true); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(53, 211, 153, 0.16)' }]}><Ionicons name="film" size={22} color={colors.accent} /></View><Text style={styles.attachmentLabel}>مشاركة فيلم</Text></Pressable>
+              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('إرسال صورة', 'اختر مصدر الصورة', [{ text: 'الكاميرا', onPress: () => handlePickImage(true) }, { text: 'مكتبة الصور', onPress: () => handlePickImage(false) }, { text: 'إلغاء', style: 'cancel' }]); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(91, 178, 255, 0.16)' }]}><Ionicons name="image" size={22} color="#62B2FF" /></View><Text style={styles.attachmentLabel}>إرسال صورة</Text></Pressable>
+              <Pressable style={styles.attachmentItem} onPress={openGifPicker}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(146, 91, 255, 0.18)' }]}><Text style={styles.gifLabel}>GIF</Text></View><Text style={styles.attachmentLabel}>العثور على GIF</Text></Pressable>
+              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); handleRecordToggle(); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(255, 126, 58, 0.16)' }]}><Ionicons name="mic" size={22} color="#FF8A4C" /></View><Text style={styles.attachmentLabel}>{recorderState.isRecording ? 'إيقاف التسجيل' : 'رسالة صوتية'}</Text></Pressable>
             </View>
           </View>
         </View>

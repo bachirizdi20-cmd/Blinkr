@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Share, View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
+import { ActivityIndicator, Share, View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -22,7 +22,8 @@ import { clearAccountLibraryStorage } from '../lib/library-storage';
 import { ProfileIdentity } from '../components/ProfileIdentity';
 import { ProfileStatsGrid } from '../components/ProfileStatsGrid';
 import { ProfileTopReviews } from '../components/ProfileTopReviews';
-import { posterUrl } from '../lib/tmdb';
+import { catalogPosterUrl, normalizeReviewMediaType, openCatalogItem } from '../lib/catalog-navigation';
+import { PlatformAlert as Alert } from '../lib/platform-alert';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 
@@ -111,13 +112,14 @@ export default function ProfileScreen() {
   const ratedReviews = publishedReviews.filter((review) => review.rating != null);
   const movieReviewCount = publishedReviews.filter((review) => review.mediaType === 'movie').length;
   const tvReviewCount = publishedReviews.filter((review) => review.mediaType === 'tv').length;
+  const bookReviewCount = publishedReviews.filter((review) => review.mediaType === 'book').length;
   const averageReviewRating = ratedReviews.length
     ? ratedReviews.reduce((total, review) => total + Number(review.rating), 0) / ratedReviews.length
     : null;
   const topReviews = [...ratedReviews]
     .sort((a, b) => Number(b.rating) - Number(a.rating) || new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 5)
-    .map((review) => ({ ...review, mediaType: review.mediaType === 'tv' ? 'tv' as const : 'movie' as const }));
+    .map((review) => ({ ...review, mediaType: normalizeReviewMediaType(review.mediaType) }));
   const latestPublishedReviews = [...publishedReviews].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 3);
   const joinedDate = formatProfileDate(accountQuery.data?.user.createdAt ?? profile.joinedAt);
   const likeItems = Object.values(likes).sort((a, b) => b.likedAt - a.likedAt).slice(0, 8);
@@ -127,9 +129,9 @@ export default function ProfileScreen() {
   const handleRequestVerification = async () => {
     try {
       await requestVerification.mutateAsync();
-      Alert.alert('Verification email sent', 'Check your inbox and follow the link to verify your email.');
+      Alert.alert('تم إرسال رسالة التحقق', 'افتح بريدك الإلكتروني واتبع الرابط لتأكيده.');
     } catch {
-      Alert.alert('Could not send email', 'Please try again later.');
+      Alert.alert('تعذر إرسال الرسالة', 'حاول مرة أخرى لاحقًا.');
     }
   };
 
@@ -200,6 +202,7 @@ export default function ProfileScreen() {
           averageRating={averageReviewRating}
           movieReviews={movieReviewCount}
           tvReviews={tvReviewCount}
+          bookReviews={bookReviewCount}
           onFollowersPress={() => navigation.navigate('People', { initialFilter: 'followers' })}
           onFollowingPress={() => navigation.navigate('People', { initialFilter: 'following' })}
         />
@@ -209,7 +212,7 @@ export default function ProfileScreen() {
           loading={remoteReviewsQuery.isLoading}
           error={remoteReviewsQuery.isError}
           onRetry={() => void remoteReviewsQuery.refetch()}
-          onOpen={(mediaType, id) => navigation.navigate('Detail', { mediaType, id })}
+          onOpen={(mediaType, id) => openCatalogItem(navigation, { mediaType, mediaId: id })}
           subtitle="أبرز اختياراتك من المراجعات المنشورة"
         />
 
@@ -223,11 +226,11 @@ export default function ProfileScreen() {
           ) : latestPublishedReviews.length === 0 ? (
             <View style={styles.publishedReviewsEmpty}><Text style={styles.publishedReviewsHint}>ستظهر هنا المراجعات التي تنشرها.</Text></View>
           ) : latestPublishedReviews.map((review) => {
-            const poster = posterUrl(review.posterPath, 'w200');
-            const mediaType = review.mediaType === 'tv' ? 'tv' : 'movie';
+            const mediaType = normalizeReviewMediaType(review.mediaType);
+            const poster = catalogPosterUrl(mediaType, review.posterPath, 'w200');
             return (
-              <Pressable key={review.id} style={styles.publishedReviewCard} onPress={() => navigation.navigate('Detail', { mediaType, id: review.mediaId })}>
-                {poster ? <Image source={{ uri: poster }} style={styles.publishedReviewPoster} contentFit="cover" /> : <View style={[styles.publishedReviewPoster, styles.publishedPosterFallback]}><Ionicons name="film-outline" size={22} color={colors.textFaint} /></View>}
+              <Pressable key={review.id} style={styles.publishedReviewCard} onPress={() => openCatalogItem(navigation, { mediaType, mediaId: review.mediaId, title: review.title, posterPath: review.posterPath })}>
+                {poster ? <Image source={{ uri: poster }} style={styles.publishedReviewPoster} contentFit="cover" /> : <View style={[styles.publishedReviewPoster, styles.publishedPosterFallback]}><Ionicons name={mediaType === 'book' ? 'book-outline' : 'film-outline'} size={22} color={colors.textFaint} /></View>}
                 <View style={styles.publishedReviewInfo}>
                   <Text style={styles.publishedReviewTitle} numberOfLines={2}>{review.title}</Text>
                   {review.rating != null ? <View style={styles.publishedRating}><Ionicons name="star" size={12} color={colors.gold} /><Text style={styles.publishedRatingText}>{review.rating}/10</Text></View> : null}
@@ -249,12 +252,12 @@ export default function ProfileScreen() {
         </ScrollView>
 
         <View style={styles.section}><View style={styles.referenceSectionHeader}><Text style={styles.referenceSectionTitle}>أفلامك المفضلة</Text><Pressable onPress={() => navigation.navigate('Likes')}><Text style={styles.viewAll}>عرض الكل</Text></Pressable></View>
-          {likeItems.length === 0 ? <EmptyState icon="heart-outline" title="لا توجد مفضلات بعد" message="اضغط على القلب في أي عنوان لإضافته هنا." /> : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.posterRail}>{likeItems.slice(0, 8).map((item) => <View key={`${item.mediaType}-${item.mediaId}`} style={styles.favoriteItem}><PosterCard item={{ id: item.mediaId, mediaType: item.mediaType, title: item.title, posterPath: item.posterPath, date: item.date, voteAverage: item.voteAverage }} width={112} onPress={() => navigation.navigate('Detail', { mediaType: item.mediaType, id: item.mediaId })} /><Pressable accessibilityLabel={`إزالة ${item.title} من المفضلة`} style={styles.removeFavorite} onPress={() => lib.toggleLike(item)}><Ionicons name="heart" size={14} color={colors.bg} /></Pressable></View>)}</ScrollView>}
+          {likeItems.length === 0 ? <EmptyState icon="heart-outline" title="لا توجد مفضلات بعد" message="اضغط على القلب في أي عنوان لإضافته هنا." /> : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.posterRail}>{likeItems.slice(0, 8).map((item) => <View key={`${item.mediaType}-${item.mediaId}`} style={styles.favoriteItem}><PosterCard item={{ id: item.mediaId, mediaType: item.mediaType, title: item.title, posterPath: item.posterPath, date: item.date, voteAverage: item.voteAverage }} width={112} onPress={() => openCatalogItem(navigation, item)} /><Pressable accessibilityLabel={`إزالة ${item.title} من المفضلة`} style={styles.removeFavorite} onPress={() => lib.toggleLike(item)}><Ionicons name="heart" size={14} color={colors.bg} /></Pressable></View>)}</ScrollView>}
         </View>
 
         <View style={styles.contentColumns}>
-          <View style={styles.activityPanel}><View style={styles.panelHeader}><Text style={styles.panelTitle}>النشاط</Text><Ionicons name="pulse-outline" size={18} color={colors.accent} /></View>{recentReviews.length === 0 ? <Text style={styles.emptyPanel}>ستظهر تقييماتك ومراجعاتك هنا.</Text> : recentReviews.slice(0, 3).map((entry) => <Pressable key={entry.id} style={styles.activityRow} onPress={() => navigation.navigate('Detail', { mediaType: entry.mediaType, id: entry.mediaId })}><View style={styles.activityAvatar}><Text style={styles.activityInitial}>{initials.slice(0, 1)}</Text></View><View style={{ flex: 1 }}><Text style={styles.activityText}>{user.name || profile.username} قيّم</Text><Text style={styles.activityTitle} numberOfLines={1}>{entry.title}</Text>{!!entry.rating && <RatingStars rating={entry.rating} size={12} />}</View></Pressable>)}</View>
-          <View style={styles.activityPanel}><View style={styles.panelHeader}><Text style={styles.panelTitle}>اليوميات</Text><Pressable onPress={() => navigation.navigate('Diary')}><Text style={styles.viewAll}>عرض الكل</Text></Pressable></View>{recentDiary.length === 0 ? <Text style={styles.emptyPanel}>ابدأ بتسجيل ما تشاهده.</Text> : recentDiary.slice(0, 3).map((entry) => <Pressable key={entry.id} style={styles.diaryRow} onPress={() => navigation.navigate('Detail', { mediaType: entry.mediaType, id: entry.mediaId })}><View style={styles.dateBadge}><Text style={styles.dateMonth}>{entry.watchedDate?.slice(0, 3) || 'سجل'}</Text><Text style={styles.dateDay}>{entry.watchedDate?.slice(-2) || '—'}</Text></View><View style={{ flex: 1 }}><Text style={styles.diaryTitle} numberOfLines={1}>{entry.title}</Text><Text style={styles.diaryDate}>{entry.watchedDate}</Text>{!!entry.rating && <RatingStars rating={entry.rating} size={12} />}</View></Pressable>)}</View>
+          <View style={styles.activityPanel}><View style={styles.panelHeader}><Text style={styles.panelTitle}>النشاط</Text><Ionicons name="pulse-outline" size={18} color={colors.accent} /></View>{recentReviews.length === 0 ? <Text style={styles.emptyPanel}>ستظهر تقييماتك ومراجعاتك هنا.</Text> : recentReviews.slice(0, 3).map((entry) => <Pressable key={entry.id} style={styles.activityRow} onPress={() => openCatalogItem(navigation, entry)}><View style={styles.activityAvatar}><Text style={styles.activityInitial}>{initials.slice(0, 1)}</Text></View><View style={{ flex: 1 }}><Text style={styles.activityText}>{user.name || profile.username} قيّم</Text><Text style={styles.activityTitle} numberOfLines={1}>{entry.title}</Text>{!!entry.rating && <RatingStars rating={entry.rating} size={12} />}</View></Pressable>)}</View>
+          <View style={styles.activityPanel}><View style={styles.panelHeader}><Text style={styles.panelTitle}>اليوميات</Text><Pressable onPress={() => navigation.navigate('Diary')}><Text style={styles.viewAll}>عرض الكل</Text></Pressable></View>{recentDiary.length === 0 ? <Text style={styles.emptyPanel}>ابدأ بتسجيل ما تشاهده.</Text> : recentDiary.slice(0, 3).map((entry) => <Pressable key={entry.id} style={styles.diaryRow} onPress={() => openCatalogItem(navigation, entry)}><View style={styles.dateBadge}><Text style={styles.dateMonth}>{entry.watchedDate?.slice(0, 3) || 'سجل'}</Text><Text style={styles.dateDay}>{entry.watchedDate?.slice(-2) || '—'}</Text></View><View style={{ flex: 1 }}><Text style={styles.diaryTitle} numberOfLines={1}>{entry.title}</Text><Text style={styles.diaryDate}>{entry.watchedDate}</Text>{!!entry.rating && <RatingStars rating={entry.rating} size={12} />}</View></Pressable>)}</View>
         </View>
 
         <View style={styles.cloudStats}><Text style={styles.cloudStatsTitle}>مزامنة بياناتك</Text><View style={styles.cloudStatsRow}><Text style={styles.cloudStatText}>{publishedReviews.length} مراجعة سحابية</Text>{remoteLibraryQuery.isError ? <Pressable onPress={() => void remoteLibraryQuery.refetch()}><Text style={styles.verifyText}>تعذر تحميل المكتبة — إعادة المحاولة</Text></Pressable> : <Text style={styles.cloudStatText}>{remoteLibraryQuery.isLoading ? 'جارٍ تحميل المكتبة…' : `${remoteLibraryQuery.data?.length ?? 0} عنصر في المكتبة`}</Text>}</View>{librarySyncError ? <Text style={styles.syncErrorText}>تعذرت مزامنة اليوميات والقوائم والمفضلة إلى ملفك العام.</Text> : null}{!emailVerified && user.email ? <Pressable onPress={handleRequestVerification} disabled={requestVerification.isPending} style={styles.verifyButton}><Ionicons name="mail-outline" size={15} color={colors.accent} /><Text style={styles.verifyText}>{requestVerification.isPending ? 'جارٍ الإرسال…' : 'تحقق من بريدك الإلكتروني'}</Text></Pressable> : null}</View>

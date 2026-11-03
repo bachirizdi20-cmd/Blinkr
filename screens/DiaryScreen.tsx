@@ -9,7 +9,7 @@ import RatingStars from '../components/RatingStars';
 import EmptyState from '../components/EmptyState';
 import { ContentStackParamList } from '../navigation/types';
 import { useLibrary, DiaryEntry } from '../context/LibraryContext';
-import { posterUrl } from '../lib/tmdb';
+import { catalogPosterUrl } from '../lib/catalog-navigation';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
@@ -33,10 +33,10 @@ export default function DiaryScreen() {
         })
       }
     >
-      <Image source={{ uri: posterUrl(item.posterPath, 'w200') ?? undefined }} style={styles.poster} contentFit="cover" />
+      <Image source={{ uri: catalogPosterUrl(item.mediaType, item.posterPath, 'w200') ?? undefined }} style={styles.poster} contentFit="cover" />
       <View style={{ flex: 1 }}>
         <Text style={styles.title} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.date}>{item.watchedDate}{item.rewatch ? '  •  Rewatch' : ''}</Text>
+        <Text style={styles.date}>{item.watchedDate}{item.rewatch ? (item.mediaType === 'book' ? '  •  إعادة قراءة' : '  •  إعادة مشاهدة') : ''}</Text>
         {!!item.rating && <RatingStars rating={item.rating} size={14} />}
         {!!item.review && <Text numberOfLines={2} style={styles.review}>{item.review}</Text>}
       </View>
@@ -46,9 +46,9 @@ export default function DiaryScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <Text style={styles.header}>Diary</Text>
+      <Text style={styles.header}>اليوميات</Text>
       {entries.length === 0 ? (
-        <EmptyState icon="book-outline" title="No diary entries" message="Log titles from their detail page to start your diary." />
+        <EmptyState icon="book-outline" title="لا توجد إدخالات بعد" message="سجّل كتابًا أو فيلمًا أو مسلسلًا من صفحة التفاصيل لبدء يومياتك." />
       ) : (
         <FlatList
           data={entries}

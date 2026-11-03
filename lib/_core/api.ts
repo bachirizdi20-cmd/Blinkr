@@ -6,6 +6,13 @@ type ApiResponse<T> = {
   error?: string;
 };
 
+export class ApiRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
+}
+
 function getBrowserCsrfToken() {
   if (typeof document === "undefined") return undefined;
   const cookie = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith("blinkr_csrf="));
@@ -27,14 +34,12 @@ export async function apiCall<T>(endpoint: string, options: RequestInit = {}): P
   if (sessionToken) {
     headers["Authorization"] = `Bearer ${sessionToken}`;
   }
-  console.log("[API] apiCall:", { endpoint, hasToken: !!sessionToken, method: options.method || "GET" });
-
   const baseUrl = getApiBaseUrl();
   // Ensure no double slashes between baseUrl and endpoint
   const cleanBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   const url = baseUrl ? `${cleanBaseUrl}${cleanEndpoint}` : endpoint;
-  console.log("[API] Full URL:", url);
+  console.log("[API] apiCall:", { route: cleanEndpoint.split("?")[0], hasToken: !!sessionToken, method: options.method || "GET" });
 
   try {
     console.log("[API] Making request...");
@@ -45,14 +50,6 @@ export async function apiCall<T>(endpoint: string, options: RequestInit = {}): P
     });
 
     console.log("[API] Response status:", response.status, response.statusText);
-    const responseHeaders = Object.fromEntries(response.headers.entries());
-    console.log("[API] Response headers:", responseHeaders);
-
-    // Check if Set-Cookie header is present (cookies are automatically handled in React Native)
-    const setCookie = response.headers.get("Set-Cookie");
-    if (setCookie) {
-      console.log("[API] Set-Cookie header received:", setCookie);
-    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -64,7 +61,7 @@ export async function apiCall<T>(endpoint: string, options: RequestInit = {}): P
       } catch {
         // Not JSON, use text as is
       }
-      throw new Error(errorMessage || `API call failed: ${response.statusText}`);
+      throw new ApiRequestError(errorMessage || `API call failed: ${response.statusText}`, response.status);
     }
 
     const contentType = response.headers.get("content-type");
@@ -96,7 +93,7 @@ export async function exchangeOAuthCode(
   // Use GET with query params
   const params = new URLSearchParams({ code, state });
   const endpoint = `/api/oauth/mobile?${params.toString()}`;
-  console.log("[API] Calling OAuth mobile endpoint:", endpoint);
+  console.log("[API] Calling OAuth mobile endpoint");
   const result = await apiCall<{ app_session_id: string; user: any }>(endpoint);
 
   // Convert app_session_id to sessionToken for compatibility
@@ -104,7 +101,6 @@ export async function exchangeOAuthCode(
   console.log("[API] OAuth exchange result:", {
     hasSessionToken: !!sessionToken,
     hasUser: !!result.user,
-    sessionToken: sessionToken ? `${sessionToken.substring(0, 50)}...` : null,
   });
 
   return {
@@ -133,8 +129,8 @@ export async function getMe(): Promise<{
     const result = await apiCall<{ user: any }>("/api/auth/me");
     return result.user || null;
   } catch (error) {
-    console.error("[API] getMe failed:", error);
-    return null;
+    if (error instanceof ApiRequestError && error.status === 401) return null;
+    throw error;
   }
 }
 

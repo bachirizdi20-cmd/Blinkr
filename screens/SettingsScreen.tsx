@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
@@ -8,6 +8,7 @@ import { ContentStackParamList } from '../navigation/types';
 import { useAuth } from '../hooks/use-auth';
 import { trpc } from '../lib/trpc';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
+import { PlatformAlert as Alert } from '../lib/platform-alert';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 

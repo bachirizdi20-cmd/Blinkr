@@ -3,14 +3,15 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { Image } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
-import { posterUrl } from '../lib/tmdb';
+import { catalogPosterUrl } from '../lib/catalog-navigation';
+import { ReviewMediaType } from '../types/tmdb';
 
 export type ProfileTopReviewItem = {
   id: string | number;
   title: string;
   posterPath?: string | null;
   rating: number;
-  mediaType: 'movie' | 'tv';
+  mediaType: ReviewMediaType;
   mediaId: number;
 };
 
@@ -26,7 +27,7 @@ export function ProfileTopReviews({
   loading?: boolean;
   error?: boolean;
   onRetry?: () => void;
-  onOpen: (mediaType: 'movie' | 'tv', mediaId: number) => void;
+  onOpen: (mediaType: ReviewMediaType, mediaId: number) => void;
   subtitle?: string;
 }) {
   return (
@@ -45,11 +46,11 @@ export function ProfileTopReviews({
       ) : items.length ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
           {items.map((item) => {
-            const poster = posterUrl(item.posterPath ?? null, 'w342');
+            const poster = catalogPosterUrl(item.mediaType, item.posterPath ?? null, 'w342');
             return (
               <Pressable key={item.id} style={styles.card} onPress={() => onOpen(item.mediaType, item.mediaId)} accessibilityRole="button">
                 <View style={styles.posterWrap}>
-                  {poster ? <Image source={{ uri: poster }} style={styles.poster} contentFit="cover" /> : <View style={[styles.poster, styles.posterFallback]}><Ionicons name="film-outline" size={26} color={colors.textFaint} /></View>}
+                  {poster ? <Image source={{ uri: poster }} style={styles.poster} contentFit="cover" /> : <View style={[styles.poster, styles.posterFallback]}><Ionicons name={item.mediaType === 'book' ? 'book-outline' : 'film-outline'} size={26} color={colors.textFaint} /></View>}
                   <View style={styles.rating}><Ionicons name="star" size={11} color={colors.gold} /><Text style={styles.ratingText}>{item.rating}/10</Text></View>
                 </View>
                 <Text style={styles.itemTitle} numberOfLines={2}>{item.title}</Text>

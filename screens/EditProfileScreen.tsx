@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -10,6 +10,7 @@ import { useLibrary, AVATAR_COLORS } from '../context/LibraryContext';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { trpc } from '../lib/trpc';
 import { isStoredMediaUrl, resolveMediaUrl } from '../lib/media-url';
+import { PlatformAlert as Alert } from '../lib/platform-alert';
 
 async function prepareAvatarDataUri(uri: string, width?: number, height?: number) {
   const maxSide = 512;
@@ -30,10 +31,6 @@ async function prepareAvatarDataUri(uri: string, width?: number, height?: number
 }
 
 function showProfileMessage(title: string, message: string) {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    window.alert(`${title}\n\n${message}`);
-    return;
-  }
   Alert.alert(title, message);
 }
 

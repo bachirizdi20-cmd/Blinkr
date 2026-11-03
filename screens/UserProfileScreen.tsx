@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -11,11 +11,13 @@ import ApiErrorState from '../components/ApiErrorState';
 import PosterCard from '../components/PosterCard';
 import { ContentStackParamList } from '../navigation/types';
 import { trpc } from '../lib/trpc';
-import { posterUrl } from '../lib/tmdb';
+import { catalogPosterUrl, normalizeReviewMediaType, openCatalogItem } from '../lib/catalog-navigation';
+import { ReviewMediaType } from '../types/tmdb';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { ProfileIdentity } from '../components/ProfileIdentity';
 import { ProfileStatsGrid } from '../components/ProfileStatsGrid';
 import { ProfileTopReviews } from '../components/ProfileTopReviews';
+import { PlatformAlert as Alert } from '../lib/platform-alert';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type RouteT = RouteProp<ContentStackParamList, 'UserProfile'>;
@@ -33,7 +35,7 @@ export default function UserProfileScreen() {
         userId={numericId}
         onBack={() => navigation.goBack()}
         onMessage={() => navigation.navigate('Conversation', { userId: `remote-${numericId}` })}
-        onOpenMedia={(mediaType, mediaId) => navigation.navigate('Detail', { mediaType, id: mediaId })}
+        onOpenMedia={(mediaType, mediaId) => openCatalogItem(navigation, { mediaType, mediaId })}
       />
     );
   }
@@ -67,7 +69,7 @@ function RemoteUserProfile({
   userId: number;
   onBack: () => void;
   onMessage: () => void;
-  onOpenMedia: (mediaType: 'movie' | 'tv', mediaId: number) => void;
+  onOpenMedia: (mediaType: ReviewMediaType, mediaId: number) => void;
 }) {
   const profileQuery = trpc.social.profile.useQuery({ userId });
   const reviewsQuery = trpc.social.userReviews.useQuery({ userId }, { enabled: Boolean(profileQuery.data) });
@@ -190,6 +192,7 @@ function RemoteUserProfile({
           averageRating={profile.averageRating == null ? null : Number(profile.averageRating)}
           movieReviews={profile.movieReviewCount ?? 0}
           tvReviews={profile.tvReviewCount ?? 0}
+          bookReviews={profile.bookReviewCount ?? 0}
         />
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.profileTabs}>
@@ -200,7 +203,7 @@ function RemoteUserProfile({
         </ScrollView>
 
         {(activeProfileTab === 'profile' || activeProfileTab === 'reviews') ? <ProfileTopReviews
-          items={(topReviewsQuery.data ?? []).map((item) => ({ ...item, mediaType: item.mediaType === 'tv' ? 'tv' as const : 'movie' as const }))}
+          items={(topReviewsQuery.data ?? []).map((item) => ({ ...item, mediaType: normalizeReviewMediaType(item.mediaType) }))}
           loading={topReviewsQuery.isLoading}
           error={topReviewsQuery.isError}
           onRetry={() => void topReviewsQuery.refetch()}
@@ -211,7 +214,7 @@ function RemoteUserProfile({
         {(activeProfileTab === 'profile' || activeProfileTab === 'reviews') ? <View style={styles.sectionHeader}>
           <View>
             <Text style={styles.sectionTitle}>أحدث المراجعات</Text>
-            <Text style={styles.sectionSubtitle}>آراء هذا المستخدم في الأفلام والمسلسلات</Text>
+          <Text style={styles.sectionSubtitle}>آراء هذا المستخدم في الأفلام والمسلسلات والكتب</Text>
           </View>
           <Ionicons name="film-outline" size={21} color={colors.accent} />
         </View> : null}
@@ -226,14 +229,14 @@ function RemoteUserProfile({
           <View style={styles.reviewsList}>
             {(reviewsQuery.data ?? []).map((item) => {
               const review = item.review;
-              const mediaType: 'movie' | 'tv' = review.mediaType === 'tv' ? 'tv' : 'movie';
-              const poster = posterUrl(review.posterPath, 'w200');
+              const mediaType = normalizeReviewMediaType(review.mediaType);
+              const poster = catalogPosterUrl(mediaType, review.posterPath, 'w200');
               const reviewDate = formatArabicDate(review.updatedAt);
               const spoilerVisible = !review.spoiler || revealedSpoilers[review.id];
               return (
                 <View key={review.id} style={styles.reviewCard}>
                   <Pressable style={styles.reviewTop} onPress={() => onOpenMedia(mediaType, review.mediaId)} accessibilityRole="button">
-                    {poster ? <Image source={{ uri: poster }} style={styles.poster} contentFit="cover" /> : <View style={[styles.poster, styles.posterFallback]}><Ionicons name="film-outline" size={25} color={colors.textFaint} /></View>}
+                    {poster ? <Image source={{ uri: poster }} style={styles.poster} contentFit="cover" /> : <View style={[styles.poster, styles.posterFallback]}><Ionicons name={mediaType === 'book' ? 'book-outline' : 'film-outline'} size={25} color={colors.textFaint} /></View>}
                     <View style={styles.reviewInfo}>
                       <Text style={styles.reviewTitle} numberOfLines={2}>{review.title}</Text>
                       <View style={styles.ratingPill}><Ionicons name="star" size={13} color={colors.gold} /><Text style={styles.ratingText}>{review.rating}/10</Text></View>

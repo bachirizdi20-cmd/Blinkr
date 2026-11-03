@@ -14,6 +14,7 @@ import { assertLoginAllowed, clearLoginFailures, recordLoginFailure } from "./ra
 import { createAuthToken, consumeAuthToken, markEmailVerified, updateUserPassword } from "./db";
 import { sendAuthEmail } from "./email";
 import { verifyFirebaseIdToken } from "./_core/firebase-auth";
+import { getOpenLibraryWork, OpenLibraryError, searchOpenLibraryBooks } from "./open-library";
 
 const tmdbPathSchema = z.string().regex(
   /^\/(?:trending|movie|tv|discover|genre|search|person|authentication)(?:\/[A-Za-z0-9_,-]+)*$/,
@@ -250,9 +251,9 @@ export const appRouter = router({
   }),
   reviews: router({
     mine: protectedProcedure.query(({ ctx }) => db.listUserReviews(ctx.user.id)),
-    getMine: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv"]), mediaId: z.number().int().positive() })).query(({ ctx, input }) => db.getUserReview(ctx.user.id, input.mediaType, input.mediaId)),
+    getMine: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book"]), mediaId: z.number().int().positive() })).query(({ ctx, input }) => db.getUserReview(ctx.user.id, input.mediaType, input.mediaId)),
     save: protectedProcedure.input(z.object({
-      mediaType: z.enum(["movie", "tv"]),
+      mediaType: z.enum(["movie", "tv", "book"]),
       mediaId: z.number().int().positive(),
       title: z.string().trim().min(1).max(255),
       posterPath: z.string().max(255).nullable().optional(),
@@ -271,7 +272,7 @@ export const appRouter = router({
       spoiler: input.spoiler,
       watchedDate: input.watchedDate ? new Date(input.watchedDate) : null,
     })),
-    delete: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv"]), mediaId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+    delete: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book"]), mediaId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
       await db.deleteUserReview(ctx.user.id, input.mediaType, input.mediaId);
       return { success: true } as const;
     }),
@@ -316,7 +317,7 @@ export const appRouter = router({
     }),
     deleteMessage: protectedProcedure.input(z.object({ messageId: z.number().int().positive() })).mutation(({ ctx, input }) => db.deleteChatMessage(ctx.user.id, input.messageId)),
     deleteConversation: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive() })).mutation(({ ctx, input }) => db.deleteConversation(ctx.user.id, input.otherUserId)),
-    shareMedia: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive(), mediaType: z.enum(['movie', 'tv']), mediaId: z.number().int().positive(), title: z.string().trim().min(1).max(255), posterPath: z.string().max(255).nullable().optional(), rating: z.number().min(0).max(10), overview: z.string().max(1200).nullable().optional() })).mutation(async ({ ctx, input }) => {
+    shareMedia: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive(), mediaType: z.enum(['movie', 'tv', 'book']), mediaId: z.number().int().positive(), title: z.string().trim().min(1).max(255), posterPath: z.string().max(255).nullable().optional(), rating: z.number().min(0).max(10), overview: z.string().max(1200).nullable().optional() })).mutation(async ({ ctx, input }) => {
       const conversation = await db.getOrCreateConversation(ctx.user.id, input.otherUserId);
       if (!conversation) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Conversation unavailable' });
       return db.createChatMessage({ conversationId: conversation.id, senderId: ctx.user.id, text: null, sharedMediaType: input.mediaType, sharedMediaId: input.mediaId, sharedTitle: input.title, sharedPosterPath: input.posterPath ?? null, sharedRating: Math.round(input.rating * 10), sharedOverview: input.overview ?? null }, input.otherUserId);
@@ -349,9 +350,9 @@ export const appRouter = router({
   }),
   library: router({
     mine: protectedProcedure.query(({ ctx }) => db.listUserMediaStatuses(ctx.user.id)),
-    getStatus: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv"]), mediaId: z.number().int().positive() })).query(({ ctx, input }) => db.getUserMediaStatus(ctx.user.id, input.mediaType, input.mediaId)),
+    getStatus: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book"]), mediaId: z.number().int().positive() })).query(({ ctx, input }) => db.getUserMediaStatus(ctx.user.id, input.mediaType, input.mediaId)),
     setStatus: protectedProcedure.input(z.object({
-      mediaType: z.enum(["movie", "tv"]),
+      mediaType: z.enum(["movie", "tv", "book"]),
       mediaId: z.number().int().positive(),
       title: z.string().trim().min(1).max(255),
       posterPath: z.string().max(255).nullable().optional(),
@@ -364,10 +365,38 @@ export const appRouter = router({
       posterPath: input.posterPath ?? null,
       status: input.status,
     })),
-    removeStatus: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv"]), mediaId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+    removeStatus: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book"]), mediaId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
       await db.deleteMediaStatus(ctx.user.id, input.mediaType, input.mediaId);
       return { success: true } as const;
     }),
+  }),
+  books: router({
+    search: publicProcedure
+      .input(z.object({ query: z.string().trim().min(2).max(120), page: z.number().int().min(1).max(1000).default(1), limit: z.number().int().min(1).max(20).default(20) }))
+      .query(async ({ input }) => {
+        try {
+          return await searchOpenLibraryBooks(input.query, input.page, input.limit);
+        } catch (error) {
+          if (error instanceof OpenLibraryError) {
+            const code = error.status === 404 ? "NOT_FOUND" : error.status === 429 || error.status === 403 ? "TOO_MANY_REQUESTS" : error.message.includes("مهلة") ? "TIMEOUT" : "BAD_GATEWAY";
+            throw new TRPCError({ code, message: error.message });
+          }
+          throw new TRPCError({ code: "BAD_GATEWAY", message: "تعذر الاتصال بمصدر الكتب." });
+        }
+      }),
+    detail: publicProcedure
+      .input(z.object({ workId: z.number().int().positive().max(2_147_483_647) }))
+      .query(async ({ input }) => {
+        try {
+          return await getOpenLibraryWork(input.workId);
+        } catch (error) {
+          if (error instanceof OpenLibraryError) {
+            const code = error.status === 404 ? "NOT_FOUND" : error.status === 429 || error.status === 403 ? "TOO_MANY_REQUESTS" : error.message.includes("مهلة") ? "TIMEOUT" : "BAD_GATEWAY";
+            throw new TRPCError({ code, message: error.message });
+          }
+          throw new TRPCError({ code: "BAD_GATEWAY", message: "تعذر جلب تفاصيل الكتاب." });
+        }
+      }),
   }),
   tmdb: router({
     get: publicProcedure

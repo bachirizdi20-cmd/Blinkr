@@ -7,7 +7,6 @@ import {
   Pressable,
   Dimensions,
   Linking,
-  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,6 +22,7 @@ import LoadingView from '../components/LoadingView';
 import EmptyState from '../components/EmptyState';
 import ApiErrorState from '../components/ApiErrorState';
 import { ContentStackParamList } from '../navigation/types';
+import { PlatformAlert as Alert } from '../lib/platform-alert';
 import { fetchDetail, posterUrl, backdropUrl, profileUrl } from '../lib/tmdb';
 import { DetailResult } from '../types/tmdb';
 import { useLibrary, mediaKey } from '../context/LibraryContext';
@@ -37,16 +37,16 @@ const { width, height } = Dimensions.get('window');
 const BACKDROP_HEIGHT = height * 0.36;
 
 function formatReviewDate(value: string) {
-  if (!value) return 'TMDB review';
+  if (!value) return 'مراجعة من TMDB';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'TMDB review' : date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+  return Number.isNaN(date.getTime()) ? 'مراجعة من TMDB' : date.toLocaleDateString('ar', { month: 'short', year: 'numeric' });
 }
 
 function formatRuntime(mins: number | null) {
   if (!mins) return null;
   const h = Math.floor(mins / 60);
   const m = mins % 60;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  return h > 0 ? `${h.toLocaleString('ar')} س ${m.toLocaleString('ar')} د` : `${m.toLocaleString('ar')} د`;
 }
 
 export default function DetailScreen() {
@@ -72,7 +72,7 @@ export default function DetailScreen() {
       setDetail(data);
     } catch (err) {
       console.warn(err);
-      setError(err instanceof Error ? err.message : 'Unable to load this title right now.');
+      setError('تعذر تحميل بيانات هذا العنوان. تحقق من الاتصال وحاول مجددًا.');
     } finally {
       setLoading(false);
     }
@@ -111,11 +111,11 @@ export default function DetailScreen() {
     return (
       <View style={styles.stateScreen}>
         <SafeAreaView edges={['top']} style={styles.stateTopBar}>
-          <Pressable style={styles.iconBtn} onPress={() => navigation.goBack()} accessibilityLabel="Go back">
+          <Pressable style={styles.iconBtn} onPress={() => navigation.goBack()} accessibilityLabel="رجوع">
             <Ionicons name="chevron-back" size={22} color={colors.text} />
           </Pressable>
         </SafeAreaView>
-        <ApiErrorState message={error ?? 'This title is unavailable.'} onRetry={load} />
+        <ApiErrorState message={error ?? 'هذا العنوان غير متاح حاليًا.'} onRetry={load} />
       </View>
     );
   }
@@ -126,7 +126,7 @@ export default function DetailScreen() {
   const runtimeLabel =
     mediaType === 'movie'
       ? formatRuntime(detail.runtimeMinutes)
-      : `${detail.numberOfSeasons} Season${detail.numberOfSeasons !== 1 ? 's' : ''}`;
+      : `${detail.numberOfSeasons.toLocaleString('ar')} موسم`;
 
   const handleRate = (rating: number) => {
     if (!mediaRef) return;
@@ -141,8 +141,7 @@ export default function DetailScreen() {
       else await setStatusMutation.mutateAsync({ mediaType, mediaId: id, title: detail.title, posterPath: detail.posterPath, status: 'watched' });
       await myStatusQuery.refetch();
     } catch (error) {
-      lib.toggleWatchedQuick(mediaRef);
-      Alert.alert('Sync failed', error instanceof Error ? error.message : 'Your local change was rolled back.');
+      Alert.alert('تعذرت المزامنة', 'احتفظنا بالتغيير على هذا الجهاز. تحقق من اتصالك وحاول مجددًا.');
     }
   };
 
@@ -152,7 +151,7 @@ export default function DetailScreen() {
       await setStatusMutation.mutateAsync({ mediaType, mediaId: id, title: detail.title, posterPath: detail.posterPath, status: watching ? 'watchlist' : 'watching' });
       await myStatusQuery.refetch();
     } catch (error) {
-      Alert.alert('Sync failed', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert('تعذرت المزامنة', 'تحقق من اتصالك وحاول مرة أخرى.');
     }
   };
 
@@ -164,15 +163,14 @@ export default function DetailScreen() {
       else await setStatusMutation.mutateAsync({ mediaType, mediaId: id, title: detail.title, posterPath: detail.posterPath, status: 'watchlist' });
       await myStatusQuery.refetch();
     } catch (error) {
-      lib.toggleWatchlist(mediaRef);
-      Alert.alert('Sync failed', error instanceof Error ? error.message : 'Your local change was rolled back.');
+      Alert.alert('تعذرت المزامنة', 'احتفظنا بالتغيير على هذا الجهاز. تحقق من اتصالك وحاول مجددًا.');
     }
   };
 
   const handleDeleteEntry = (entryId: string) => {
-    Alert.alert('Delete log entry', 'Remove this diary entry?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => lib.deleteDiaryEntry(entryId) },
+    Alert.alert('حذف من اليوميات', 'هل تريد حذف هذا السجل؟', [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'حذف', style: 'destructive', onPress: () => lib.deleteDiaryEntry(entryId) },
     ]);
   };
 
@@ -191,7 +189,7 @@ export default function DetailScreen() {
             </Pressable>
             {detail.isAnime && (
               <View style={styles.animeTag}>
-                <Text style={styles.animeTagText}>ANIME</Text>
+                <Text style={styles.animeTagText}>أنمي</Text>
               </View>
             )}
           </SafeAreaView>
@@ -210,7 +208,7 @@ export default function DetailScreen() {
           <View style={styles.headerInfo}>
             <Text style={styles.title} numberOfLines={3}>{detail.title}</Text>
             <Text style={styles.metaLine}>
-              {year}{runtimeLabel ? `  •  ${runtimeLabel}` : ''}{'  •  '}{mediaType === 'movie' ? 'Movie' : 'TV Series'}
+              {year}{runtimeLabel ? `  •  ${runtimeLabel}` : ''}{'  •  '}{mediaType === 'movie' ? 'فيلم' : 'مسلسل'}
             </Text>
             <View style={styles.tmdbRow}>
               <Ionicons name="star" size={14} color={colors.gold} />
@@ -227,25 +225,25 @@ export default function DetailScreen() {
 
           <View style={styles.actionsCard}>
             <View style={styles.ratingSection}>
-              <Text style={styles.ratingLabel}>Your Rating</Text>
+              <Text style={styles.ratingLabel}>تقييمك</Text>
               <RatingStars rating={userRating} size={26} interactive onChange={handleRate} />
             </View>
             <View style={styles.actionsRow}>
               <Pressable style={styles.actionBtn} onPress={handleToggleWatched}>
                 <Ionicons name={watched ? 'checkmark-circle' : 'checkmark-circle-outline'} size={24} color={watched ? colors.accent : colors.text} />
-                <Text style={[styles.actionLabel, watched && { color: colors.accent }]}>Watched</Text>
+                <Text style={[styles.actionLabel, watched && { color: colors.accent }]}>تمت مشاهدته</Text>
               </Pressable>
               <Pressable style={styles.actionBtn} onPress={handleSetWatching}>
                 <Ionicons name={watching ? 'play-circle' : 'play-circle-outline'} size={24} color={watching ? colors.accent2 : colors.text} />
-                <Text style={[styles.actionLabel, watching && { color: colors.accent2 }]}>Watching</Text>
+                <Text style={[styles.actionLabel, watching && { color: colors.accent2 }]}>أشاهده الآن</Text>
               </Pressable>
               <Pressable style={styles.actionBtn} onPress={handleToggleWatchlist}>
                 <Ionicons name={inWatchlist ? 'bookmark' : 'bookmark-outline'} size={24} color={inWatchlist ? colors.accent3 : colors.text} />
-                <Text style={[styles.actionLabel, inWatchlist && { color: colors.accent3 }]}>Watchlist</Text>
+                <Text style={[styles.actionLabel, inWatchlist && { color: colors.accent3 }]}>قائمة المشاهدة</Text>
               </Pressable>
               <Pressable style={styles.actionBtn} onPress={() => mediaRef && lib.toggleLike(mediaRef)}>
                 <Ionicons name={liked ? 'heart' : 'heart-outline'} size={24} color={liked ? colors.danger : colors.text} />
-                <Text style={[styles.actionLabel, liked && { color: colors.danger }]}>Like</Text>
+                <Text style={[styles.actionLabel, liked && { color: colors.danger }]}>أعجبني</Text>
               </Pressable>
               <Pressable
                 style={styles.actionBtn}
@@ -260,7 +258,7 @@ export default function DetailScreen() {
                 }
               >
                 <Ionicons name="create-outline" size={24} color={colors.text} />
-                <Text style={styles.actionLabel}>Log/Review</Text>
+                <Text style={styles.actionLabel}>تسجيل أو مراجعة</Text>
               </Pressable>
               <Pressable
                 style={styles.actionBtn}
@@ -275,14 +273,14 @@ export default function DetailScreen() {
                 }
               >
                 <Ionicons name="list-outline" size={24} color={colors.text} />
-                <Text style={styles.actionLabel}>Add to List</Text>
+                <Text style={styles.actionLabel}>أضف إلى قائمة</Text>
               </Pressable>
               <Pressable
                 style={styles.actionBtn}
                 onPress={() => navigation.navigate('People', { shareMedia: { mediaType, mediaId: id, title: detail.title, posterPath: detail.posterPath, rating: detail.voteAverage ?? 0, overview: detail.overview ?? null } })}
               >
                 <Ionicons name="paper-plane-outline" size={24} color={colors.text} />
-                <Text style={styles.actionLabel}>Share Card</Text>
+                <Text style={styles.actionLabel}>مشاركة العنوان</Text>
               </Pressable>
             </View>
           </View>
@@ -293,23 +291,23 @@ export default function DetailScreen() {
               onPress={() => Linking.openURL(`https://www.youtube.com/watch?v=${trailer.key}`)}
             >
               <Ionicons name="play-circle" size={20} color={colors.bg} />
-              <Text style={styles.trailerText}>Watch Trailer</Text>
+              <Text style={styles.trailerText}>مشاهدة الإعلان</Text>
             </Pressable>
           )}
 
           {myReviewQuery.data && (
             <View style={styles.ownReviewCard}>
-              <View style={styles.ownReviewHeader}><Text style={styles.sectionTitle}>Your review</Text><RatingStars rating={myReviewQuery.data.rating} size={15} /></View>
+              <View style={styles.ownReviewHeader}><Text style={styles.sectionTitle}>مراجعتك</Text><RatingStars rating={myReviewQuery.data.rating} size={15} /></View>
               {!!myReviewQuery.data.review && <Text style={styles.ownReviewBody}>{myReviewQuery.data.review}</Text>}
             </View>
           )}
 
-          <Text style={styles.sectionTitle}>Overview</Text>
-          <Text style={styles.overview}>{detail.overview || 'No overview available.'}</Text>
+          <Text style={styles.sectionTitle}>نبذة</Text>
+          <Text style={styles.overview}>{detail.overview || 'لا تتوفر نبذة لهذا العنوان.'}</Text>
 
           {director && (
             <Text style={styles.directorText}>
-              <Text style={{ color: colors.textDim }}>{director.job}: </Text>
+              <Text style={{ color: colors.textDim }}>{director.job === 'Director' ? 'المخرج' : 'المبتكر'}: </Text>
               <Text style={{ color: colors.text, fontWeight: '700' }}>{director.name}</Text>
             </Text>
           )}
@@ -317,7 +315,7 @@ export default function DetailScreen() {
 
         {(detail.cast.length > 0 || detail.crew.length > 0) && (
           <View style={styles.peopleSection}>
-            <Text style={[styles.sectionTitle, { paddingHorizontal: spacing.lg }]}>Cast & Crew</Text>
+            <Text style={[styles.sectionTitle, { paddingHorizontal: spacing.lg }]}>طاقم العمل</Text>
             {detail.cast.length > 0 && (
               <CastRow
                 cast={detail.cast}
@@ -351,23 +349,23 @@ export default function DetailScreen() {
         <View style={styles.reviewsSection}>
           <View style={styles.sectionHeaderRow}>
             <View>
-              <Text style={styles.sectionTitle}>TMDB Reviews</Text>
-              <Text style={styles.sectionSubtitle}>What viewers are saying</Text>
+              <Text style={styles.sectionTitle}>مراجعات TMDB</Text>
+              <Text style={styles.sectionSubtitle}>آراء المشاهدين</Text>
             </View>
             {detail.reviews.length > 0 && (
               <Pressable
                 style={styles.allReviewsButton}
                 onPress={() => navigation.navigate('AllReviews', { mediaType, id, title: detail.title })}
                 accessibilityRole="button"
-                accessibilityLabel="View all reviews"
+                accessibilityLabel="عرض جميع المراجعات"
               >
-                <Text style={styles.allReviewsText}>View all</Text>
+                <Text style={styles.allReviewsText}>عرض الكل</Text>
                 <Ionicons name="chevron-forward" size={14} color={colors.accent} />
               </Pressable>
             )}
           </View>
           {detail.reviews.length === 0 ? (
-            <EmptyState icon="chatbox-ellipses-outline" title="No TMDB reviews yet" message="Be the first to share your thoughts from the review action above." />
+            <EmptyState icon="chatbox-ellipses-outline" title="لا توجد مراجعات من TMDB بعد" message="كن أول من يكتب مراجعة لهذا العنوان." />
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.reviewsRow}>
               {detail.reviews.map((review) => (
@@ -376,7 +374,7 @@ export default function DetailScreen() {
                   style={({ pressed }) => [styles.reviewCard, pressed && styles.cardPressed]}
                   onPress={() => review.url && Linking.openURL(review.url)}
                   accessibilityRole="button"
-                  accessibilityLabel={`Review by ${review.author}`}
+                  accessibilityLabel={`مراجعة كتبها ${review.author}`}
                 >
                   <View style={styles.reviewHeader}>
                     {review.authorAvatarPath ? (
@@ -395,7 +393,7 @@ export default function DetailScreen() {
                   <Text style={styles.reviewBody} numberOfLines={7}>{review.content.trim()}</Text>
                   <View style={styles.reviewFooter}>
                     <Text style={styles.reviewDate}>{formatReviewDate(review.createdAt)}</Text>
-                    <Text style={styles.readReview}>Read full review</Text>
+                    <Text style={styles.readReview}>قراءة المراجعة كاملة</Text>
                   </View>
                 </Pressable>
               ))}
@@ -405,7 +403,7 @@ export default function DetailScreen() {
 
         {mediaType === 'tv' && detail.seasons.length > 0 && (
           <View style={{ marginBottom: spacing.lg }}>
-            <Text style={[styles.sectionTitle, { paddingHorizontal: spacing.lg }]}>Seasons</Text>
+            <Text style={[styles.sectionTitle, { paddingHorizontal: spacing.lg }]}>المواسم</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
               {detail.seasons
                 .filter((s) => s.season_number > 0 || detail.seasons.length === 1)
@@ -425,7 +423,7 @@ export default function DetailScreen() {
                         </View>
                       )}
                       <Text numberOfLines={1} style={styles.seasonName}>{s.name}</Text>
-                      <Text style={styles.seasonEpCount}>{s.episode_count} episodes</Text>
+                      <Text style={styles.seasonEpCount}>{s.episode_count.toLocaleString('ar')} حلقات</Text>
                     </Pressable>
                   );
                 })}
@@ -435,7 +433,7 @@ export default function DetailScreen() {
 
         {diaryEntries.length > 0 && (
           <View style={{ marginBottom: spacing.lg, paddingHorizontal: spacing.lg }}>
-            <Text style={styles.sectionTitle}>Your Logs</Text>
+            <Text style={styles.sectionTitle}>سجل المشاهدة</Text>
             {diaryEntries.map((entry) => (
               <Pressable
                 key={entry.id}
@@ -454,9 +452,9 @@ export default function DetailScreen() {
               >
                 <View style={styles.logHeader}>
                   <Text style={styles.logDate}>
-                    {new Date(entry.watchedDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {new Date(entry.watchedDate).toLocaleDateString('ar', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </Text>
-                  {entry.rewatch && <Text style={styles.rewatchTag}>Rewatch</Text>}
+                  {entry.rewatch && <Text style={styles.rewatchTag}>إعادة المشاهدة</Text>}
                 </View>
                 {!!entry.rating && <RatingStars rating={entry.rating} size={15} />}
                 {!!entry.review && <Text style={styles.reviewText} numberOfLines={4}>{entry.review}</Text>}
@@ -467,7 +465,7 @@ export default function DetailScreen() {
 
         {detail.similar.length > 0 && (
           <SectionRow
-            title={mediaType === 'movie' ? 'More Like This' : 'Similar Shows'}
+            title={mediaType === 'movie' ? 'أعمال مشابهة' : 'مسلسلات مشابهة'}
             data={detail.similar}
             onItemPress={(item) => navigation.push('Detail', { mediaType: item.mediaType, id: item.id })}
           />

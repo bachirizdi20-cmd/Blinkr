@@ -8,7 +8,7 @@ import RatingStars from '../components/RatingStars';
 import EmptyState from '../components/EmptyState';
 import { ContentStackParamList } from '../navigation/types';
 import { useLibrary, DiaryEntry } from '../context/LibraryContext';
-import { posterUrl } from '../lib/tmdb';
+import { catalogPosterUrl, openCatalogItem } from '../lib/catalog-navigation';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
@@ -21,10 +21,10 @@ export default function ReviewsScreen() {
   const renderItem = ({ item }: { item: DiaryEntry }) => (
     <Pressable
       style={styles.card}
-      onPress={() => navigation.navigate('Detail', { mediaType: item.mediaType, id: item.mediaId })}
+      onPress={() => openCatalogItem(navigation, item)}
     >
       <View style={styles.cardHeader}>
-        <Image source={{ uri: posterUrl(item.posterPath, 'w200') ?? undefined }} style={styles.poster} contentFit="cover" />
+        <Image source={{ uri: catalogPosterUrl(item.mediaType, item.posterPath, 'w200') ?? undefined }} style={styles.poster} contentFit="cover" />
         <View style={{ flex: 1 }}>
           <Text style={styles.title} numberOfLines={1}>{item.title}</Text>
           <Text style={styles.date}>{item.watchedDate}</Text>
@@ -37,9 +37,9 @@ export default function ReviewsScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <Text style={styles.header}>Reviews</Text>
+      <Text style={styles.header}>المراجعات</Text>
       {entries.length === 0 ? (
-        <EmptyState icon="chatbox-ellipses-outline" title="No reviews yet" message="Write a review when logging a title." />
+        <EmptyState icon="chatbox-ellipses-outline" title="لا توجد مراجعات بعد" message="اكتب مراجعة عند تسجيل كتاب أو عنوان تشاهده." />
       ) : (
         <FlatList
           data={entries}

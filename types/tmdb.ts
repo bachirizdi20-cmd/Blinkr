@@ -1,5 +1,5 @@
 export type MediaType = 'movie' | 'tv';
-export type ReviewMediaType = MediaType;
+export type ReviewMediaType = MediaType | 'book';
 
 export interface Genre {
   id: number;

@@ -1,6 +1,7 @@
 import { MediaType, ReviewMediaType } from '../types/tmdb';
 import { FeedDescriptor } from '../lib/tmdb';
 import { PeopleFilter } from '../types/social';
+import { BookSummary } from '../types/books';
 
 export type ContentStackParamList = {
   HomeMain: undefined;
@@ -9,6 +10,7 @@ export type ContentStackParamList = {
   CreateMain: undefined;
   ProfileMain: undefined;
   Detail: { mediaType: MediaType; id: number };
+  BookDetail: { workId: number; book?: Partial<BookSummary> };
   Season: { tvId: number; seasonNumber: number; tvName: string };
   Person: { personId: number; name: string };
   CategoryList: { title: string; feed: FeedDescriptor };
@@ -22,7 +24,7 @@ export type ContentStackParamList = {
   EditProfile: undefined;
   Settings: undefined;
   Conversation: { userId: string };
-  People: { initialFilter?: PeopleFilter; shareMedia?: { mediaType: MediaType; mediaId: number; title: string; posterPath: string | null; rating: number; overview?: string | null } } | undefined;
+  People: { initialFilter?: PeopleFilter; shareMedia?: { mediaType: ReviewMediaType; mediaId: number; title: string; posterPath: string | null; rating: number; overview?: string | null } } | undefined;
   Notifications: undefined;
   UserProfile: { userId: string };
   ReviewModal: {
@@ -34,7 +36,7 @@ export type ContentStackParamList = {
     entryId?: string;
   };
   AddToList: {
-    mediaType: MediaType;
+    mediaType: ReviewMediaType;
     mediaId: number;
     title: string;
     posterPath: string | null;

@@ -1,10 +1,10 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { MediaType } from '../types/tmdb';
+import { ReviewMediaType } from '../types/tmdb';
 import { getAccountLibraryStorageKeys, loadAccountLibraryStorage } from '../lib/library-storage';
 
 export interface MediaRef {
-  mediaType: MediaType;
+  mediaType: ReviewMediaType;
   mediaId: number;
   title: string;
   posterPath: string | null;
@@ -13,7 +13,7 @@ export interface MediaRef {
   voteAverage?: number;
 }
 
-export const mediaKey = (mediaType: MediaType, mediaId: number) => `${mediaType}-${mediaId}`;
+export const mediaKey = (mediaType: ReviewMediaType, mediaId: number) => `${mediaType}-${mediaId}`;
 
 export interface DiaryEntry extends MediaRef {
   id: string;
@@ -63,15 +63,15 @@ interface LibraryContextValue {
   profile: UserProfile;
   episodeWatched: EpisodeWatchedMap;
 
-  isInWatchlist: (mediaType: MediaType, mediaId: number) => boolean;
+  isInWatchlist: (mediaType: ReviewMediaType, mediaId: number) => boolean;
   toggleWatchlist: (item: MediaRef) => void;
 
-  isLiked: (mediaType: MediaType, mediaId: number) => boolean;
+  isLiked: (mediaType: ReviewMediaType, mediaId: number) => boolean;
   toggleLike: (item: MediaRef) => void;
 
-  getDiaryForMedia: (mediaType: MediaType, mediaId: number) => DiaryEntry[];
-  getLatestRating: (mediaType: MediaType, mediaId: number) => number | undefined;
-  isWatched: (mediaType: MediaType, mediaId: number) => boolean;
+  getDiaryForMedia: (mediaType: ReviewMediaType, mediaId: number) => DiaryEntry[];
+  getLatestRating: (mediaType: ReviewMediaType, mediaId: number) => number | undefined;
+  isWatched: (mediaType: ReviewMediaType, mediaId: number) => boolean;
   setQuickRating: (item: MediaRef, rating: number) => void;
   toggleWatchedQuick: (item: MediaRef) => void;
   addDiaryEntry: (entry: Omit<DiaryEntry, 'id' | 'createdAt'>) => string;
@@ -82,7 +82,7 @@ interface LibraryContextValue {
   deleteList: (id: string) => void;
   renameList: (id: string, name: string, description: string) => void;
   toggleItemInList: (listId: string, item: MediaRef) => void;
-  isItemInList: (listId: string, mediaType: MediaType, mediaId: number) => boolean;
+  isItemInList: (listId: string, mediaType: ReviewMediaType, mediaId: number) => boolean;
 
   updateProfile: (patch: Partial<UserProfile>) => void;
 
@@ -156,7 +156,7 @@ export function LibraryProvider({ children, accountId }: { children: React.React
   useEffect(() => { if (loaded) AsyncStorage.setItem(storageKeys.profile, JSON.stringify(profile)); }, [profile, loaded, storageKeys.profile]);
   useEffect(() => { if (loaded) AsyncStorage.setItem(storageKeys.episodes, JSON.stringify(episodeWatched)); }, [episodeWatched, loaded, storageKeys.episodes]);
 
-  const isInWatchlist = useCallback((mediaType: MediaType, mediaId: number) => !!watchlist[mediaKey(mediaType, mediaId)], [watchlist]);
+  const isInWatchlist = useCallback((mediaType: ReviewMediaType, mediaId: number) => !!watchlist[mediaKey(mediaType, mediaId)], [watchlist]);
 
   const toggleWatchlist = useCallback((item: MediaRef) => {
     const key = mediaKey(item.mediaType, item.mediaId);
@@ -168,7 +168,7 @@ export function LibraryProvider({ children, accountId }: { children: React.React
     });
   }, []);
 
-  const isLiked = useCallback((mediaType: MediaType, mediaId: number) => !!likes[mediaKey(mediaType, mediaId)], [likes]);
+  const isLiked = useCallback((mediaType: ReviewMediaType, mediaId: number) => !!likes[mediaKey(mediaType, mediaId)], [likes]);
 
   const toggleLike = useCallback((item: MediaRef) => {
     const key = mediaKey(item.mediaType, item.mediaId);
@@ -181,7 +181,7 @@ export function LibraryProvider({ children, accountId }: { children: React.React
   }, []);
 
   const getDiaryForMedia = useCallback(
-    (mediaType: MediaType, mediaId: number) =>
+    (mediaType: ReviewMediaType, mediaId: number) =>
       diary
         .filter((e) => e.mediaType === mediaType && e.mediaId === mediaId)
         .sort((a, b) => b.createdAt - a.createdAt),
@@ -189,7 +189,7 @@ export function LibraryProvider({ children, accountId }: { children: React.React
   );
 
   const getLatestRating = useCallback(
-    (mediaType: MediaType, mediaId: number) => {
+    (mediaType: ReviewMediaType, mediaId: number) => {
       const entries = diary
         .filter((e) => e.mediaType === mediaType && e.mediaId === mediaId && e.rating)
         .sort((a, b) => b.createdAt - a.createdAt);
@@ -199,7 +199,7 @@ export function LibraryProvider({ children, accountId }: { children: React.React
   );
 
   const isWatched = useCallback(
-    (mediaType: MediaType, mediaId: number) => diary.some((e) => e.mediaType === mediaType && e.mediaId === mediaId),
+    (mediaType: ReviewMediaType, mediaId: number) => diary.some((e) => e.mediaType === mediaType && e.mediaId === mediaId),
     [diary]
   );
 
@@ -283,7 +283,7 @@ export function LibraryProvider({ children, accountId }: { children: React.React
   }, []);
 
   const isItemInList = useCallback(
-    (listId: string, mediaType: MediaType, mediaId: number) => {
+    (listId: string, mediaType: ReviewMediaType, mediaId: number) => {
       const list = lists.find((l) => l.id === listId);
       return !!list?.items.some((i) => i.mediaType === mediaType && i.mediaId === mediaId);
     },

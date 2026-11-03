@@ -20,15 +20,15 @@ import { colors, fontSizes, spacing } from "@/lib/theme";
 function FirstLaunchGate() {
   const { user, loading, error, refresh } = useAuth();
 
-  if (loading && Platform.OS !== "web") {
-    return <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={colors.accent} /></View>;
+  if (loading) {
+    return <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", gap: spacing.sm }}><ActivityIndicator color={colors.accent} /><Text style={{ color: colors.textDim, fontSize: fontSizes.sm, writingDirection: "rtl" }}>جارٍ التحقق من جلسة الدخول…</Text></View>;
   }
 
   if (!user) {
     return (
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: colors.bg }}
-        behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? 16 : 0}
       >
         <ScrollView
@@ -48,7 +48,7 @@ function FirstLaunchGate() {
             {error ? <Text style={{ color: colors.danger, fontSize: fontSizes.sm, textAlign: "center", marginBottom: spacing.md, writingDirection: "rtl" }}>{error.message}</Text> : null}
             <AuthPanel onAuthenticated={refresh} />
           </View>
-          <Text style={{ color: colors.textFaint, fontSize: 12, marginTop: spacing.md, textAlign: "center", writingDirection: "rtl" }}>تسجيل آمن • بياناتك تبقى خاصة</Text>
+          <Text style={{ color: colors.textFaint, fontSize: 12, marginTop: spacing.md, textAlign: "center", writingDirection: "rtl" }}>تسجيل آمن • الملف الشخصي عام</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     );

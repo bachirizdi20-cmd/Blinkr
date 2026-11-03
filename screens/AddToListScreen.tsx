@@ -31,9 +31,9 @@ export default function AddToListScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <Text style={styles.doneText}>Close</Text>
+          <Text style={styles.doneText}>إغلاق</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>Add to List</Text>
+        <Text style={styles.headerTitle}>إضافة إلى قائمة</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -43,7 +43,7 @@ export default function AddToListScreen() {
         <View style={styles.createRow}>
           <TextInput
             style={styles.input}
-            placeholder="New list name"
+            placeholder="اسم القائمة الجديدة"
             placeholderTextColor={colors.textFaint}
             value={newName}
             onChangeText={setNewName}
@@ -52,13 +52,13 @@ export default function AddToListScreen() {
             returnKeyType="done"
           />
           <Pressable style={styles.createBtn} onPress={handleCreate}>
-            <Text style={styles.createBtnText}>Create</Text>
+            <Text style={styles.createBtnText}>إنشاء</Text>
           </Pressable>
         </View>
       ) : (
         <Pressable style={styles.newListRow} onPress={() => setCreating(true)}>
           <Ionicons name="add-circle" size={22} color={colors.accent} />
-          <Text style={styles.newListText}>Create New List</Text>
+          <Text style={styles.newListText}>إنشاء قائمة جديدة</Text>
         </Pressable>
       )}
 
@@ -66,7 +66,7 @@ export default function AddToListScreen() {
         data={lib.lists}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: spacing.lg }}
-        ListEmptyComponent={<EmptyState icon="list-outline" title="No lists yet" message="Create your first list above." />}
+        ListEmptyComponent={<EmptyState icon="list-outline" title="لا توجد قوائم بعد" message="أنشئ قائمتك الأولى من الخيار أعلاه." />}
         renderItem={({ item }) => {
           const included = lib.isItemInList(item.id, mediaType, mediaId);
           return (
@@ -76,7 +76,7 @@ export default function AddToListScreen() {
             >
               <View style={{ flex: 1 }}>
                 <Text style={styles.listName}>{item.name}</Text>
-                <Text style={styles.listCount}>{item.items.length} title{item.items.length !== 1 ? 's' : ''}</Text>
+                <Text style={styles.listCount}>{item.items.length.toLocaleString('ar')} عناوين</Text>
               </View>
               <Ionicons
                 name={included ? 'checkmark-circle' : 'ellipse-outline'}

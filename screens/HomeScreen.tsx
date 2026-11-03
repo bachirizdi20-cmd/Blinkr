@@ -26,9 +26,9 @@ import {
   fetchTVList,
   fetchAnime,
   backdropUrl,
-  posterUrl,
 } from '../lib/tmdb';
-import { NormalizedItem } from '../types/tmdb';
+import { NormalizedItem, ReviewMediaType } from '../types/tmdb';
+import { catalogPosterUrl, openCatalogItem } from '../lib/catalog-navigation';
 import { useMetadata } from '../context/MetadataContext';
 import { useAuth } from '../hooks/use-auth';
 import { trpc } from '../lib/trpc';
@@ -74,23 +74,36 @@ export default function HomeScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const tasks: Array<[() => Promise<any>, (results: NormalizedItem[]) => void]> = [
-      [() => fetchTrendingAll(1), (v) => setTrending(v)],
-      [() => fetchMovieList('popular', 1), (v) => setMoviePopular(v)],
-      [() => fetchMovieList('top_rated', 1), (v) => setMovieTop(v)],
-      [() => fetchMovieList('upcoming', 1), (v) => setMovieUpcoming(v)],
-      [() => fetchMovieList('now_playing', 1), (v) => setMovieNowPlaying(v)],
-      [() => fetchTVList('popular', 1), (v) => setTvPopular(v)],
-      [() => fetchTVList('top_rated', 1), (v) => setTvTop(v)],
-      [() => fetchTVList('airing_today', 1), (v) => setTvAiring(v)],
-      [() => fetchAnime('tv', 1), (v) => setAnimeTv(v)],
-      [() => fetchAnime('movie', 1), (v) => setAnimeMovie(v)],
-    ];
-    const outcomes = await Promise.allSettled(tasks.map(async ([fetch, apply]) => apply((await fetch()).results)));
-    if (outcomes.every((item) => item.status === 'rejected')) setError('Unable to reach TMDB right now. Pull to retry.');
-    else if (outcomes.some((item) => item.status === 'rejected')) console.warn('Some home sections could not be loaded.');
-    setLoading(false);
-    setRefreshing(false);
+    try {
+      const results = await Promise.allSettled([
+        fetchTrendingAll(1),
+        fetchMovieList('popular', 1),
+        fetchMovieList('top_rated', 1),
+        fetchMovieList('upcoming', 1),
+        fetchMovieList('now_playing', 1),
+        fetchTVList('popular', 1),
+        fetchTVList('top_rated', 1),
+        fetchTVList('airing_today', 1),
+        fetchAnime('tv', 1),
+        fetchAnime('movie', 1),
+      ]);
+      const setters: ((items: NormalizedItem[]) => void)[] = [
+        setTrending, setMoviePopular, setMovieTop, setMovieUpcoming, setMovieNowPlaying,
+        setTvPopular, setTvTop, setTvAiring, setAnimeTv, setAnimeMovie,
+      ];
+      const failures: unknown[] = [];
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') setters[index](result.value.results);
+        else failures.push(result.reason);
+      });
+      if (failures.length === results.length) setError('تعذر تحميل العناوين الآن. اسحب الشاشة لإعادة المحاولة.');
+      else if (failures.length) setError('تعذر تحميل بعض الأقسام؛ ستبقى الأقسام المتاحة ظاهرة. اسحب الشاشة لإعادة المحاولة.');
+    } catch {
+      setError('تعذر الاتصال بخدمة العناوين الآن.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -112,75 +125,75 @@ export default function HomeScreen() {
     () => [
       {
         key: 'movie_popular',
-        title: 'Popular Movies',
+        title: 'الأفلام الرائجة',
         data: moviePopular,
         loading,
         categories: ['all', 'movie'],
-        seeAll: () => navigation.navigate('CategoryList', { title: 'Popular Movies', feed: { kind: 'movieList', list: 'popular' } }),
+        seeAll: () => navigation.navigate('CategoryList', { title: 'الأفلام الرائجة', feed: { kind: 'movieList', list: 'popular' } }),
       },
       {
         key: 'tv_popular',
-        title: 'Popular TV Shows',
+        title: 'المسلسلات الرائجة',
         data: tvPopular,
         loading,
         categories: ['all', 'tv'],
-        seeAll: () => navigation.navigate('CategoryList', { title: 'Popular TV Shows', feed: { kind: 'tvList', list: 'popular' } }),
+        seeAll: () => navigation.navigate('CategoryList', { title: 'المسلسلات الرائجة', feed: { kind: 'tvList', list: 'popular' } }),
       },
       {
         key: 'anime_tv',
-        title: 'Popular Anime Series',
+        title: 'مسلسلات الأنمي الرائجة',
         data: animeTv,
         loading,
         categories: ['all', 'anime'],
-        seeAll: () => navigation.navigate('CategoryList', { title: 'Popular Anime Series', feed: { kind: 'anime', media: 'tv' } }),
+        seeAll: () => navigation.navigate('CategoryList', { title: 'مسلسلات الأنمي الرائجة', feed: { kind: 'anime', media: 'tv' } }),
       },
       {
         key: 'now_playing',
-        title: 'In Theaters',
+        title: 'في دور العرض',
         data: movieNowPlaying,
         loading,
         categories: ['all', 'movie'],
-        seeAll: () => navigation.navigate('CategoryList', { title: 'In Theaters', feed: { kind: 'movieList', list: 'now_playing' } }),
+        seeAll: () => navigation.navigate('CategoryList', { title: 'في دور العرض', feed: { kind: 'movieList', list: 'now_playing' } }),
       },
       {
         key: 'anime_movie',
-        title: 'Anime Movies',
+        title: 'أفلام أنمي',
         data: animeMovie,
         loading,
         categories: ['anime'],
-        seeAll: () => navigation.navigate('CategoryList', { title: 'Anime Movies', feed: { kind: 'anime', media: 'movie' } }),
+        seeAll: () => navigation.navigate('CategoryList', { title: 'أفلام أنمي', feed: { kind: 'anime', media: 'movie' } }),
       },
       {
         key: 'movie_top',
-        title: 'Top Rated Movies',
+        title: 'الأفلام الأعلى تقييمًا',
         data: movieTop,
         loading,
         categories: ['all', 'movie'],
-        seeAll: () => navigation.navigate('CategoryList', { title: 'Top Rated Movies', feed: { kind: 'movieList', list: 'top_rated' } }),
+        seeAll: () => navigation.navigate('CategoryList', { title: 'الأفلام الأعلى تقييمًا', feed: { kind: 'movieList', list: 'top_rated' } }),
       },
       {
         key: 'tv_top',
-        title: 'Top Rated TV Shows',
+        title: 'المسلسلات الأعلى تقييمًا',
         data: tvTop,
         loading,
         categories: ['tv'],
-        seeAll: () => navigation.navigate('CategoryList', { title: 'Top Rated TV Shows', feed: { kind: 'tvList', list: 'top_rated' } }),
+        seeAll: () => navigation.navigate('CategoryList', { title: 'المسلسلات الأعلى تقييمًا', feed: { kind: 'tvList', list: 'top_rated' } }),
       },
       {
         key: 'tv_airing',
-        title: 'Airing Today',
+        title: 'يُعرض اليوم',
         data: tvAiring,
         loading,
         categories: ['tv'],
-        seeAll: () => navigation.navigate('CategoryList', { title: 'Airing Today', feed: { kind: 'tvList', list: 'airing_today' } }),
+        seeAll: () => navigation.navigate('CategoryList', { title: 'يُعرض اليوم', feed: { kind: 'tvList', list: 'airing_today' } }),
       },
       {
         key: 'upcoming',
-        title: 'Upcoming Movies',
+        title: 'أفلام قادمة',
         data: movieUpcoming,
         loading,
         categories: ['all', 'movie'],
-        seeAll: () => navigation.navigate('CategoryList', { title: 'Upcoming Movies', feed: { kind: 'movieList', list: 'upcoming' } }),
+        seeAll: () => navigation.navigate('CategoryList', { title: 'أفلام قادمة', feed: { kind: 'movieList', list: 'upcoming' } }),
       },
     ],
     [moviePopular, tvPopular, animeTv, movieNowPlaying, animeMovie, movieTop, tvTop, tvAiring, movieUpcoming, loading]
@@ -199,14 +212,14 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.brand}>Blinkr</Text>
-            <Text style={styles.tagline}>Track every story you watch</Text>
+            <Text style={styles.tagline}>تابع كل قصة تشاهدها</Text>
           </View>
           <View style={styles.headerActions}>
-            <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Notifications')} accessibilityRole="button" accessibilityLabel={unreadNotifications ? `Notifications, ${unreadNotifications} unread` : 'Notifications'}>
+            <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Notifications')} accessibilityRole="button" accessibilityLabel="الإشعارات">
               <Ionicons name="notifications-outline" size={20} color={colors.text} />
               {unreadNotifications > 0 ? <View style={styles.notificationDot}><Text style={styles.notificationCount}>{unreadNotifications > 9 ? '9+' : unreadNotifications}</Text></View> : null}
             </Pressable>
-            <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Search')} accessibilityRole="button" accessibilityLabel="Search">
+            <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Search')} accessibilityRole="button" accessibilityLabel="البحث">
               <Ionicons name="search" size={20} color={colors.text} />
             </Pressable>
           </View>
@@ -219,7 +232,7 @@ export default function HomeScreen() {
             <View style={styles.heroContent}>
               <View style={styles.trendingTag}>
                 <Ionicons name="flame" size={12} color={colors.accent2} />
-                <Text style={styles.trendingTagText}>Trending Today</Text>
+                <Text style={styles.trendingTagText}>الرائج اليوم</Text>
               </View>
               <Text style={styles.heroTitle} numberOfLines={2}>{hero.title}</Text>
               <View style={styles.heroMetaRow}>
@@ -228,7 +241,7 @@ export default function HomeScreen() {
                 <Text style={styles.heroDot}>•</Text>
                 <Text style={styles.heroMetaText}>{hero.date?.slice(0, 4)}</Text>
                 <Text style={styles.heroDot}>•</Text>
-                <Text style={styles.heroMetaText}>{hero.mediaType === 'movie' ? 'Movie' : 'TV Series'}</Text>
+                <Text style={styles.heroMetaText}>{hero.mediaType === 'movie' ? 'فيلم' : 'مسلسل'}</Text>
               </View>
             </View>
           </Pressable>
@@ -245,7 +258,7 @@ export default function HomeScreen() {
               style={[styles.categoryPill, category === c && styles.categoryPillActive]}
             >
               <Text style={[styles.categoryText, category === c && styles.categoryTextActive]}>
-                {c === 'all' ? 'All' : c === 'movie' ? 'Movies' : c === 'tv' ? 'TV' : 'Anime'}
+                {c === 'all' ? 'الكل' : c === 'movie' ? 'الأفلام' : c === 'tv' ? 'المسلسلات' : 'الأنمي'}
               </Text>
             </Pressable>
           ))}
@@ -265,12 +278,10 @@ export default function HomeScreen() {
           </ScrollView>
         )}
 
-        <SocialReviewFeed onOpenDetail={(review) => navigation.navigate('Detail', { mediaType: review.mediaType, id: review.mediaId })} enabled={Boolean(user)} />
+        <SocialReviewFeed onOpenDetail={(review) => openCatalogItem(navigation, review)} enabled={Boolean(user)} />
 
-        {error ? (
-          <ApiErrorState message={error} onRetry={load} />
-        ) : (
-          visibleSections.map((s) => (
+        {error ? <ApiErrorState message={error} onRetry={load} /> : null}
+        {visibleSections.map((s) => (
           <SectionRow
             key={s.key}
             title={s.title}
@@ -279,8 +290,7 @@ export default function HomeScreen() {
             onSeeAll={s.seeAll}
             onItemPress={openDetail}
           />
-          ))
-        )}
+        ))}
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
@@ -290,7 +300,7 @@ export default function HomeScreen() {
 
 
 type FeedRow = {
-  review: { id: number; userId: number; mediaType: 'movie' | 'tv'; mediaId: number; title: string; posterPath: string | null; rating: number; review: string; createdAt: string | Date };
+  review: { id: number; userId: number; mediaType: ReviewMediaType; mediaId: number; title: string; posterPath: string | null; rating: number; review: string; createdAt: string | Date };
   username: string | null;
   displayName: string | null;
   avatarUrl: string | null;
@@ -299,7 +309,7 @@ type FeedRow = {
   likedByMe: boolean;
 };
 
-function SocialReviewFeed({ onOpenDetail, enabled }: { onOpenDetail: (review: { mediaType: 'movie' | 'tv'; mediaId: number }) => void; enabled: boolean }) {
+function SocialReviewFeed({ onOpenDetail, enabled }: { onOpenDetail: (review: { mediaType: ReviewMediaType; mediaId: number; title: string; posterPath: string | null }) => void; enabled: boolean }) {
   const [showAllReviews, setShowAllReviews] = useState(false);
   const feedQuery = trpc.social.feed.useQuery(undefined, { enabled });
   const rows = (feedQuery.data ?? []) as FeedRow[];
@@ -309,23 +319,23 @@ function SocialReviewFeed({ onOpenDetail, enabled }: { onOpenDetail: (review: { 
     <View style={styles.socialSection}>
       <View style={styles.socialSectionHeader}>
         <View>
-          <Text style={styles.socialTitle}>From people you follow</Text>
-          <Text style={styles.socialSubtitle}>Fresh thoughts from your circle</Text>
+          <Text style={styles.socialTitle}>من تتابعهم</Text>
+          <Text style={styles.socialSubtitle}>أحدث آراء دائرتك</Text>
         </View>
         {rows.length > 3 ? (
           <Pressable style={styles.socialMoreButton} onPress={() => setShowAllReviews((current) => !current)} accessibilityRole="button">
-            <Text style={styles.socialMoreText}>{showAllReviews ? 'Show less' : 'View more'}</Text>
+            <Text style={styles.socialMoreText}>{showAllReviews ? 'عرض أقل' : 'عرض المزيد'}</Text>
             <Ionicons name={showAllReviews ? 'chevron-up' : 'chevron-down'} size={15} color={colors.accent} />
           </Pressable>
         ) : <Ionicons name="people-outline" size={19} color={colors.accent} />}
       </View>
       {feedQuery.isError ? (
-        <ApiErrorState message="Couldn't load your feed." onRetry={() => feedQuery.refetch()} />
+        <ApiErrorState message="تعذر تحميل موجز مراجعاتك." onRetry={() => feedQuery.refetch()} />
       ) : rows.length === 0 ? (
         <View style={styles.socialEmpty}>
           <Ionicons name="chatbubble-ellipses-outline" size={24} color={colors.textFaint} />
-          <Text style={styles.socialEmptyTitle}>No reviews from your circle yet</Text>
-          <Text style={styles.socialEmptyText}>Follow more people to see their latest thoughts here.</Text>
+          <Text style={styles.socialEmptyTitle}>لا توجد مراجعات جديدة بعد</Text>
+          <Text style={styles.socialEmptyText}>تابع أشخاصًا آخرين لتظهر آراؤهم هنا.</Text>
         </View>
       ) : (
         visibleRows.map((row, index) => (
@@ -350,7 +360,7 @@ function FeedReviewCard({
 }: {
   row: FeedRow;
   index: number;
-  onOpenDetail: (review: { mediaType: 'movie' | 'tv'; mediaId: number }) => void;
+    onOpenDetail: (review: { mediaType: ReviewMediaType; mediaId: number; title: string; posterPath: string | null }) => void;
   onChanged: () => void;
 }) {
   const { review, username, displayName, avatarUrl, likeCount, commentCount, likedByMe } = row;
@@ -367,7 +377,7 @@ function FeedReviewCard({
     addCommentMutation.mutate({ reviewId: review.id, text: commentText.trim() });
   };
 
-  const poster = posterUrl(review.posterPath, 'w342');
+  const poster = catalogPosterUrl(review.mediaType, review.posterPath, 'w342');
   const createdAtMs = new Date(review.createdAt).getTime();
 
   return (
@@ -385,29 +395,29 @@ function FeedReviewCard({
           )}
         </View>
         <View style={styles.socialAuthorBlock}>
-          <Text style={styles.socialAuthor}>{displayName ?? username ?? 'A friend'}</Text>
-          <Text style={styles.socialHandle}>@{username ?? 'friend'} · {formatSocialTime(createdAtMs)}</Text>
+          <Text style={styles.socialAuthor}>{displayName ?? username ?? 'مستخدم'}</Text>
+          <Text style={styles.socialHandle}>@{username ?? 'مستخدم'} · {formatSocialTime(createdAtMs)}</Text>
         </View>
         <View style={styles.socialRating}><Ionicons name="star" size={13} color={colors.gold} /><Text style={styles.socialRatingText}>{review.rating}/10</Text></View>
       </View>
-      <Pressable style={styles.socialMediaRow} onPress={() => onOpenDetail({ mediaType: review.mediaType, mediaId: review.mediaId })}>
-        {poster ? <Image source={{ uri: poster }} style={styles.socialPoster} contentFit="cover" /> : <View style={[styles.socialPoster, styles.socialPosterFallback]}><Ionicons name="film-outline" size={20} color={colors.textFaint} /></View>}
-        <View style={styles.socialMediaInfo}><Text style={styles.socialMediaTitle} numberOfLines={2}>{review.title}</Text><Text style={styles.socialMediaHint}>Tap to open details</Text></View>
+      <Pressable style={styles.socialMediaRow} onPress={() => onOpenDetail({ mediaType: review.mediaType, mediaId: review.mediaId, title: review.title, posterPath: review.posterPath })}>
+        {poster ? <Image source={{ uri: poster }} style={styles.socialPoster} contentFit="cover" /> : <View style={[styles.socialPoster, styles.socialPosterFallback]}><Ionicons name={review.mediaType === 'book' ? 'book-outline' : 'film-outline'} size={20} color={colors.textFaint} /></View>}
+        <View style={styles.socialMediaInfo}><Text style={styles.socialMediaTitle} numberOfLines={2}>{review.title}</Text><Text style={styles.socialMediaHint}>اضغط لفتح التفاصيل</Text></View>
       </Pressable>
       <Text style={styles.socialReviewText}>{review.review}</Text>
       <View style={styles.socialActions}>
-        <Pressable style={styles.socialAction} onPress={() => toggleLikeMutation.mutate({ reviewId: review.id })} accessibilityLabel={likedByMe ? 'Unlike review' : 'Like review'}>
+        <Pressable style={styles.socialAction} onPress={() => toggleLikeMutation.mutate({ reviewId: review.id })} accessibilityRole="button" accessibilityLabel={likedByMe ? 'إلغاء الإعجاب بالمراجعة' : 'الإعجاب بالمراجعة'}>
           <Ionicons name={likedByMe ? 'heart' : 'heart-outline'} size={20} color={likedByMe ? colors.danger : colors.textDim} />
           <Text style={[styles.socialActionText, likedByMe && { color: colors.danger }]}>{likeCount}</Text>
         </Pressable>
-        <Pressable style={styles.socialAction} onPress={() => setCommentOpen((current) => !current)} accessibilityLabel="Comment on review">
+        <Pressable style={styles.socialAction} onPress={() => setCommentOpen((current) => !current)} accessibilityRole="button" accessibilityLabel="التعليق على المراجعة">
           <Ionicons name="chatbubble-outline" size={19} color={colors.textDim} />
           <Text style={styles.socialActionText}>{commentCount}</Text>
         </Pressable>
       </View>
       {commentOpen && (commentsQuery.data ?? []).slice(0, 2).map((item) => (
         <View key={item.comment.id} style={styles.commentRow}>
-          <Text style={styles.commentAuthor}>{item.name ?? item.username ?? 'Someone'}</Text>
+          <Text style={styles.commentAuthor}>{item.name ?? item.username ?? 'مستخدم'}</Text>
           <Text style={styles.commentBody}>{item.comment.text}</Text>
         </View>
       ))}
@@ -416,7 +426,7 @@ function FeedReviewCard({
           <TextInput
             value={commentText}
             onChangeText={setCommentText}
-            placeholder="Write a comment..."
+            placeholder="اكتب تعليقًا…"
             placeholderTextColor={colors.textFaint}
             selectionColor={colors.accent}
             cursorColor={colors.accent}
@@ -424,7 +434,7 @@ function FeedReviewCard({
             returnKeyType="send"
             onSubmitEditing={submitComment}
           />
-          <Pressable style={styles.commentSend} onPress={submitComment} accessibilityLabel="Post comment">
+          <Pressable style={styles.commentSend} onPress={submitComment} accessibilityRole="button" accessibilityLabel="إرسال التعليق">
             <Ionicons name="arrow-up" size={16} color={colors.bg} />
           </Pressable>
         </View>
@@ -435,10 +445,11 @@ function FeedReviewCard({
 
 function formatSocialTime(value: number) {
   const minutes = Math.max(1, Math.round((Date.now() - value) / 60000));
-  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 60) return minutes === 1 ? 'قبل دقيقة' : `قبل ${minutes} دقيقة`;
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.round(hours / 24)}d`;
+  if (hours < 24) return hours === 1 ? 'قبل ساعة' : `قبل ${hours} ساعة`;
+  const days = Math.round(hours / 24);
+  return days === 1 ? 'قبل يوم' : `قبل ${days} يوم`;
 }
 
 const styles = StyleSheet.create({

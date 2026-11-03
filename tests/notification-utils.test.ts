@@ -3,8 +3,8 @@ import { matchesNotificationFilter, NOTIFICATION_COPY } from '../lib/notificatio
 
 describe('notification utilities', () => {
   it('describes message notifications separately from review comments', () => {
-    expect(NOTIFICATION_COPY.message).toBe('sent you a message');
-    expect(NOTIFICATION_COPY.comment).toBe('commented on your review');
+    expect(NOTIFICATION_COPY.message).toBe('أرسل إليك رسالة');
+    expect(NOTIFICATION_COPY.comment).toBe('علّق على مراجعتك');
   });
 
   it('matches the messages filter without matching comments', () => {
