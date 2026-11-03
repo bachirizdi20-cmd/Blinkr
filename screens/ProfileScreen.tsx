@@ -110,19 +110,13 @@ export default function ProfileScreen() {
   const recentReviews = diary.filter((e) => !!e.review).sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
   const publishedReviews = remoteReviewsQuery.data ?? [];
   const ratedReviews = publishedReviews.filter((review) => review.rating != null);
-  const movieReviewCount = publishedReviews.filter((review) => review.mediaType === 'movie').length;
-  const tvReviewCount = publishedReviews.filter((review) => review.mediaType === 'tv').length;
-  const bookReviewCount = publishedReviews.filter((review) => review.mediaType === 'book').length;
-  const averageReviewRating = ratedReviews.length
-    ? ratedReviews.reduce((total, review) => total + Number(review.rating), 0) / ratedReviews.length
-    : null;
   const topReviews = [...ratedReviews]
     .sort((a, b) => Number(b.rating) - Number(a.rating) || new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 5)
     .map((review) => ({ ...review, mediaType: normalizeReviewMediaType(review.mediaType) }));
   const latestPublishedReviews = [...publishedReviews].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 3);
   const joinedDate = formatProfileDate(accountQuery.data?.user.createdAt ?? profile.joinedAt);
-  const likeItems = Object.values(likes).sort((a, b) => b.likedAt - a.likedAt).slice(0, 8);
+  const likeItems = Object.values(likes).sort((a, b) => b.likedAt - a.likedAt).slice(0, 5);
 
   const emailVerified = Boolean((accountQuery.data?.user as { emailVerifiedAt?: Date | null } | undefined)?.emailVerifiedAt);
 
@@ -198,14 +192,22 @@ export default function ProfileScreen() {
         <ProfileStatsGrid
           followers={accountQuery.data?.socialStats.followerCount ?? 0}
           following={accountQuery.data?.socialStats.followingCount ?? 0}
-          reviews={publishedReviews.length}
-          averageRating={averageReviewRating}
-          movieReviews={movieReviewCount}
-          tvReviews={tvReviewCount}
-          bookReviews={bookReviewCount}
+          followingLabel="أتابعهم"
           onFollowersPress={() => navigation.navigate('People', { initialFilter: 'followers' })}
           onFollowingPress={() => navigation.navigate('People', { initialFilter: 'following' })}
         />
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.profileTabs}>
+          <ProfileTab icon="person-circle-outline" label="الملف" active />
+          <ProfileTab icon="book-outline" label="اليوميات" onPress={() => navigation.navigate('Diary')} />
+          <ProfileTab icon="list-outline" label="القوائم" onPress={() => navigation.navigate('Lists')} />
+          <ProfileTab icon="star-outline" label="التقييمات" onPress={() => navigation.navigate('Reviews')} />
+        </ScrollView>
+
+        <View style={styles.section}><View style={styles.referenceSectionHeader}><View><Text style={styles.referenceSectionTitle}>مفضلاتك</Text><Text style={styles.sectionHeadingSubtitle}>خمسة عناوين تعبّر عن ذوقك</Text></View><Pressable onPress={() => navigation.navigate('Likes')}><Text style={styles.viewAll}>عرض الكل</Text></Pressable></View>
+          {likeItems.length === 0 ? <EmptyState icon="heart-outline" title="لا توجد مفضلات بعد" message="اضغط على القلب في أي عنوان لإضافته هنا." /> : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.posterRail}>{likeItems.map((item) => <View key={`${item.mediaType}-${item.mediaId}`} style={styles.favoriteItem}><PosterCard item={{ id: item.mediaId, mediaType: item.mediaType, title: item.title, posterPath: item.posterPath, date: item.date, voteAverage: item.voteAverage }} width={112} onPress={() => openCatalogItem(navigation, item)} /><Pressable accessibilityLabel={`إزالة ${item.title} من المفضلة`} style={styles.removeFavorite} onPress={() => lib.toggleLike(item)}><Ionicons name="heart" size={14} color={colors.bg} /></Pressable></View>)}</ScrollView>}
+        </View>
 
         <ProfileTopReviews
           items={topReviews}
@@ -216,9 +218,9 @@ export default function ProfileScreen() {
           subtitle="أبرز اختياراتك من المراجعات المنشورة"
         />
 
-        <View style={styles.publishedReviewsSection}>
+        <View style={[styles.publishedReviewsSection, { paddingHorizontal: spacing.lg }]}>
           <View style={styles.sectionHeading}>
-            <View><Text style={styles.sectionHeadingTitle}>أحدث المراجعات</Text><Text style={styles.sectionHeadingSubtitle}>آراؤك المنشورة في الأفلام والمسلسلات</Text></View>
+            <View><Text style={styles.sectionHeadingTitle}>أحدث المراجعات</Text><Text style={styles.sectionHeadingSubtitle}>آراؤك المنشورة في الأفلام والمسلسلات والكتب</Text></View>
             <Ionicons name="film-outline" size={21} color={colors.accent} />
           </View>
           {remoteReviewsQuery.isLoading ? <View style={styles.publishedReviewsState}><ActivityIndicator color={colors.accent} /><Text style={styles.publishedReviewsHint}>جارٍ تحميل المراجعات…</Text></View> : remoteReviewsQuery.isError ? (
@@ -241,18 +243,6 @@ export default function ProfileScreen() {
               </Pressable>
             );
           })}
-        </View>
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.profileTabs}>
-          <ProfileTab icon="person-circle-outline" label="الملف" active />
-          <ProfileTab icon="book-outline" label="اليوميات" onPress={() => navigation.navigate('Diary')} />
-          <ProfileTab icon="list-outline" label="القوائم" onPress={() => navigation.navigate('Lists')} />
-          <ProfileTab icon="star-outline" label="التقييمات" onPress={() => navigation.navigate('Reviews')} />
-        </ScrollView>
-
-        <View style={styles.section}><View style={styles.referenceSectionHeader}><Text style={styles.referenceSectionTitle}>أفلامك المفضلة</Text><Pressable onPress={() => navigation.navigate('Likes')}><Text style={styles.viewAll}>عرض الكل</Text></Pressable></View>
-          {likeItems.length === 0 ? <EmptyState icon="heart-outline" title="لا توجد مفضلات بعد" message="اضغط على القلب في أي عنوان لإضافته هنا." /> : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.posterRail}>{likeItems.slice(0, 8).map((item) => <View key={`${item.mediaType}-${item.mediaId}`} style={styles.favoriteItem}><PosterCard item={{ id: item.mediaId, mediaType: item.mediaType, title: item.title, posterPath: item.posterPath, date: item.date, voteAverage: item.voteAverage }} width={112} onPress={() => openCatalogItem(navigation, item)} /><Pressable accessibilityLabel={`إزالة ${item.title} من المفضلة`} style={styles.removeFavorite} onPress={() => lib.toggleLike(item)}><Ionicons name="heart" size={14} color={colors.bg} /></Pressable></View>)}</ScrollView>}
         </View>
 
         <View style={styles.contentColumns}>

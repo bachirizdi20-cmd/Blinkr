@@ -188,11 +188,6 @@ function RemoteUserProfile({
         <ProfileStatsGrid
           followers={profile.followerCount ?? 0}
           following={profile.followingCount ?? 0}
-          reviews={profile.reviewCount ?? 0}
-          averageRating={profile.averageRating == null ? null : Number(profile.averageRating)}
-          movieReviews={profile.movieReviewCount ?? 0}
-          tvReviews={profile.tvReviewCount ?? 0}
-          bookReviews={profile.bookReviewCount ?? 0}
         />
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.profileTabs}>
@@ -201,6 +196,19 @@ function RemoteUserProfile({
           <ProfileTab icon="list-outline" label="القوائم" active={activeProfileTab === 'lists'} onPress={() => setActiveProfileTab('lists')} />
           <ProfileTab icon="star-outline" label="التقييمات" active={activeProfileTab === 'reviews'} onPress={() => setActiveProfileTab('reviews')} />
         </ScrollView>
+
+        {(activeProfileTab === 'profile' || activeProfileTab === 'diary' || activeProfileTab === 'lists') ? (
+          <PublicMediaSection
+            tab={activeProfileTab}
+            displayName={displayName}
+            items={mediaStatusesQuery.data ?? []}
+            library={publicLibraryQuery.data ?? { likes: [], watchlist: [], diary: [], lists: [] }}
+            loading={mediaStatusesQuery.isLoading || publicLibraryQuery.isLoading}
+            error={mediaStatusesQuery.isError || publicLibraryQuery.isError}
+            onRetry={() => { void mediaStatusesQuery.refetch(); void publicLibraryQuery.refetch(); }}
+            onOpen={onOpenMedia}
+          />
+        ) : null}
 
         {(activeProfileTab === 'profile' || activeProfileTab === 'reviews') ? <ProfileTopReviews
           items={(topReviewsQuery.data ?? []).map((item) => ({ ...item, mediaType: normalizeReviewMediaType(item.mediaType) }))}
@@ -271,18 +279,6 @@ function RemoteUserProfile({
           </View>
         ) : null}
 
-        {(activeProfileTab === 'profile' || activeProfileTab === 'diary' || activeProfileTab === 'lists') ? (
-          <PublicMediaSection
-            tab={activeProfileTab}
-            displayName={displayName}
-            items={mediaStatusesQuery.data ?? []}
-            library={publicLibraryQuery.data ?? { likes: [], watchlist: [], diary: [], lists: [] }}
-            loading={mediaStatusesQuery.isLoading || publicLibraryQuery.isLoading}
-            error={mediaStatusesQuery.isError || publicLibraryQuery.isError}
-            onRetry={() => { void mediaStatusesQuery.refetch(); void publicLibraryQuery.refetch(); }}
-            onOpen={onOpenMedia}
-          />
-        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -350,7 +346,7 @@ function PublicMediaSection({
           ? library.lists.map((list) => ({ title: list.name, subtitle: list.description || `قائمة أنشأها ${displayName}`, values: list.items }))
           : [{ title: 'قائمة المشاهدة', subtitle: `العناوين المحفوظة لدى ${displayName}`, values: library.watchlist.length ? library.watchlist : watchlist }])
       : [
-          ...(library.likes.length ? [{ title: 'المفضلة', subtitle: `العناوين التي أحبها ${displayName}`, values: library.likes.slice(0, 8) }] : []),
+          ...(library.likes.length ? [{ title: 'المفضلة', subtitle: `أبرز خمسة عناوين يحبها ${displayName}`, values: library.likes.slice(0, 5) }] : []),
           { title: 'أفلام ومسلسلات شاهدها', subtitle: `آخر ما سجله ${displayName} كمُشاهَد`, values: watched.slice(0, 8) },
           { title: 'قائمة المشاهدة', subtitle: `عناوين يريد ${displayName} مشاهدتها`, values: (library.watchlist.length ? library.watchlist : watchlist).slice(0, 8) },
         ];
