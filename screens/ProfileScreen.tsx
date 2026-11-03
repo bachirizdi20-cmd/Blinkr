@@ -64,7 +64,7 @@ export default function ProfileScreen() {
   if (authLoading) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <View style={styles.authLoading}><ActivityIndicator size="large" color={colors.accent} /><Text style={styles.authLoadingText}>Checking your account...</Text></View>
+          <View style={styles.authLoading}><ActivityIndicator size="large" color={colors.accent} /><Text style={styles.authLoadingText}>جارٍ التحقق من حسابك…</Text></View>
       </SafeAreaView>
     );
   }
@@ -74,11 +74,11 @@ export default function ProfileScreen() {
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.authScreen}>
           <View style={styles.authIcon}><Ionicons name="person-circle-outline" size={54} color={colors.accent} /></View>
-          <Text style={styles.authTitle}>Your movie space</Text>
-          <Text style={styles.authBody}>Sign in to save your diary, build watchlists, follow friends, and keep your activity synced.</Text>
-          {!!authError && <Text style={styles.authError}>We couldn't verify your session. Please try again.</Text>}
+          <Text style={styles.authTitle}>مساحتك في Blinkr</Text>
+          <Text style={styles.authBody}>سجّل الدخول لحفظ يومياتك وقوائم المشاهدة ومتابعة أصدقائك ومزامنة نشاطك.</Text>
+          {!!authError && <Text style={styles.authError}>تعذّر التحقق من جلستك. حاول مرة أخرى.</Text>}
           <AuthPanel onAuthenticated={refresh} />
-          <Text style={styles.authNote}>Your session is protected and synced across devices.</Text>
+          <Text style={styles.authNote}>جلستك محمية ويمكن مزامنتها عبر أجهزتك.</Text>
         </View>
       </SafeAreaView>
     );

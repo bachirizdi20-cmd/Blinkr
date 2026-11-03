@@ -1,6 +1,7 @@
 import React from "react";
 import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import Svg, { Path } from "react-native-svg";
 import { AuthTextInput, type AuthTextInputHandle } from "@/components/AuthTextInput";
 import { createUserWithEmailAndPassword, GoogleAuthProvider, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signInWithPopup, updateProfile, type User } from "firebase/auth";
 import { trpc } from "@/lib/trpc";
@@ -13,15 +14,25 @@ type AuthMode = "login" | "register" | "forgot";
 type FieldName = "name" | "email" | "password" | "confirmPassword";
 type FieldErrors = Partial<Record<FieldName, string>>;
 
-function friendlyAuthError(error: unknown) {
-  const code = typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : "";
+type GoogleFailureStage = "popup" | "session";
+
+function friendlyAuthError(error: unknown, stage?: GoogleFailureStage) {
+  const details = typeof error === "object" && error !== null ? error as {
+    code?: unknown;
+    data?: { code?: unknown };
+    shape?: { data?: { code?: unknown } };
+  } : {};
+  const code = typeof details.code === "string" ? details.code : "";
+  const rawTrpcCode = details.data?.code ?? details.shape?.data?.code;
+  const trpcCode = typeof rawTrpcCode === "string" || typeof rawTrpcCode === "number" ? String(rawTrpcCode) : "";
   const message = error instanceof Error ? error.message : String(error);
-  const normalized = `${code} ${message}`.toLowerCase();
+  const normalized = `${code} ${trpcCode} ${message}`.toLowerCase();
   if (code === "auth/operation-not-allowed") return "طريقة تسجيل الدخول هذه غير مفعّلة في Firebase. فعّل المزوّد المطلوب من Authentication ثم Sign-in method.";
   if (code === "auth/unauthorized-domain") return "نطاق التطبيق غير مسموح في Firebase. أضف bachirizdi20-cmd.github.io إلى Authentication ثم Settings ثم Authorized domains.";
   if (code === "auth/invalid-api-key") return "إعداد Firebase غير صالح. راجع إعدادات تطبيق الويب في مشروع Firebase.";
   if (code === "auth/email-already-in-use") return "هذا البريد لديه حساب بالفعل. اختر تسجيل الدخول؛ إذا لم يكن موثقًا سنعيد إرسال رابط التحقق.";
   if (code === "auth/account-exists-with-different-credential") return "هذا البريد مرتبط بطريقة دخول أخرى. استخدم طريقة الدخول الأصلية أولًا؛ لا تنشئ حسابًا جديدًا كي لا تفصل بياناتك.";
+  if (stage === "popup" && code === "auth/invalid-credential") return "تعذر التحقق من حساب Google. أغلق نافذة الاختيار وحاول مجددًا.";
   if (code === "auth/popup-blocked") return "منع المتصفح نافذة تسجيل الدخول. اسمح بالنوافذ المنبثقة لهذا الموقع ثم أعد المحاولة.";
   if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return "أُغلقت نافذة تسجيل الدخول قبل اكتمال العملية. حاول مرة أخرى.";
   if (code === "auth/invalid-email") return "صيغة البريد الإلكتروني غير صحيحة.";
@@ -29,7 +40,17 @@ function friendlyAuthError(error: unknown) {
   if (normalized.includes("too many") || normalized.includes("too-many-requests")) return "محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.";
   if (normalized.includes("verify") || normalized.includes("verified")) return "تحقق من بريدك الإلكتروني أولًا، ثم سجّل الدخول مجددًا.";
   if (normalized.includes("network") || normalized.includes("fetch") || normalized.includes("timeout") || normalized.includes("connect")) {
+    if (stage === "session") return "تم اختيار حساب Google، لكن تعذر الاتصال بخادم Blinkr لإكمال الدخول. أعد تحميل الصفحة ثم حاول مجددًا. (G-NET)";
     return "تعذّر الاتصال الآن. تحقق من الإنترنت وحاول مرة أخرى.";
+  }
+  if (stage === "session" && (trpcCode === "PRECONDITION_FAILED" || normalized.includes("firebase authentication is not configured"))) {
+    return "تم اختيار الحساب، لكن إعداد تسجيل Google في خادم Blinkr غير مكتمل. (G-CONFIG)";
+  }
+  if (stage === "session" && (trpcCode === "UNAUTHORIZED" || trpcCode === "-32001" || normalized.includes("firebase sign-in is invalid"))) {
+    return "تم اختيار الحساب، لكن تعذر التحقق من جلسة Firebase. تأكد من اختيار حساب Google الصحيح ثم أعد المحاولة. (G-VERIFY)";
+  }
+  if (stage === "session" && (trpcCode === "INTERNAL_SERVER_ERROR" || trpcCode === "-32603")) {
+    return "تم التحقق من Google، لكن خادم Blinkr تعذر عليه إنشاء جلستك. أعد المحاولة بعد قليل. (G-SERVER)";
   }
   if (normalized.includes("already") || normalized.includes("exists") || normalized.includes("conflict")) {
     return "هذا البريد مسجّل بالفعل. سجّل الدخول بدلًا من ذلك.";
@@ -37,7 +58,20 @@ function friendlyAuthError(error: unknown) {
   if (normalized.includes("invalid") || normalized.includes("incorrect") || normalized.includes("password") || normalized.includes("credential") || normalized.includes("unauthorized")) {
     return "البريد أو كلمة المرور غير صحيحين. إذا كان هذا حساب Blinkr قديمًا، اختر إنشاء حساب بالبريد نفسه وأكّد البريد لربط بياناتك القديمة.";
   }
+  if (stage === "session") return "تم اختيار حساب Google، لكن تعذر إكمال جلسة Blinkr. أعد تحميل الصفحة ثم حاول مرة أخرى. (G-SESSION)";
+  if (stage === "popup" && code.startsWith("auth/")) return `تعذر إكمال تسجيل Google. رمز الخطأ: ${code}`;
   return "تعذّر إكمال العملية. حاول مرة أخرى بعد قليل.";
+}
+
+function GoogleGMark({ size = 20 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 48 48">
+      <Path fill="#4285F4" d="M46.98 24.55c0-1.57-.14-3.07-.4-4.52H24v9.06h12.92c-.57 3-2.29 5.54-4.87 7.24l7.62 5.91c4.45-4.11 7.31-10.16 7.31-17.69z" />
+      <Path fill="#34A853" d="M24 48c6.48 0 11.92-2.15 15.89-5.76l-7.62-5.91c-2.12 1.42-4.83 2.27-8.27 2.27-6.35 0-11.72-4.29-13.64-10.04l-7.87 6.08C6.38 42.98 14.52 48 24 48z" />
+      <Path fill="#FBBC05" d="M10.36 28.56A14.47 14.47 0 0 1 9.6 24c0-1.58.27-3.1.76-4.56l-7.87-6.08a23.98 23.98 0 0 0 0 21.28l7.87-6.08z" />
+      <Path fill="#EA4335" d="M24 9.4c3.53 0 6.7 1.21 9.2 3.59l6.87-6.87C35.91 2.31 30.48 0 24 0 14.52 0 6.38 5.02 2.49 13.36l7.87 6.08C12.28 13.69 17.65 9.4 24 9.4z" />
+    </Svg>
+  );
 }
 
 function FieldError({ message }: { message?: string }) {
@@ -61,6 +95,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = React.useState(false);
   const nameRef = React.useRef<AuthTextInputHandle>(null);
   const emailRef = React.useRef<AuthTextInputHandle>(null);
   const passwordRef = React.useRef<AuthTextInputHandle>(null);
@@ -92,17 +127,25 @@ export function AuthPanel({ onAuthenticated }: Props) {
     }
 
     setIsSubmitting(true);
+    setIsGoogleSubmitting(true);
+    let stage: GoogleFailureStage = "popup";
     try {
       firebaseAuth.languageCode = "ar";
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: "select_account" });
       // GitHub Pages and Firebase authDomain are cross-site; popup avoids redirect storage workarounds.
       const result = await signInWithPopup(firebaseAuth, provider);
+      stage = "session";
       await completeFederatedSignIn(result.user);
     } catch (signInError) {
-      setError(friendlyAuthError(signInError));
+      const code = typeof signInError === "object" && signInError !== null && "code" in signInError && typeof signInError.code === "string"
+        ? signInError.code
+        : "unknown";
+      console.warn("[Auth] Google sign-in failed", { stage, code });
+      setError(friendlyAuthError(signInError, stage));
     } finally {
       setIsSubmitting(false);
+      setIsGoogleSubmitting(false);
     }
   };
 
@@ -198,8 +241,8 @@ export function AuthPanel({ onAuthenticated }: Props) {
             accessibilityRole="button"
             accessibilityLabel={isRegister ? "إنشاء حساب باستخدام Google" : "تسجيل الدخول باستخدام Google"}
           >
-            <Ionicons name="logo-google" size={19} color="#4285F4" />
-            <Text style={styles.socialButtonText}>Google</Text>
+            {isGoogleSubmitting ? <ActivityIndicator size="small" color="#4285F4" /> : <GoogleGMark />}
+            <Text style={styles.socialButtonText}>{isGoogleSubmitting ? "جارٍ إكمال تسجيل Google…" : "المتابعة باستخدام Google"}</Text>
           </Pressable>
         </View>
         <View style={styles.socialDivider}>
@@ -365,9 +408,9 @@ const styles = {
   switch: { alignItems: "center" as const, justifyContent: "center" as const, minHeight: 48, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
   switchText: { color: colors.accent, fontSize: fontSizes.sm, fontWeight: "700" as const, textAlign: "center" as const, writingDirection: "rtl" as const },
   passwordHint: { color: colors.textFaint, fontSize: 12, lineHeight: 18, textAlign: "center" as const, marginTop: spacing.xs, writingDirection: "rtl" as const },
-  socialButtons: { flexDirection: "row" as const, gap: spacing.sm, marginTop: spacing.sm },
-  socialButton: { flex: 1, flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 9, minHeight: 52, paddingHorizontal: spacing.sm, borderWidth: 1, borderColor: colors.borderLight, borderRadius: 12, backgroundColor: colors.surfaceHigh },
-  socialButtonText: { color: colors.text, fontSize: fontSizes.sm, fontWeight: "800" as const },
+  socialButtons: { flexDirection: "row" as const, gap: spacing.sm, marginTop: spacing.md },
+  socialButton: { flex: 1, flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 10, minHeight: 56, paddingHorizontal: spacing.md, borderWidth: 1, borderColor: "#DADCE0", borderRadius: 14, backgroundColor: "#FFFFFF", shadowColor: "#000000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 5, elevation: 2 },
+  socialButtonText: { color: "#202124", fontSize: fontSizes.sm, fontWeight: "800" as const, writingDirection: "rtl" as const },
   socialDivider: { flexDirection: "row" as const, alignItems: "center" as const, gap: spacing.sm, marginTop: spacing.md, marginBottom: spacing.xs },
   socialDividerLine: { flex: 1, height: 1, backgroundColor: colors.borderLight },
   socialDividerText: { color: colors.textFaint, fontSize: 12, writingDirection: "rtl" as const },

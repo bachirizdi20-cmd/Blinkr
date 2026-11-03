@@ -43,15 +43,15 @@ export function getApiBaseUrl(): string {
     const { protocol, hostname } = window.location;
     // Pattern: 8081-sandboxid.region.domain -> 3000-sandboxid.region.domain
     const apiHostname = hostname.replace(/^8081-/, "3000-");
-    if (apiHostname !== hostname) {
+  if (apiHostname !== hostname) {
       return `${protocol}//${apiHostname}`;
     }
   }
 
-  // Release builds must resolve API-backed images and tRPC even if no base URL
-  // was supplied. Development/staging builds must provide their own URL.
+  // Production web builds on GitHub Pages cannot serve API routes themselves.
+  // Use Render when no explicit API base URL was embedded at build time.
   const developmentBuild = typeof __DEV__ !== "undefined" && __DEV__;
-  if (ReactNative.Platform.OS !== "web" && !developmentBuild) {
+  if (!developmentBuild) {
     return productionApiBaseUrl;
   }
 
