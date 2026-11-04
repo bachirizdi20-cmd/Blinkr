@@ -14,7 +14,7 @@ export type ContentStackParamList = {
   Season: { tvId: number; seasonNumber: number; tvName: string };
   Person: { personId: number; name: string };
   CategoryList: { title: string; feed: FeedDescriptor };
-  Search: undefined;
+  Search: { mediaOnly?: boolean } | undefined;
   Lists: undefined;
   ListDetail: { listId: string };
   Diary: undefined;

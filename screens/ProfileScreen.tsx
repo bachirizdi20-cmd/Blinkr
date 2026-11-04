@@ -194,14 +194,11 @@ export default function ProfileScreen() {
 
         <View style={styles.section}>
           <View style={styles.referenceSectionHeader}><Text style={styles.referenceSectionTitle}>مفضلاتك</Text></View>
-          {likeItems.length === 0 ? (
-            <View style={styles.favoriteEmpty}><EmptyState icon="heart-outline" title="لا توجد مفضلات بعد" message="اضغط على القلب في أي عنوان لإضافته هنا." /></View>
-          ) : (
-            <ProfileFavoriteRail
-              items={likeItems}
-              onOpen={(item) => openCatalogItem(navigation, item)}
-            />
-          )}
+          <ProfileFavoriteRail
+            items={likeItems}
+            onOpen={(item) => openCatalogItem(navigation, item)}
+            onAddFavorite={() => navigation.navigate('Search', { mediaOnly: true })}
+          />
         </View>
 
         <ProfileSectionTabs activeTab={activeTab} onChange={handleProfileTabChange} />

@@ -60,7 +60,7 @@ export default function RootTabNavigator() {
         },
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textDim,
-        tabBarLabelStyle: { fontSize: 10, lineHeight: 13, fontWeight: '700', marginTop: 0 },
+        tabBarShowLabel: false,
         tabBarIconStyle: { marginTop: 0 },
         tabBarHideOnKeyboard: true,
       }}

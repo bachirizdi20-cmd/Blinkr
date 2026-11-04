@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import BookCard from '../components/BookCard';
 import PosterCard from '../components/PosterCard';
@@ -20,6 +20,7 @@ import { trpc } from '../lib/trpc';
 import { useAuth } from '../hooks/use-auth';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
+type SearchRoute = RouteProp<ContentStackParamList, 'Search'>;
 type Tab = 'all' | 'people' | 'movies' | 'tv' | 'books' | 'reviews';
 const tabs: { key: Tab; label: string }[] = [
   { key: 'all', label: 'الكل' }, { key: 'people', label: 'الأشخاص' }, { key: 'movies', label: 'الأفلام' },
@@ -28,9 +29,11 @@ const tabs: { key: Tab; label: string }[] = [
 
 export default function SearchScreen() {
   const navigation = useNavigation<Nav>();
+  const route = useRoute<SearchRoute>();
+  const mediaOnly = Boolean(route.params?.mediaOnly);
   const { user: authUser } = useAuth();
   const [query, setQuery] = useState('');
-  const [tab, setTab] = useState<Tab>('all');
+  const [tab, setTab] = useState<Tab>(mediaOnly ? 'movies' : 'all');
   const [mediaResults, setMediaResults] = useState<NormalizedItem[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
@@ -48,13 +51,14 @@ export default function SearchScreen() {
     return () => clearTimeout(timer);
   }, [trimmed]);
   const shouldSearch = debouncedQuery.length >= 2;
-  const peopleQuery = trpc.social.users.useQuery({ query: debouncedQuery }, { enabled: Boolean(authUser) && shouldSearch, retry: 1 });
-  const reviewsQuery = trpc.social.searchReviews.useQuery({ query: debouncedQuery }, { enabled: Boolean(authUser) && shouldSearch, retry: 1 });
+  const peopleQuery = trpc.social.users.useQuery({ query: debouncedQuery }, { enabled: Boolean(authUser) && shouldSearch && !mediaOnly, retry: 1 });
+  const reviewsQuery = trpc.social.searchReviews.useQuery({ query: debouncedQuery }, { enabled: Boolean(authUser) && shouldSearch && !mediaOnly, retry: 1 });
   const booksQuery = trpc.books.search.useQuery(
     { query: debouncedQuery, page: bookPage, limit: 20 },
-    { enabled: shouldSearch && (tab === 'all' || tab === 'books'), retry: 1 },
+    { enabled: shouldSearch && !mediaOnly && (tab === 'all' || tab === 'books'), retry: 1 },
   );
   const recentStorageKey = authUser ? `@blinkr/recent-searches/${authUser.id}` : null;
+  const visibleTabs = mediaOnly ? tabs.filter((item) => item.key === 'movies' || item.key === 'tv') : tabs;
 
   useEffect(() => {
     let active = true;
@@ -78,6 +82,13 @@ export default function SearchScreen() {
   const removeRecentSearch = (value: string) => persistRecentSearches(recentSearchesRef.current.filter((item) => item !== value));
   const clearRecentSearches = () => persistRecentSearches([]);
   const updateQuery = (value: string) => { setQuery(value); setBookPage(1); setBookResults([]); };
+
+  useEffect(() => {
+    setTab(mediaOnly ? 'movies' : 'all');
+    setQuery('');
+    setDebouncedQuery('');
+    setSearchFocused(false);
+  }, [mediaOnly]);
 
   useEffect(() => {
     if (!shouldSearch) return;
@@ -150,13 +161,13 @@ export default function SearchScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <Text style={styles.header}>بحث</Text>
-      <View style={styles.searchBar}><Ionicons name="search" size={19} color={colors.textFaint} /><TextInput style={styles.input} placeholder="ابحث عن أشخاص أو مراجعات أو أفلام أو مسلسلات أو كتب…" placeholderTextColor={colors.textFaint} value={query} onChangeText={updateQuery} onFocus={() => setSearchFocused(true)} onSubmitEditing={() => { commitSearch(query); setTab('all'); }} returnKeyType="search" autoCorrect={false} selectionColor={colors.accent} cursorColor={colors.accent} />{query ? <Pressable onPress={() => updateQuery('')} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textFaint} /></Pressable> : null}</View>
-      {searchFocused && !trimmed && recentSearches.length > 0 ? <View style={styles.recentPanel}><View style={styles.recentHeader}><Text style={styles.recentTitle}>عمليات البحث الأخيرة</Text><Pressable onPress={clearRecentSearches}><Text style={styles.clearRecent}>مسح الكل</Text></Pressable></View>{recentSearches.map((item) => <View key={item} style={styles.recentRow}><Pressable style={styles.recentSelect} onPress={() => { updateQuery(item); setTab('all'); commitSearch(item); }}><Ionicons name="time-outline" size={16} color={colors.textFaint} /><Text style={styles.recentText} numberOfLines={1}>{item}</Text></Pressable><Pressable onPress={() => removeRecentSearch(item)} hitSlop={8} accessibilityLabel={`حذف ${item} من عمليات البحث الأخيرة`}><Ionicons name="close" size={16} color={colors.textFaint} /></Pressable></View>)}</View> : null}
+      <Text style={styles.header}>{mediaOnly ? 'الأفلام والمسلسلات' : 'بحث'}</Text>
+      <View style={styles.searchBar}><Ionicons name="search" size={19} color={colors.textFaint} /><TextInput style={styles.input} placeholder={mediaOnly ? 'ابحث عن فيلم أو مسلسل…' : 'ابحث عن أشخاص أو مراجعات أو أفلام أو مسلسلات أو كتب…'} placeholderTextColor={colors.textFaint} value={query} onChangeText={updateQuery} onFocus={() => setSearchFocused(true)} onSubmitEditing={() => { commitSearch(query); setTab(mediaOnly ? 'movies' : 'all'); }} returnKeyType="search" autoCorrect={false} selectionColor={colors.accent} cursorColor={colors.accent} />{query ? <Pressable onPress={() => updateQuery('')} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textFaint} /></Pressable> : null}</View>
+      {searchFocused && !trimmed && recentSearches.length > 0 ? <View style={styles.recentPanel}><View style={styles.recentHeader}><Text style={styles.recentTitle}>عمليات البحث الأخيرة</Text><Pressable onPress={clearRecentSearches}><Text style={styles.clearRecent}>مسح الكل</Text></Pressable></View>{recentSearches.map((item) => <View key={item} style={styles.recentRow}><Pressable style={styles.recentSelect} onPress={() => { updateQuery(item); setTab(mediaOnly ? 'movies' : 'all'); commitSearch(item); }}><Ionicons name="time-outline" size={16} color={colors.textFaint} /><Text style={styles.recentText} numberOfLines={1}>{item}</Text></Pressable><Pressable onPress={() => removeRecentSearch(item)} hitSlop={8} accessibilityLabel={`حذف ${item} من عمليات البحث الأخيرة`}><Ionicons name="close" size={16} color={colors.textFaint} /></Pressable></View>)}</View> : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
-        {tabs.map((item) => <Pressable key={item.key} onPress={() => setTab(item.key)} style={[styles.tab, tab === item.key && styles.tabActive]}><Text style={[styles.tabText, tab === item.key && styles.tabTextActive]}>{item.label}</Text></Pressable>)}
+        {visibleTabs.map((item) => <Pressable key={item.key} onPress={() => setTab(item.key)} style={[styles.tab, tab === item.key && styles.tabActive]}><Text style={[styles.tabText, tab === item.key && styles.tabTextActive]}>{item.label}</Text></Pressable>)}
       </ScrollView>
-      {!shouldSearch ? <EmptyState icon="search-outline" title="ابحث في Blinkr" message="اعثر على الأشخاص والمراجعات والأفلام والمسلسلات والكتب." /> : isLoading ? <View style={styles.center}><ActivityIndicator color={colors.accent} size="large" /><Text style={styles.loadingText}>جارٍ البحث…</Text></View> : fatalSearchError ? <ApiErrorState message="تعذر إكمال البحث الآن. تحقق من الاتصال ثم أعد المحاولة." onRetry={retrySearch} /> : (
+      {!shouldSearch ? <EmptyState icon="search-outline" title={mediaOnly ? 'ابحث عن فيلم أو مسلسل' : 'ابحث في Blinkr'} message={mediaOnly ? 'اكتب اسم الفيلم أو المسلسل الذي تريد إضافته إلى مفضلاتك.' : 'اعثر على الأشخاص والمراجعات والأفلام والمسلسلات والكتب.'} /> : isLoading ? <View style={styles.center}><ActivityIndicator color={colors.accent} size="large" /><Text style={styles.loadingText}>جارٍ البحث…</Text></View> : fatalSearchError ? <ApiErrorState message="تعذر إكمال البحث الآن. تحقق من الاتصال ثم أعد المحاولة." onRetry={retrySearch} /> : (
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {tab === 'all' && allHasError ? <View style={styles.partialError}><Text style={styles.partialErrorText}>تعذر تحميل بعض النتائج. يمكنك مراجعة النتائج المتاحة أو إعادة المحاولة.</Text><Pressable onPress={retrySearch} accessibilityRole="button"><Text style={styles.partialRetry}>إعادة المحاولة</Text></Pressable></View> : null}
           {(tab === 'all' || tab === 'people') && people.length > 0 ? <Section title="الأشخاص" action={() => setTab('people')}><View>{people.slice(0, tab === 'people' ? 50 : 5).map((person: any) => <Pressable key={person.id} style={styles.personRow} onPress={() => navigation.navigate('UserProfile', { userId: String(person.id) })}><UserAvatar name={person.name || person.username} color={colors.accent} size={42} /><View style={styles.resultCopy}><Text style={styles.resultTitle}>{person.name || person.username}</Text><Text style={styles.resultMeta}>@{person.username}</Text>{person.bio ? <Text style={styles.resultSub} numberOfLines={1}>{person.bio}</Text> : null}</View><Ionicons name="chevron-forward" size={18} color={colors.textFaint} /></Pressable>)}</View></Section> : null}
