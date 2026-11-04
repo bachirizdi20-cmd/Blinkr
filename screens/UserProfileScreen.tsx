@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -73,8 +73,6 @@ function RemoteUserProfile({
   onMessage: () => void;
   onOpenMedia: (mediaType: ReviewMediaType, mediaId: number) => void;
 }) {
-  const { width: screenWidth } = useWindowDimensions();
-  const wideProfileHeader = screenWidth >= 460;
   const profileQuery = trpc.social.profile.useQuery({ userId });
   const reviewsQuery = trpc.social.userReviews.useQuery({ userId }, { enabled: Boolean(profileQuery.data) });
   const publicLibraryQuery = trpc.social.userLibrary.useQuery({ userId }, { enabled: Boolean(profileQuery.data) });
@@ -166,25 +164,21 @@ function RemoteUserProfile({
       ) : null}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        <View style={[styles.profileSummaryRow, wideProfileHeader && styles.profileSummaryRowWide]}>
-          <View style={[styles.profileIdentityColumn, wideProfileHeader && styles.profileIdentityColumnWide]}>
-            <ProfileIdentity
-              name={displayName}
-              avatar={<UserAvatar name={displayName} color={colors.accent} size={76} imageUrl={profile.avatarUrl ?? undefined} />}
-              badge={profile.followsYou ? <View style={styles.followsYouTag}><Text style={styles.followsYouText}>يتابعك</Text></View> : undefined}
-            />
-          </View>
-          <View style={[styles.profileStatsColumn, wideProfileHeader && styles.profileStatsColumnWide]}>
+        <ProfileIdentity
+          name={displayName}
+          avatar={<UserAvatar name={displayName} color={colors.accent} size={64} imageUrl={profile.avatarUrl ?? undefined} />}
+          badge={profile.followsYou ? <View style={styles.followsYouTag}><Text style={styles.followsYouText}>يتابعك</Text></View> : undefined}
+          stats={(
             <ProfileStatsGrid
-              compact={wideProfileHeader}
+              compact
               followers={profile.followerCount ?? 0}
               following={profile.followingCount ?? 0}
               reviews={profile.reviewCount ?? 0}
               followingLabel="يتابعهم"
               onReviewsPress={() => handleProfileTabChange('reviews')}
             />
-          </View>
-        </View>
+          )}
+        />
         <View style={styles.profileActions}>
           {profile.isSelf ? <Text style={styles.selfLabel}>هذا ملفك الشخصي</Text> : (
             <>
@@ -332,12 +326,6 @@ const styles = StyleSheet.create({
   header: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border },
   headerTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800' },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
-  profileSummaryRow: { flexDirection: 'column' },
-  profileSummaryRowWide: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md },
-  profileIdentityColumn: { width: '100%' },
-  profileIdentityColumnWide: { flex: 1, minWidth: 0 },
-  profileStatsColumn: { width: '100%' },
-  profileStatsColumnWide: { width: '56%' },
   profileActions: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm, marginBottom: spacing.xs },
   favoritesSection: { marginTop: spacing.sm, marginBottom: 0 },
   favoritesHeader: { marginBottom: spacing.sm, alignItems: 'flex-end' },

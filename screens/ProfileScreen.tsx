@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Share, View, Text, StyleSheet, ScrollView, Pressable, Modal, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Share, View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -29,8 +29,6 @@ type Nav = NativeStackNavigationProp<ContentStackParamList>;
 
 export default function ProfileScreen() {
   const navigation = useNavigation<Nav>();
-  const { width: screenWidth } = useWindowDimensions();
-  const wideProfileHeader = screenWidth >= 460;
   const { user, loading: authLoading, error: authError, logout, refresh } = useAuth();
   const deleteMutation = trpc.account.delete.useMutation();
   const requestVerification = trpc.auth.requestVerification.useMutation();
@@ -159,21 +157,17 @@ export default function ProfileScreen() {
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.profileScrollContent}>
         <View style={styles.commonProfileContent}>
-        <View style={[styles.profileSummaryRow, wideProfileHeader && styles.profileSummaryRowWide]}>
-          <View style={[styles.profileIdentityColumn, wideProfileHeader && styles.profileIdentityColumnWide]}>
-            <ProfileIdentity
-              name={displayName}
-              avatar={(
-                <Pressable onPress={() => navigation.navigate('EditProfile')} style={styles.avatarButton} accessibilityLabel="تغيير صورة الملف الشخصي">
-                  {resolveMediaUrl(displayedAvatar) ? <Image source={{ uri: resolveMediaUrl(displayedAvatar) }} style={styles.avatar} contentFit="cover" /> : <View style={[styles.avatar, { backgroundColor: profile.avatarColor }]}><Text style={styles.avatarText}>{initials}</Text></View>}
-                  <View style={styles.avatarCameraBadge}><Ionicons name="camera-outline" size={12} color={colors.accent} /></View>
-                </Pressable>
-              )}
-            />
-          </View>
-          <View style={[styles.profileStatsColumn, wideProfileHeader && styles.profileStatsColumnWide]}>
+        <ProfileIdentity
+          name={displayName}
+          avatar={(
+            <Pressable onPress={() => navigation.navigate('EditProfile')} style={styles.avatarButton} accessibilityLabel="تغيير صورة الملف الشخصي">
+              {resolveMediaUrl(displayedAvatar) ? <Image source={{ uri: resolveMediaUrl(displayedAvatar) }} style={styles.avatar} contentFit="cover" /> : <View style={[styles.avatar, { backgroundColor: profile.avatarColor }]}><Text style={styles.avatarText}>{initials}</Text></View>}
+              <View style={styles.avatarCameraBadge}><Ionicons name="camera-outline" size={10} color={colors.accent} /></View>
+            </Pressable>
+          )}
+          stats={(
             <ProfileStatsGrid
-              compact={wideProfileHeader}
+              compact
               followers={accountQuery.data?.socialStats.followerCount ?? null}
               following={accountQuery.data?.socialStats.followingCount ?? null}
               reviews={remoteReviewsQuery.isLoading || remoteReviewsQuery.isError ? null : publishedReviews.length}
@@ -182,8 +176,8 @@ export default function ProfileScreen() {
               onFollowingPress={() => navigation.navigate('People', { initialFilter: 'following' })}
               onReviewsPress={() => handleProfileTabChange('reviews')}
             />
-          </View>
-        </View>
+          )}
+        />
         <View style={styles.identityActions}>
           <Pressable style={({ pressed }) => [styles.identityAction, styles.identityPrimary, pressed && styles.pressed]} onPress={() => navigation.navigate('EditProfile')}><Ionicons name="create-outline" size={15} color={colors.accent} /><Text style={styles.identityPrimaryText}>تعديل الملف</Text></Pressable>
           <Pressable style={({ pressed }) => [styles.identityAction, styles.identitySecondary, pressed && styles.pressed]} onPress={() => Share.share({ message: `تابع ${displayName} على Blinkr.` })} accessibilityLabel="مشاركة الملف"><Ionicons name="share-outline" size={17} color={colors.text} /><Text style={styles.identitySecondaryText}>مشاركة الرابط</Text></Pressable>
@@ -292,12 +286,6 @@ const styles = StyleSheet.create({
   topNavTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800' },
   profileScrollContent: { paddingBottom: spacing.xl },
   commonProfileContent: { paddingHorizontal: spacing.lg },
-  profileSummaryRow: { flexDirection: 'column' },
-  profileSummaryRowWide: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md },
-  profileIdentityColumn: { width: '100%' },
-  profileIdentityColumnWide: { flex: 1, minWidth: 0 },
-  profileStatsColumn: { width: '100%' },
-  profileStatsColumnWide: { width: '56%' },
   identityActions: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm, marginBottom: spacing.xs },
   identityAction: { minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: spacing.md, borderRadius: radius.pill, borderWidth: 1 },
   identityPrimary: { backgroundColor: 'rgba(51,214,166,0.10)', borderColor: 'rgba(51,214,166,0.44)' },
@@ -349,7 +337,7 @@ const styles = StyleSheet.create({
   authNote: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: spacing.md },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.lg },
   avatarButton: { position: 'relative' },
-  avatar: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.surfaceHigh },
-  avatarCameraBadge: { position: 'absolute', right: 0, bottom: 0, width: 23, height: 23, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh, borderWidth: 2, borderColor: colors.bg },
-  avatarText: { color: '#04120C', fontSize: fontSizes.xl, fontWeight: '800' },
+  avatar: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.surfaceHigh },
+  avatarCameraBadge: { position: 'absolute', right: 0, bottom: 0, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh, borderWidth: 2, borderColor: colors.bg },
+  avatarText: { color: '#04120C', fontSize: fontSizes.lg, fontWeight: '800' },
 });

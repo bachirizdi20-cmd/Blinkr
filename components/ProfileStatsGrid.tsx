@@ -34,11 +34,11 @@ export function ProfileStatsGrid({
       {items.map((item, index) => {
         const content = (
           <>
-            <Text style={styles.value}>{item.value == null ? '—' : item.value.toLocaleString('ar')}</Text>
-            <Text style={styles.label}>{item.label}</Text>
+            <Text style={[styles.value, compact && styles.valueCompact]}>{item.value == null ? '—' : item.value.toLocaleString('ar')}</Text>
+            <Text style={[styles.label, compact && styles.labelCompact]}>{item.label}</Text>
           </>
         );
-        const cellStyle = [styles.item, index < items.length - 1 && styles.divided];
+        const cellStyle = [styles.item, compact && styles.itemCompact, index < items.length - 1 && styles.divided];
         const accessibilityLabel = `${item.value == null ? 'غير متاح' : item.value.toLocaleString('ar')} ${item.label}`;
         return item.onPress ? (
           <Pressable
@@ -71,10 +71,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  gridCompact: { marginTop: 0, marginBottom: 0 },
+  gridCompact: { marginTop: 0, marginBottom: 0, paddingVertical: 2 },
   item: { flex: 1, minWidth: 0, minHeight: 44, alignItems: 'center', justifyContent: 'center', gap: 1, paddingHorizontal: spacing.xs },
+  itemCompact: { minHeight: 34, paddingHorizontal: 2 },
   divided: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border },
   value: { color: colors.text, fontSize: 17, lineHeight: 21, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  valueCompact: { fontSize: 15, lineHeight: 18 },
   label: { color: colors.textDim, fontSize: 10, lineHeight: 14, fontWeight: '600', textAlign: 'center' },
+  labelCompact: { fontSize: 9, lineHeight: 12 },
   pressed: { opacity: 0.68 },
 });
