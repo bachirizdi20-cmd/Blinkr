@@ -142,8 +142,7 @@ function RemoteUserProfile({
     return <ProfileState onBack={onBack}><EmptyState icon="person-remove-outline" title="الملف غير متاح" message="قد يكون المستخدم حذف حسابه أو حظرك." /></ProfileState>;
   }
 
-  const displayName = profile.name?.trim() || profile.username || 'مستخدم Blinkr';
-  const joinedDate = formatArabicDate(profile.joinedAt);
+  const displayName = profile.name?.trim() || 'مستخدم Blinkr';
   const favoriteItems = rawPublicLibrary.likes.slice(0, 5);
 
   return (
@@ -165,14 +164,15 @@ function RemoteUserProfile({
       ) : null}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        <ProfileStatsGrid
+          followers={profile.followerCount ?? 0}
+          following={profile.followingCount ?? 0}
+          reviews={profile.reviewCount ?? 0}
+          onReviewsPress={() => handleProfileTabChange('reviews')}
+        />
         <ProfileIdentity
-          showBio={false}
           name={displayName}
-          username={profile.username || `user${userId}`}
-          bio={profile.bio}
-          joinedAt={joinedDate || null}
-          bioFallback="لم يضف هذا المستخدم نبذة شخصية بعد."
-          avatar={<UserAvatar name={displayName} color={colors.accent} size={84} imageUrl={profile.avatarUrl ?? undefined} />}
+          avatar={<UserAvatar name={displayName} color={colors.accent} size={76} imageUrl={profile.avatarUrl ?? undefined} />}
           badge={profile.followsYou ? <View style={styles.followsYouTag}><Text style={styles.followsYouText}>يتابعك</Text></View> : undefined}
           actions={profile.isSelf ? <Text style={styles.selfLabel}>هذا ملفك الشخصي</Text> : (
             <>
@@ -187,23 +187,17 @@ function RemoteUserProfile({
                   {profile.isFollowing ? 'تتابعه' : 'متابعة'}
                 </Text>
               </Pressable>
-              <Pressable style={[styles.actionButton, styles.secondaryButton]} onPress={onMessage} accessibilityRole="button">
-                <Ionicons name="chatbubble-outline" size={16} color={colors.text} />
-                <Text style={[styles.actionText, styles.secondaryButtonText]}>مراسلة</Text>
-              </Pressable>
               <Pressable style={[styles.actionButton, styles.secondaryButton, styles.shareIconButton]} onPress={() => void Share.share({ message: `تابع ${displayName} على Blinkr.` })} accessibilityRole="button" accessibilityLabel="مشاركة الملف">
                 <Ionicons name="share-outline" size={16} color={colors.text} />
+              </Pressable>
+              <Pressable style={[styles.actionButton, styles.secondaryButton]} onPress={onMessage} accessibilityRole="button">
+                <Ionicons name="chatbubble-outline" size={16} color={colors.text} />
+                <Text style={[styles.actionText, styles.secondaryButtonText]}>الدردشة</Text>
               </Pressable>
             </>
           )}
         />
 
-        <ProfileStatsGrid
-          followers={profile.followerCount ?? 0}
-          following={profile.followingCount ?? 0}
-          reviews={profile.reviewCount ?? 0}
-          onReviewsPress={() => handleProfileTabChange('reviews')}
-        />
         <ProfileBio bio={profile.bio} fallback="لم يضف هذا المستخدم نبذة شخصية بعد." />
 
         <View style={styles.favoritesSection}>

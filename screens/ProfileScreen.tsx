@@ -98,13 +98,11 @@ export default function ProfileScreen() {
   }
 
   const remoteProfile = accountQuery.data?.data;
-  const displayName = user.name || remoteProfile?.username || profile.username;
-  const displayedUsername = remoteProfile?.username || profile.username || 'cinephile';
+  const displayName = user.name || 'مستخدم Blinkr';
   const displayedBio = remoteProfile ? remoteProfile.bio : profile.bio;
   const displayedAvatar = remoteProfile ? remoteProfile.avatarUrl : profile.avatarUri;
   const initials = displayName.slice(0, 2).toUpperCase();
   const publishedReviews = remoteReviewsQuery.data ?? [];
-  const joinedDate = formatProfileDate(accountQuery.data?.user.createdAt ?? profile.joinedAt);
   const likeItems = Object.values(likes).sort((a, b) => b.likedAt - a.likedAt).slice(0, 5);
   const savedItems = mergeProfileMediaItems(Object.values(lib.watchlist), remoteStatusesQuery.data ?? [], ['watchlist', 'watching']);
   const completedItems = mergeProfileMediaItems(diary, remoteStatusesQuery.data ?? [], ['watched']);
@@ -159,13 +157,17 @@ export default function ProfileScreen() {
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.profileScrollContent}>
         <View style={styles.commonProfileContent}>
+        <ProfileStatsGrid
+          followers={accountQuery.data?.socialStats.followerCount ?? null}
+          following={accountQuery.data?.socialStats.followingCount ?? null}
+          reviews={remoteReviewsQuery.isLoading || remoteReviewsQuery.isError ? null : publishedReviews.length}
+          followingLabel="أتابعهم"
+          onFollowersPress={() => navigation.navigate('People', { initialFilter: 'followers' })}
+          onFollowingPress={() => navigation.navigate('People', { initialFilter: 'following' })}
+          onReviewsPress={() => handleProfileTabChange('reviews')}
+        />
         <ProfileIdentity
-          showBio={false}
           name={displayName}
-          username={displayedUsername}
-          bio={displayedBio}
-          joinedAt={joinedDate}
-          bioFallback="أضف نبذة قصيرة عن ذوقك السينمائي."
           avatar={(
             <Pressable onPress={() => navigation.navigate('EditProfile')} style={styles.avatarButton} accessibilityLabel="تغيير صورة الملف الشخصي">
               {resolveMediaUrl(displayedAvatar) ? <Image source={{ uri: resolveMediaUrl(displayedAvatar) }} style={styles.avatar} contentFit="cover" /> : <View style={[styles.avatar, { backgroundColor: profile.avatarColor }]}><Text style={styles.avatarText}>{initials}</Text></View>}
@@ -175,19 +177,9 @@ export default function ProfileScreen() {
           actions={(
             <>
               <Pressable style={({ pressed }) => [styles.identityAction, styles.identityPrimary, pressed && styles.pressed]} onPress={() => navigation.navigate('EditProfile')}><Ionicons name="create-outline" size={15} color={colors.accent} /><Text style={styles.identityPrimaryText}>تعديل الملف</Text></Pressable>
-              <Pressable style={({ pressed }) => [styles.identityAction, styles.identitySecondary, pressed && styles.pressed]} onPress={() => Share.share({ message: `تابع ${displayName} على Blinkr.` })} accessibilityLabel="مشاركة الملف"><Ionicons name="share-outline" size={17} color={colors.text} /><Text style={styles.identitySecondaryText}>مشاركة</Text></Pressable>
+              <Pressable style={({ pressed }) => [styles.identityAction, styles.identitySecondary, pressed && styles.pressed]} onPress={() => Share.share({ message: `تابع ${displayName} على Blinkr.` })} accessibilityLabel="مشاركة الملف"><Ionicons name="share-outline" size={17} color={colors.text} /><Text style={styles.identitySecondaryText}>مشاركة الرابط</Text></Pressable>
             </>
           )}
-        />
-
-        <ProfileStatsGrid
-          followers={accountQuery.data?.socialStats.followerCount ?? null}
-          following={accountQuery.data?.socialStats.followingCount ?? null}
-          reviews={remoteReviewsQuery.isLoading || remoteReviewsQuery.isError ? null : publishedReviews.length}
-          followingLabel="أتابعهم"
-          onFollowersPress={() => navigation.navigate('People', { initialFilter: 'followers' })}
-          onFollowingPress={() => navigation.navigate('People', { initialFilter: 'following' })}
-          onReviewsPress={() => handleProfileTabChange('reviews')}
         />
         <ProfileBio bio={displayedBio} fallback="أضف نبذة قصيرة عن ذوقك في الأفلام والكتب." />
         </View>
@@ -341,7 +333,7 @@ const styles = StyleSheet.create({
   authNote: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: spacing.md },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.lg },
   avatarButton: { position: 'relative' },
-  avatar: { width: 84, height: 84, borderRadius: 42, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.surfaceHigh },
-  avatarCameraBadge: { position: 'absolute', right: 0, bottom: 0, width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh, borderWidth: 2, borderColor: colors.bg },
+  avatar: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.surfaceHigh },
+  avatarCameraBadge: { position: 'absolute', right: 0, bottom: 0, width: 23, height: 23, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh, borderWidth: 2, borderColor: colors.bg },
   avatarText: { color: '#04120C', fontSize: fontSizes.xl, fontWeight: '800' },
 });
