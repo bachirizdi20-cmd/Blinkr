@@ -182,18 +182,20 @@ export default function ProfileScreen() {
           )}
         />
         <ProfileBio bio={displayedBio} fallback="أضف نبذة قصيرة عن ذوقك في الأفلام والكتب." />
-        </View>
 
         <View style={styles.section}>
-          <View style={styles.referenceSectionHeader}><Text style={styles.referenceSectionTitle}>مفضلاتك</Text></View>
+          <View style={styles.referenceSectionHeader}><Text style={styles.referenceSectionTitle}>المفضلات</Text></View>
           <ProfileFavoriteRail
             items={likeItems}
             onOpen={(item) => openCatalogItem(navigation, item)}
             onAddFavorite={() => navigation.navigate('Search', { mediaOnly: true })}
+            horizontalPadding={0}
+            availableWidthPadding={spacing.lg}
           />
         </View>
 
         <ProfileSectionTabs activeTab={activeTab} onChange={handleProfileTabChange} />
+        </View>
 
         <View style={styles.tabBody}>
           {activeTab === 'reviews' ? (
@@ -283,14 +285,14 @@ const styles = StyleSheet.create({
   topNavTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800' },
   profileScrollContent: { paddingBottom: spacing.xl },
   commonProfileContent: { paddingHorizontal: spacing.lg },
-  identityAction: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: spacing.md, borderRadius: radius.pill, borderWidth: 1 },
+  identityAction: { minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: spacing.md, borderRadius: radius.pill, borderWidth: 1 },
   identityPrimary: { backgroundColor: 'rgba(51,214,166,0.10)', borderColor: 'rgba(51,214,166,0.44)' },
   identityPrimaryText: { color: colors.accent, fontSize: fontSizes.xs, fontWeight: '800' },
   identitySecondary: { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border },
   identitySecondaryText: { color: colors.text, fontSize: fontSizes.xs, fontWeight: '800' },
   pressed: { opacity: 0.72, transform: [{ scale: 0.97 }] },
-  section: { marginBottom: spacing.lg },
-  referenceSectionHeader: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, paddingHorizontal: spacing.lg, marginBottom: spacing.md },
+  section: { marginTop: spacing.sm, marginBottom: 0 },
+  referenceSectionHeader: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.sm },
   referenceSectionTitle: { color: colors.text, fontSize: fontSizes.lg, lineHeight: 24, fontWeight: '800', textAlign: 'right' },
   favoriteEmpty: { paddingHorizontal: spacing.lg },
   skeletonReviews: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },

@@ -168,6 +168,7 @@ function RemoteUserProfile({
           followers={profile.followerCount ?? 0}
           following={profile.followingCount ?? 0}
           reviews={profile.reviewCount ?? 0}
+          followingLabel="يتابعهم"
           onReviewsPress={() => handleProfileTabChange('reviews')}
         />
         <ProfileIdentity
@@ -187,8 +188,9 @@ function RemoteUserProfile({
                   {profile.isFollowing ? 'تتابعه' : 'متابعة'}
                 </Text>
               </Pressable>
-              <Pressable style={[styles.actionButton, styles.secondaryButton, styles.shareIconButton]} onPress={() => void Share.share({ message: `تابع ${displayName} على Blinkr.` })} accessibilityRole="button" accessibilityLabel="مشاركة الملف">
+              <Pressable style={[styles.actionButton, styles.secondaryButton]} onPress={() => void Share.share({ message: `تابع ${displayName} على Blinkr.` })} accessibilityRole="button" accessibilityLabel="مشاركة رابط الملف">
                 <Ionicons name="share-outline" size={16} color={colors.text} />
+                <Text style={[styles.actionText, styles.secondaryButtonText]}>مشاركة</Text>
               </Pressable>
               <Pressable style={[styles.actionButton, styles.secondaryButton]} onPress={onMessage} accessibilityRole="button">
                 <Ionicons name="chatbubble-outline" size={16} color={colors.text} />
@@ -319,18 +321,17 @@ const styles = StyleSheet.create({
   header: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border },
   headerTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800' },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
-  favoritesSection: { marginTop: spacing.xs, marginBottom: spacing.md },
+  favoritesSection: { marginTop: spacing.sm, marginBottom: 0 },
   favoritesHeader: { marginBottom: spacing.sm, alignItems: 'flex-end' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   loadingText: { color: colors.textDim, fontSize: fontSizes.sm },
   followsYouTag: { backgroundColor: colors.surfaceHigh, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 4 },
   followsYouText: { color: colors.textDim, fontSize: 10, fontWeight: '700' },
   selfLabel: { color: colors.textDim, fontSize: fontSizes.xs, fontWeight: '700', marginTop: spacing.xs, textAlign: 'right' },
-  actionButton: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: spacing.md, borderRadius: radius.pill },
-  shareIconButton: { width: 38, paddingHorizontal: 0 },
+  actionButton: { minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: spacing.sm, borderRadius: radius.pill },
   primaryButton: { backgroundColor: colors.accent },
   secondaryButton: { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border },
-  actionText: { fontSize: fontSizes.xs, fontWeight: '800' },
+  actionText: { fontSize: fontSizes.xs, fontWeight: '800', flexShrink: 1 },
   primaryButtonText: { color: '#04120C' },
   secondaryButtonText: { color: colors.text },
   sectionTitle: { color: colors.text, fontSize: fontSizes.lg, lineHeight: 24, fontWeight: '800', textAlign: 'right' },

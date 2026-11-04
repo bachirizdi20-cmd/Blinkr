@@ -34,11 +34,11 @@ export function ProfileBio({ bio, fallback }: { bio?: string | null; fallback: s
 }
 
 const styles = StyleSheet.create({
-  hero: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xs },
+  hero: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.xs },
   avatarWrap: { width: 76, height: 76, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   info: { flex: 1, minWidth: 0 },
   nameLine: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm },
-  name: { color: colors.text, fontSize: 20, lineHeight: 26, fontWeight: '800', flexShrink: 1, textAlign: 'right' },
-  actions: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm, marginBottom: spacing.xs },
-  bio: { color: colors.textDim, fontSize: fontSizes.sm, lineHeight: 23, textAlign: 'right', marginTop: spacing.xs, marginBottom: spacing.sm },
+  name: { color: colors.text, fontSize: 20, lineHeight: 26, fontWeight: '800', flexShrink: 1, textAlign: 'right', writingDirection: 'rtl' },
+  actions: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', alignSelf: 'stretch', gap: spacing.sm, marginTop: spacing.sm, marginBottom: spacing.xs },
+  bio: { color: colors.textDim, fontSize: fontSizes.sm, lineHeight: 22, textAlign: 'right', writingDirection: 'rtl', alignSelf: 'stretch', marginTop: spacing.md, marginBottom: spacing.md },
 });

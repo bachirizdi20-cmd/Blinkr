@@ -45,8 +45,8 @@ export function ProfileSectionTabs({ activeTab, onChange }: { activeTab: Profile
 }
 
 const styles = StyleSheet.create({
-  tabs: { flexGrow: 1, flexDirection: 'row-reverse', justifyContent: 'space-around', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, marginTop: spacing.sm, marginBottom: spacing.md },
-  tab: { flex: 1, minWidth: 58, minHeight: 50, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent', paddingBottom: 1 },
+  tabs: { flexGrow: 1, flexDirection: 'row-reverse', justifyContent: 'space-around', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, marginTop: spacing.lg, marginBottom: spacing.md },
+  tab: { flex: 1, minWidth: 58, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent', paddingBottom: 1 },
   activeTab: { borderBottomColor: colors.accent },
   pressed: { opacity: 0.7 },
 });
