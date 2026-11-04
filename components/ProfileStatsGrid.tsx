@@ -7,6 +7,7 @@ type ProfileStatsGridProps = {
   following: number | null;
   reviews: number | null;
   followingLabel?: string;
+  compact?: boolean;
   onFollowersPress?: () => void;
   onFollowingPress?: () => void;
   onReviewsPress?: () => void;
@@ -17,6 +18,7 @@ export function ProfileStatsGrid({
   following,
   reviews,
   followingLabel = 'أتابعهم',
+  compact = false,
   onFollowersPress,
   onFollowingPress,
   onReviewsPress,
@@ -28,7 +30,7 @@ export function ProfileStatsGrid({
   ];
 
   return (
-    <View style={styles.grid}>
+    <View style={[styles.grid, compact && styles.gridCompact]}>
       {items.map((item, index) => {
         const content = (
           <>
@@ -69,6 +71,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
+  gridCompact: { marginTop: 0, marginBottom: 0 },
   item: { flex: 1, minWidth: 0, minHeight: 44, alignItems: 'center', justifyContent: 'center', gap: 1, paddingHorizontal: spacing.xs },
   divided: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border },
   value: { color: colors.text, fontSize: 17, lineHeight: 21, fontWeight: '900', fontVariant: ['tabular-nums'] },

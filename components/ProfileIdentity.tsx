@@ -6,12 +6,10 @@ export function ProfileIdentity({
   name,
   avatar,
   badge,
-  actions,
 }: {
   name: string;
   avatar: ReactNode;
   badge?: ReactNode;
-  actions?: ReactNode;
 }) {
   return (
     <>
@@ -24,7 +22,6 @@ export function ProfileIdentity({
           </View>
         </View>
       </View>
-      {actions ? <View style={styles.actions}>{actions}</View> : null}
     </>
   );
 }
@@ -39,6 +36,5 @@ const styles = StyleSheet.create({
   info: { flex: 1, minWidth: 0 },
   nameLine: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm },
   name: { color: colors.text, fontSize: 20, lineHeight: 26, fontWeight: '800', flexShrink: 1, textAlign: 'right', writingDirection: 'rtl' },
-  actions: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', alignSelf: 'stretch', gap: spacing.sm, marginTop: spacing.sm, marginBottom: spacing.xs },
   bio: { color: colors.textDim, fontSize: fontSizes.sm, lineHeight: 22, textAlign: 'right', writingDirection: 'rtl', alignSelf: 'stretch', marginTop: spacing.md, marginBottom: spacing.md },
 });
