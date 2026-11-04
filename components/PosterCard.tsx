@@ -22,10 +22,11 @@ interface Props {
   width?: number;
   showRating?: boolean;
   uniform?: boolean;
+  showMetadata?: boolean;
 }
 
 
-export default function PosterCard({ item, onPress, width, showRating = true, uniform = false }: Props) {
+export default function PosterCard({ item, onPress, width, showRating = true, uniform = false, showMetadata = true }: Props) {
   const cardWidth = width ?? 108;
   const uri = item.mediaType === 'book'
     ? (item.posterPath?.startsWith('https://covers.openlibrary.org/') ? item.posterPath : null)
@@ -33,7 +34,12 @@ export default function PosterCard({ item, onPress, width, showRating = true, un
   const year = item.date ? item.date.slice(0, 4) : '';
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [{ width: cardWidth, opacity: pressed ? 0.75 : 1 }]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={item.title}
+      style={({ pressed }) => [{ width: cardWidth, opacity: pressed ? 0.75 : 1 }]}
+    >
       <View style={[styles.posterWrap, { width: cardWidth, height: cardWidth * 1.5 }]}>
         {uri ? (
           <Image source={{ uri }} style={styles.poster} contentFit="cover" transition={150} />
@@ -54,10 +60,14 @@ export default function PosterCard({ item, onPress, width, showRating = true, un
           </View>
         )}
       </View>
-      <Text numberOfLines={2} style={[styles.title, { width: cardWidth }, uniform && styles.uniformTitle]}>
-        {item.title}
-      </Text>
-      {!!year || uniform ? <Text numberOfLines={1} style={[styles.year, uniform && styles.uniformYear]}>{year || ' '}</Text> : null}
+      {showMetadata ? (
+        <>
+          <Text numberOfLines={2} style={[styles.title, { width: cardWidth }, uniform && styles.uniformTitle]}>
+            {item.title}
+          </Text>
+          {!!year || uniform ? <Text numberOfLines={1} style={[styles.year, uniform && styles.uniformYear]}>{year || ' '}</Text> : null}
+        </>
+      ) : null}
     </Pressable>
   );
 }

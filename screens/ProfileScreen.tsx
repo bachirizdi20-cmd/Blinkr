@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Share, View, Text, StyleSheet, ScrollView, Pressable, Modal, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Share, View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -37,8 +37,7 @@ export default function ProfileScreen() {
   const remoteReviewsQuery = trpc.reviews.mine.useQuery(undefined, { enabled: !!user, retry: false });
   const remoteStatusesQuery = trpc.library.mine.useQuery(undefined, { enabled: !!user, retry: false });
   const lib = useLibrary();
-  const { profile, diary, lists, likes } = lib;
-  const { width: screenWidth } = useWindowDimensions();
+  const { profile, diary, likes } = lib;
   const [menuVisible, setMenuVisible] = useState(false);
   const [librarySyncError, setLibrarySyncError] = useState(false);
   const [activeTab, setActiveTab] = useState<ProfileSectionTab>('reviews');
@@ -109,9 +108,6 @@ export default function ProfileScreen() {
   const likeItems = Object.values(likes).sort((a, b) => b.likedAt - a.likedAt).slice(0, 5);
   const savedItems = mergeProfileMediaItems(Object.values(lib.watchlist), remoteStatusesQuery.data ?? [], ['watchlist', 'watching']);
   const completedItems = mergeProfileMediaItems(diary, remoteStatusesQuery.data ?? [], ['watched']);
-  const userLists = [...lists].sort((a, b) => b.createdAt - a.createdAt);
-  const listCardWidth = Math.min(280, Math.max(140, (screenWidth - spacing.lg * 2 - spacing.sm) / 2));
-
   const emailVerified = Boolean((accountQuery.data?.user as { emailVerifiedAt?: Date | null } | undefined)?.emailVerifiedAt);
 
   const handleRequestVerification = async () => {
@@ -197,23 +193,13 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <View style={styles.referenceSectionHeader}>
-            <View style={styles.favoriteHeading}>
-              <Text style={styles.referenceSectionTitle}>مفضلاتك</Text>
-              <Text style={styles.sectionHeadingSubtitle}>أحدث خمسة عناوين أضفتها إلى مفضلاتك</Text>
-            </View>
-            <Pressable onPress={() => navigation.navigate('Likes')} style={styles.viewAllButton} accessibilityRole="button">
-              <Text style={styles.viewAll}>عرض الكل</Text>
-              <Ionicons name="chevron-back" size={15} color={colors.accent} />
-            </Pressable>
-          </View>
+          <View style={styles.referenceSectionHeader}><Text style={styles.referenceSectionTitle}>مفضلاتك</Text></View>
           {likeItems.length === 0 ? (
             <View style={styles.favoriteEmpty}><EmptyState icon="heart-outline" title="لا توجد مفضلات بعد" message="اضغط على القلب في أي عنوان لإضافته هنا." /></View>
           ) : (
             <ProfileFavoriteRail
               items={likeItems}
               onOpen={(item) => openCatalogItem(navigation, item)}
-              onRemove={(item) => lib.toggleLike(item)}
             />
           )}
         </View>
@@ -223,7 +209,6 @@ export default function ProfileScreen() {
         <View style={styles.tabBody}>
           {activeTab === 'reviews' ? (
             <View style={styles.publishedReviewsSection}>
-              <View style={styles.sectionHeading}><View><Text style={styles.sectionHeadingTitle}>المراجعات المنشورة</Text><Text style={styles.sectionHeadingSubtitle}>آراؤك في الأفلام والمسلسلات والكتب</Text></View></View>
               {remoteReviewsQuery.isLoading ? <View style={styles.publishedReviewsState}><ActivityIndicator color={colors.accent} /><Text style={styles.publishedReviewsHint}>جارٍ تحميل المراجعات…</Text></View> : remoteReviewsQuery.isError ? (
                 <View style={styles.publishedReviewsEmpty}><Text style={styles.publishedReviewsHint}>تعذر تحميل المراجعات.</Text><Pressable onPress={() => void remoteReviewsQuery.refetch()}><Text style={styles.verifyText}>إعادة المحاولة</Text></Pressable></View>
               ) : publishedReviews.length === 0 ? (
@@ -249,28 +234,13 @@ export default function ProfileScreen() {
 
           {activeTab === 'saved' ? (
             <View style={styles.profileContentSection}>
-              <Text style={styles.sectionHeadingTitle}>المحفوظات</Text>
-              <Text style={styles.sectionHeadingSubtitle}>عناوين حفظتها أو بدأت مشاهدتها وقراءتها</Text>
               <ProfileMediaGrid items={savedItems} onOpen={(mediaType, mediaId) => openCatalogItem(navigation, { mediaType, mediaId })} emptyTitle="لا توجد عناوين محفوظة" emptyMessage="أضف فيلمًا أو مسلسلًا أو كتابًا للعودة إليه لاحقًا." />
             </View>
           ) : null}
 
           {activeTab === 'completed' ? (
             <View style={styles.profileContentSection}>
-              <Text style={styles.sectionHeadingTitle}>تمت المشاهدة أو القراءة</Text>
-              <Text style={styles.sectionHeadingSubtitle}>الأعمال والكتب التي سجلتها في يومياتك</Text>
               <ProfileMediaGrid items={completedItems} onOpen={(mediaType, mediaId) => openCatalogItem(navigation, { mediaType, mediaId })} emptyIcon="checkmark-circle-outline" emptyTitle="لا يوجد سجل مكتمل بعد" emptyMessage="سجّل فيلمًا أو مسلسلًا أو كتابًا بعد مشاهدته أو قراءته." />
-            </View>
-          ) : null}
-
-          {activeTab === 'lists' ? (
-            <View style={styles.profileContentSection}>
-              <View style={styles.sectionHeading}><Text style={styles.sectionHeadingTitle}>قوائمك</Text><Pressable onPress={() => navigation.navigate('Lists')}><Text style={styles.viewAll}>إدارة القوائم</Text></Pressable></View>
-              {userLists.length === 0 ? <EmptyState icon="list-outline" title="لا توجد قوائم بعد" message="أنشئ قائمة لتنظيم الأفلام والمسلسلات والكتب." /> : (
-                <View style={styles.listGrid}>
-                  {userLists.map((list) => <Pressable key={list.id} style={[styles.listPreviewCard, { width: listCardWidth }]} onPress={() => navigation.navigate('Lists')}><Ionicons name="list-outline" size={21} color={colors.accent} /><Text style={styles.listPreviewTitle} numberOfLines={2}>{list.name}</Text><Text style={styles.listPreviewCount}>{list.items.length.toLocaleString('ar')} عنصر</Text></Pressable>)}
-                </View>
-              )}
             </View>
           ) : null}
         </View>
@@ -332,27 +302,17 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.72, transform: [{ scale: 0.97 }] },
   section: { marginBottom: spacing.lg },
   referenceSectionHeader: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, paddingHorizontal: spacing.lg, marginBottom: spacing.md },
-  favoriteHeading: { flex: 1, minWidth: 0, alignItems: 'flex-end' },
   referenceSectionTitle: { color: colors.text, fontSize: fontSizes.lg, lineHeight: 24, fontWeight: '800', textAlign: 'right' },
-  viewAllButton: { flexDirection: 'row-reverse', alignItems: 'center', gap: 2, minHeight: 40, paddingLeft: spacing.xs },
-  viewAll: { color: colors.accent, fontSize: fontSizes.sm, fontWeight: '800' },
   favoriteEmpty: { paddingHorizontal: spacing.lg },
   skeletonReviews: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
   skeletonTitle: { color: colors.textDim, fontSize: fontSizes.md, fontWeight: '800', marginBottom: spacing.md },
   tabBody: { paddingBottom: spacing.sm },
   profileContentSection: { paddingHorizontal: spacing.lg, marginBottom: spacing.xl },
-  listGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
-  listPreviewCard: { minHeight: 104, justifyContent: 'center', gap: spacing.xs, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
-  listPreviewTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '800', textAlign: 'right' },
-  listPreviewCount: { color: colors.textDim, fontSize: 12, lineHeight: 16, textAlign: 'right' },
   accountNotice: { marginHorizontal: spacing.lg, marginTop: spacing.sm, marginBottom: spacing.md, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, gap: spacing.xs },
   syncErrorText: { color: colors.danger, fontSize: fontSizes.xs, marginTop: spacing.sm, textAlign: 'right' },
   verifyButton: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.md, alignSelf: 'flex-start' as const },
   verifyText: { color: colors.accent, fontSize: fontSizes.xs, fontWeight: '800' as const },
   publishedReviewsSection: { marginBottom: spacing.xl, paddingHorizontal: spacing.lg },
-  sectionHeading: { flexDirection: 'row-reverse', alignItems: 'flex-end', justifyContent: 'flex-start', marginBottom: spacing.md },
-  sectionHeadingTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800', textAlign: 'right' },
-  sectionHeadingSubtitle: { color: colors.textDim, fontSize: 12, lineHeight: 18, marginTop: 3, textAlign: 'right' },
   publishedReviewCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginBottom: spacing.md },
   publishedReviewPoster: { width: 58, height: 82, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh },
   publishedPosterFallback: { alignItems: 'center', justifyContent: 'center' },
@@ -387,17 +347,4 @@ const styles = StyleSheet.create({
   avatar: { width: 84, height: 84, borderRadius: 42, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.surfaceHigh },
   avatarCameraBadge: { position: 'absolute', right: 0, bottom: 0, width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh, borderWidth: 2, borderColor: colors.bg },
   avatarText: { color: '#04120C', fontSize: fontSizes.xl, fontWeight: '800' },
-  diaryRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.sm, borderWidth: 1, borderColor: colors.border },
-  diaryPoster: { width: 46, height: 66, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh },
-  diaryTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '700' },
-  diaryDate: { color: colors.textDim, fontSize: 12, lineHeight: 16, marginTop: 2, marginBottom: 3 },
-  reviewCard: { backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, gap: 4 },
-  reviewTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '700' },
-  reviewBody: { color: colors.textDim, fontSize: fontSizes.sm, lineHeight: 19 },
-  listCard: { width: 130 },
-  listCoverRow: { flexDirection: 'row', marginBottom: spacing.xs },
-  listCoverPoster: { width: 60, height: 88, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh, borderWidth: 2, borderColor: colors.bg },
-  listCoverEmpty: { alignItems: 'center', justifyContent: 'center' },
-  listName: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '700' },
-  listCount: { color: colors.textDim, fontSize: 12, lineHeight: 16, marginTop: 1 },
 });

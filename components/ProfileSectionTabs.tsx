@@ -3,7 +3,7 @@ import { LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, UIManager
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { colors, spacing } from '../lib/theme';
 
-export type ProfileSectionTab = 'reviews' | 'saved' | 'completed' | 'lists';
+export type ProfileSectionTab = 'reviews' | 'saved' | 'completed';
 
 if (Platform.OS === 'android') UIManager.setLayoutAnimationEnabledExperimental?.(true);
 
@@ -12,10 +12,9 @@ export function animateProfileTabChange() {
 }
 
 const TABS: Array<{ key: ProfileSectionTab; icon: React.ComponentProps<typeof Ionicons>['name']; activeIcon: React.ComponentProps<typeof Ionicons>['name']; label: string }> = [
-  { key: 'reviews', icon: 'chatbox-ellipses-outline', activeIcon: 'chatbox-ellipses', label: 'المراجعات المنشورة' },
+  { key: 'reviews', icon: 'chatbox-ellipses-outline', activeIcon: 'chatbox-ellipses', label: 'المراجعات' },
   { key: 'saved', icon: 'bookmark-outline', activeIcon: 'bookmark', label: 'المحفوظات' },
-  { key: 'completed', icon: 'checkmark-circle-outline', activeIcon: 'checkmark-circle', label: 'تمت المشاهدة أو القراءة' },
-  { key: 'lists', icon: 'list-outline', activeIcon: 'list', label: 'القوائم' },
+  { key: 'completed', icon: 'checkmark-circle-outline', activeIcon: 'checkmark-circle', label: 'المكتمل' },
 ];
 
 export function ProfileSectionTabs({ activeTab, onChange }: { activeTab: ProfileSectionTab; onChange: (tab: ProfileSectionTab) => void }) {

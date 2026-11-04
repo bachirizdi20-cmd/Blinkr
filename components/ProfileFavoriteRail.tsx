@@ -1,33 +1,28 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import PosterCard from './PosterCard';
 import { ProfileMediaItem } from '../lib/profile-media';
-import { colors, spacing } from '../lib/theme';
+import { spacing } from '../lib/theme';
 
 type Props<T extends ProfileMediaItem> = {
   items: T[];
   onOpen: (item: T) => void;
-  onRemove?: (item: T) => void;
   horizontalPadding?: number;
+  availableWidthPadding?: number;
 };
 
 export function ProfileFavoriteRail<T extends ProfileMediaItem>({
   items,
   onOpen,
-  onRemove,
   horizontalPadding = spacing.lg,
+  availableWidthPadding = horizontalPadding,
 }: Props<T>) {
   const { width } = useWindowDimensions();
-  const availableWidth = Math.max(0, width - horizontalPadding * 2);
-  const cardWidth = Math.min(128, Math.max(88, Math.floor((availableWidth - spacing.md * 2) / 2.7)));
+  const availableWidth = Math.max(0, width - availableWidthPadding * 2);
+  const cardWidth = Math.min(96, Math.max(48, Math.floor((availableWidth - spacing.xs * 4) / 5)));
 
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={[styles.rail, { gap: spacing.sm, paddingHorizontal: horizontalPadding }]}
-    >
+    <View style={[styles.grid, { paddingHorizontal: horizontalPadding, columnGap: spacing.xs }]}>
       {items.map((item) => (
         <View key={`${item.mediaType}-${item.mediaId}`} style={{ width: cardWidth }}>
           <PosterCard
@@ -42,43 +37,14 @@ export function ProfileFavoriteRail<T extends ProfileMediaItem>({
             width={cardWidth}
             onPress={() => onOpen(item)}
             showRating={false}
-            uniform
+            showMetadata={false}
           />
-          {onRemove ? (
-            <Pressable
-              onPress={() => onRemove(item)}
-              hitSlop={8}
-              style={({ pressed }) => [styles.heartBadge, pressed && styles.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel={`إزالة ${item.title} من المفضلة`}
-            >
-              <Ionicons name="heart" size={12} color={colors.accent} />
-            </Pressable>
-          ) : (
-            <View pointerEvents="none" style={styles.heartBadge} accessibilityLabel="ضمن المفضلات">
-              <Ionicons name="heart" size={12} color={colors.accent} />
-            </View>
-          )}
         </View>
       ))}
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  rail: { paddingVertical: spacing.xs, alignItems: 'flex-start' },
-  heartBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(10,13,18,0.82)',
-    borderWidth: 1,
-    borderColor: 'rgba(242,245,248,0.16)',
-  },
-  pressed: { opacity: 0.72, transform: [{ scale: 0.94 }] },
+  grid: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'flex-start' },
 });

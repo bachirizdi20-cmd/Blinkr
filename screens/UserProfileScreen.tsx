@@ -207,11 +207,11 @@ function RemoteUserProfile({
         <ProfileBio bio={profile.bio} fallback="لم يضف هذا المستخدم نبذة شخصية بعد." />
 
         <View style={styles.favoritesSection}>
-          <View style={styles.favoritesHeader}><Text style={styles.sectionTitle}>المفضلات</Text><Text style={styles.sectionSubtitle}>أحدث خمسة عناوين أضافها هذا المستخدم</Text></View>
+          <View style={styles.favoritesHeader}><Text style={styles.sectionTitle}>المفضلات</Text></View>
           {publicLibraryQuery.isLoading ? <View style={styles.reviewLoading}><ActivityIndicator color={colors.accent} /><Text style={styles.loadingText}>جارٍ تحميل المفضلات…</Text></View> : publicLibraryQuery.isError ? (
             <View style={styles.inlineError}><Text style={styles.emptyText}>تعذر تحميل المفضلات.</Text><Pressable onPress={() => void publicLibraryQuery.refetch()}><Text style={styles.retryText}>إعادة المحاولة</Text></Pressable></View>
           ) : favoriteItems.length ? (
-            <ProfileFavoriteRail items={favoriteItems} onOpen={(item) => onOpenMedia(item.mediaType, item.mediaId)} horizontalPadding={0} />
+            <ProfileFavoriteRail items={favoriteItems} onOpen={(item) => onOpenMedia(item.mediaType, item.mediaId)} horizontalPadding={0} availableWidthPadding={spacing.lg} />
           ) : <Text style={styles.emptyText}>لم يضف هذا المستخدم مفضلات بعد.</Text>}
         </View>
 
@@ -219,7 +219,6 @@ function RemoteUserProfile({
 
         {activeTab === 'reviews' ? (
           <View>
-            <View style={styles.sectionHeader}><View><Text style={styles.sectionTitle}>المراجعات المنشورة</Text><Text style={styles.sectionSubtitle}>آراء هذا المستخدم في الأفلام والمسلسلات والكتب</Text></View></View>
             {reviewsQuery.isLoading ? (
               <View style={styles.reviewLoading}><ActivityIndicator color={colors.accent} /><Text style={styles.loadingText}>جارٍ تحميل المراجعات…</Text></View>
             ) : reviewsQuery.isError ? (
@@ -254,7 +253,6 @@ function RemoteUserProfile({
         ) : (
           <PublicMediaSection
             tab={activeTab}
-            displayName={displayName}
             library={publicLibrary}
             loading={publicLibraryQuery.isLoading}
             error={publicLibraryQuery.isError}
@@ -280,12 +278,10 @@ type PublicUserLibrary = {
   likes: PublicMediaItem[];
   watchlist: PublicMediaItem[];
   diary: PublicMediaItem[];
-  lists: Array<{ id: string; name: string; description: string; items: PublicMediaItem[] }>;
 };
 
 function PublicMediaSection({
   tab,
-  displayName,
   library,
   loading,
   error,
@@ -293,7 +289,6 @@ function PublicMediaSection({
   onOpen,
 }: {
   tab: Exclude<ProfileSectionTab, 'reviews'>;
-  displayName: string;
   library: PublicUserLibrary;
   loading: boolean;
   error: boolean;
@@ -304,26 +299,10 @@ function PublicMediaSection({
   if (error) return <View style={styles.inlineError}><Text style={styles.emptyText}>تعذر تحميل مكتبة المشاهدة.</Text><Pressable onPress={onRetry}><Text style={styles.retryText}>إعادة المحاولة</Text></Pressable></View>;
 
   const onOpenItem = (mediaType: ReviewMediaType, mediaId: number) => onOpen(mediaType, mediaId);
-  if (tab === 'lists') {
-    return library.lists.length ? (
-      <View>
-        {library.lists.map((list) => (
-          <View key={list.id || list.name} style={styles.publicListSection}>
-            <Text style={styles.sectionTitle}>{list.name}</Text>
-            {!!list.description && <Text style={styles.sectionSubtitle}>{list.description}</Text>}
-            <ProfileMediaGrid items={list.items} onOpen={onOpenItem} emptyIcon="list-outline" emptyTitle="هذه القائمة فارغة" emptyMessage="لم يضف المستخدم عناوين إلى هذه القائمة بعد." />
-          </View>
-        ))}
-      </View>
-    ) : <EmptyState icon="list-outline" title="لا توجد قوائم بعد" message={`لم ينشئ ${displayName} أي قوائم حتى الآن.`} />;
-  }
-
   const saved = tab === 'saved';
   const items = saved ? library.watchlist : library.diary;
   return (
     <View style={styles.publicMediaSection}>
-      <Text style={styles.sectionTitle}>{saved ? 'المحفوظات' : 'تمت المشاهدة أو القراءة'}</Text>
-      <Text style={styles.sectionSubtitle}>{saved ? `عناوين حفظها ${displayName} أو بدأ مشاهدتها وقراءتها` : `الأعمال والكتب التي سجلها ${displayName} في يومياته`}</Text>
       <ProfileMediaGrid
         items={items}
         onOpen={onOpenItem}
@@ -360,11 +339,8 @@ const styles = StyleSheet.create({
   actionText: { fontSize: fontSizes.xs, fontWeight: '800' },
   primaryButtonText: { color: '#04120C' },
   secondaryButtonText: { color: colors.text },
-  sectionHeader: { flexDirection: 'row-reverse', alignItems: 'flex-end', justifyContent: 'flex-start', marginBottom: spacing.md },
   sectionTitle: { color: colors.text, fontSize: fontSizes.lg, lineHeight: 24, fontWeight: '800', textAlign: 'right' },
-  sectionSubtitle: { color: colors.textDim, fontSize: 12, lineHeight: 18, marginTop: 3, textAlign: 'right' },
   publicMediaSection: { marginBottom: spacing.xl },
-  publicListSection: { marginBottom: spacing.xl },
   reviewLoading: { minHeight: 100, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   inlineError: { alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.lg },
   retryText: { color: colors.accent, fontSize: fontSizes.sm, fontWeight: '800' },
