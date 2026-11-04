@@ -1,14 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Share, View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
+import { ActivityIndicator, Share, View, Text, StyleSheet, ScrollView, Pressable, Modal, useWindowDimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
-import RatingStars from '../components/RatingStars';
 import EmptyState from '../components/EmptyState';
-import ApiErrorState from '../components/ApiErrorState';
 import PosterCard from '../components/PosterCard';
 import { ContentStackParamList } from '../navigation/types';
 import { useLibrary } from '../context/LibraryContext';
@@ -19,9 +17,11 @@ import { trpc } from '../lib/trpc';
 import { ProfileSkeleton, ReviewsSkeleton } from '../components/Skeleton';
 import { resolveMediaUrl } from '../lib/media-url';
 import { clearAccountLibraryStorage } from '../lib/library-storage';
-import { ProfileIdentity } from '../components/ProfileIdentity';
+import { ProfileBio, ProfileIdentity } from '../components/ProfileIdentity';
 import { ProfileStatsGrid } from '../components/ProfileStatsGrid';
-import { ProfileTopReviews } from '../components/ProfileTopReviews';
+import { ProfileMediaGrid } from '../components/ProfileMediaGrid';
+import { ProfileSectionTabs, ProfileSectionTab } from '../components/ProfileSectionTabs';
+import { mergeProfileMediaItems } from '../lib/profile-media';
 import { catalogPosterUrl, normalizeReviewMediaType, openCatalogItem } from '../lib/catalog-navigation';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
 
@@ -35,11 +35,13 @@ export default function ProfileScreen() {
   const librarySyncMutation = trpc.account.sync.useMutation();
   const accountQuery = trpc.account.me.useQuery(undefined, { enabled: !!user, retry: false });
   const remoteReviewsQuery = trpc.reviews.mine.useQuery(undefined, { enabled: !!user, retry: false });
-  const remoteLibraryQuery = trpc.library.mine.useQuery(undefined, { enabled: !!user, retry: false });
+  const remoteStatusesQuery = trpc.library.mine.useQuery(undefined, { enabled: !!user, retry: false });
   const lib = useLibrary();
   const { profile, diary, lists, likes } = lib;
+  const { width: screenWidth } = useWindowDimensions();
   const [menuVisible, setMenuVisible] = useState(false);
   const [librarySyncError, setLibrarySyncError] = useState(false);
+  const [activeTab, setActiveTab] = useState<ProfileSectionTab>('reviews');
 
   useEffect(() => {
     if (!user || !lib.loaded || accountQuery.isLoading || accountQuery.isError) return;
@@ -84,18 +86,10 @@ export default function ProfileScreen() {
     );
   }
 
-  if (accountQuery.isError) {
-    return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <ApiErrorState message="تعذر تحميل معلومات حسابك." onRetry={() => void accountQuery.refetch()} />
-      </SafeAreaView>
-    );
-  }
-
   if (!lib.loaded || accountQuery.isLoading) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <ScrollView showsVerticalScrollIndicator={false}><ProfileSkeleton /><View style={styles.skeletonReviews}><Text style={styles.skeletonTitle}>Your latest reviews</Text><ReviewsSkeleton /></View></ScrollView>
+        <ScrollView showsVerticalScrollIndicator={false}><ProfileSkeleton /><View style={styles.skeletonReviews}><Text style={styles.skeletonTitle}>أحدث مراجعاتك</Text><ReviewsSkeleton /></View></ScrollView>
       </SafeAreaView>
     );
   }
@@ -106,17 +100,13 @@ export default function ProfileScreen() {
   const displayedBio = remoteProfile ? remoteProfile.bio : profile.bio;
   const displayedAvatar = remoteProfile ? remoteProfile.avatarUrl : profile.avatarUri;
   const initials = displayName.slice(0, 2).toUpperCase();
-  const recentDiary = [...diary].sort((a, b) => b.createdAt - a.createdAt).slice(0, 5);
-  const recentReviews = diary.filter((e) => !!e.review).sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
   const publishedReviews = remoteReviewsQuery.data ?? [];
-  const ratedReviews = publishedReviews.filter((review) => review.rating != null);
-  const topReviews = [...ratedReviews]
-    .sort((a, b) => Number(b.rating) - Number(a.rating) || new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 5)
-    .map((review) => ({ ...review, mediaType: normalizeReviewMediaType(review.mediaType) }));
-  const latestPublishedReviews = [...publishedReviews].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 3);
   const joinedDate = formatProfileDate(accountQuery.data?.user.createdAt ?? profile.joinedAt);
   const likeItems = Object.values(likes).sort((a, b) => b.likedAt - a.likedAt).slice(0, 5);
+  const savedItems = mergeProfileMediaItems(Object.values(lib.watchlist), remoteStatusesQuery.data ?? [], ['watchlist', 'watching']);
+  const completedItems = mergeProfileMediaItems(diary, remoteStatusesQuery.data ?? [], ['watched']);
+  const userLists = [...lists].sort((a, b) => b.createdAt - a.createdAt);
+  const listCardWidth = Math.min(280, Math.max(140, (screenWidth - spacing.lg * 2 - spacing.sm) / 2));
 
   const emailVerified = Boolean((accountQuery.data?.user as { emailVerifiedAt?: Date | null } | undefined)?.emailVerifiedAt);
 
@@ -170,6 +160,7 @@ export default function ProfileScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.commonProfileContent}>
         <ProfileIdentity
+          showBio={false}
           name={displayName}
           username={displayedUsername}
           bio={displayedBio}
@@ -190,67 +181,85 @@ export default function ProfileScreen() {
         />
 
         <ProfileStatsGrid
-          followers={accountQuery.data?.socialStats.followerCount ?? 0}
-          following={accountQuery.data?.socialStats.followingCount ?? 0}
+          followers={accountQuery.data?.socialStats.followerCount ?? null}
+          following={accountQuery.data?.socialStats.followingCount ?? null}
+          reviews={remoteReviewsQuery.isLoading || remoteReviewsQuery.isError ? null : publishedReviews.length}
           followingLabel="أتابعهم"
           onFollowersPress={() => navigation.navigate('People', { initialFilter: 'followers' })}
           onFollowingPress={() => navigation.navigate('People', { initialFilter: 'following' })}
+          onReviewsPress={() => setActiveTab('reviews')}
         />
+        <ProfileBio bio={displayedBio} fallback="أضف نبذة قصيرة عن ذوقك في الأفلام والكتب." />
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.profileTabs}>
-          <ProfileTab icon="person-circle-outline" label="الملف" active />
-          <ProfileTab icon="book-outline" label="اليوميات" onPress={() => navigation.navigate('Diary')} />
-          <ProfileTab icon="list-outline" label="القوائم" onPress={() => navigation.navigate('Lists')} />
-          <ProfileTab icon="star-outline" label="التقييمات" onPress={() => navigation.navigate('Reviews')} />
-        </ScrollView>
-
-        <View style={styles.section}><View style={styles.referenceSectionHeader}><View><Text style={styles.referenceSectionTitle}>مفضلاتك</Text><Text style={styles.sectionHeadingSubtitle}>خمسة عناوين تعبّر عن ذوقك</Text></View><Pressable onPress={() => navigation.navigate('Likes')}><Text style={styles.viewAll}>عرض الكل</Text></Pressable></View>
+        <View style={styles.section}><View style={styles.referenceSectionHeader}><View><Text style={styles.referenceSectionTitle}>مفضلاتك</Text><Text style={styles.sectionHeadingSubtitle}>أحدث خمسة عناوين أضفتها إلى مفضلاتك</Text></View><Pressable onPress={() => navigation.navigate('Likes')}><Text style={styles.viewAll}>عرض الكل</Text></Pressable></View>
           {likeItems.length === 0 ? <EmptyState icon="heart-outline" title="لا توجد مفضلات بعد" message="اضغط على القلب في أي عنوان لإضافته هنا." /> : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.posterRail}>{likeItems.map((item) => <View key={`${item.mediaType}-${item.mediaId}`} style={styles.favoriteItem}><PosterCard item={{ id: item.mediaId, mediaType: item.mediaType, title: item.title, posterPath: item.posterPath, date: item.date, voteAverage: item.voteAverage }} width={112} onPress={() => openCatalogItem(navigation, item)} /><Pressable accessibilityLabel={`إزالة ${item.title} من المفضلة`} style={styles.removeFavorite} onPress={() => lib.toggleLike(item)}><Ionicons name="heart" size={14} color={colors.bg} /></Pressable></View>)}</ScrollView>}
         </View>
 
-        <ProfileTopReviews
-          items={topReviews}
-          loading={remoteReviewsQuery.isLoading}
-          error={remoteReviewsQuery.isError}
-          onRetry={() => void remoteReviewsQuery.refetch()}
-          onOpen={(mediaType, id) => openCatalogItem(navigation, { mediaType, mediaId: id })}
-          subtitle="أبرز اختياراتك من المراجعات المنشورة"
-        />
+        <ProfileSectionTabs activeTab={activeTab} onChange={setActiveTab} />
 
-        <View style={[styles.publishedReviewsSection, { paddingHorizontal: spacing.lg }]}>
-          <View style={styles.sectionHeading}>
-            <View><Text style={styles.sectionHeadingTitle}>أحدث المراجعات</Text><Text style={styles.sectionHeadingSubtitle}>آراؤك المنشورة في الأفلام والمسلسلات والكتب</Text></View>
-            <Ionicons name="film-outline" size={21} color={colors.accent} />
-          </View>
-          {remoteReviewsQuery.isLoading ? <View style={styles.publishedReviewsState}><ActivityIndicator color={colors.accent} /><Text style={styles.publishedReviewsHint}>جارٍ تحميل المراجعات…</Text></View> : remoteReviewsQuery.isError ? (
-            <View style={styles.publishedReviewsEmpty}><Text style={styles.publishedReviewsHint}>تعذر تحميل المراجعات.</Text><Pressable onPress={() => void remoteReviewsQuery.refetch()}><Text style={styles.verifyText}>إعادة المحاولة</Text></Pressable></View>
-          ) : latestPublishedReviews.length === 0 ? (
-            <View style={styles.publishedReviewsEmpty}><Text style={styles.publishedReviewsHint}>ستظهر هنا المراجعات التي تنشرها.</Text></View>
-          ) : latestPublishedReviews.map((review) => {
-            const mediaType = normalizeReviewMediaType(review.mediaType);
-            const poster = catalogPosterUrl(mediaType, review.posterPath, 'w200');
-            return (
-              <Pressable key={review.id} style={styles.publishedReviewCard} onPress={() => openCatalogItem(navigation, { mediaType, mediaId: review.mediaId, title: review.title, posterPath: review.posterPath })}>
-                {poster ? <Image source={{ uri: poster }} style={styles.publishedReviewPoster} contentFit="cover" /> : <View style={[styles.publishedReviewPoster, styles.publishedPosterFallback]}><Ionicons name={mediaType === 'book' ? 'book-outline' : 'film-outline'} size={22} color={colors.textFaint} /></View>}
-                <View style={styles.publishedReviewInfo}>
-                  <Text style={styles.publishedReviewTitle} numberOfLines={2}>{review.title}</Text>
-                  {review.rating != null ? <View style={styles.publishedRating}><Ionicons name="star" size={12} color={colors.gold} /><Text style={styles.publishedRatingText}>{review.rating}/10</Text></View> : null}
-                  <Text style={styles.publishedReviewDate}>{formatProfileDate(review.updatedAt)}</Text>
-                  <Text style={styles.publishedReviewBody} numberOfLines={3}>{review.review || 'قيّمت هذا العنوان دون إضافة تعليق مكتوب.'}</Text>
+        <View style={styles.tabBody}>
+          {activeTab === 'reviews' ? (
+            <View style={styles.publishedReviewsSection}>
+              <View style={styles.sectionHeading}><View><Text style={styles.sectionHeadingTitle}>المراجعات المنشورة</Text><Text style={styles.sectionHeadingSubtitle}>آراؤك في الأفلام والمسلسلات والكتب</Text></View></View>
+              {remoteReviewsQuery.isLoading ? <View style={styles.publishedReviewsState}><ActivityIndicator color={colors.accent} /><Text style={styles.publishedReviewsHint}>جارٍ تحميل المراجعات…</Text></View> : remoteReviewsQuery.isError ? (
+                <View style={styles.publishedReviewsEmpty}><Text style={styles.publishedReviewsHint}>تعذر تحميل المراجعات.</Text><Pressable onPress={() => void remoteReviewsQuery.refetch()}><Text style={styles.verifyText}>إعادة المحاولة</Text></Pressable></View>
+              ) : publishedReviews.length === 0 ? (
+                <EmptyState icon="chatbox-ellipses-outline" title="لا توجد مراجعات منشورة بعد" message="ستظهر هنا المراجعات التي تنشرها." />
+              ) : publishedReviews.map((review) => {
+                const mediaType = normalizeReviewMediaType(review.mediaType);
+                const poster = catalogPosterUrl(mediaType, review.posterPath, 'w200');
+                return (
+                  <Pressable key={review.id} style={styles.publishedReviewCard} onPress={() => openCatalogItem(navigation, { mediaType, mediaId: review.mediaId, title: review.title, posterPath: review.posterPath })}>
+                    {poster ? <Image source={{ uri: poster }} style={styles.publishedReviewPoster} contentFit="cover" /> : <View style={[styles.publishedReviewPoster, styles.publishedPosterFallback]}><Ionicons name={mediaType === 'book' ? 'book-outline' : 'film-outline'} size={22} color={colors.textFaint} /></View>}
+                    <View style={styles.publishedReviewInfo}>
+                      <Text style={styles.publishedReviewTitle} numberOfLines={2}>{review.title}</Text>
+                      {review.rating != null ? <View style={styles.publishedRating}><Ionicons name="star" size={12} color={colors.gold} /><Text style={styles.publishedRatingText}>{review.rating}/10</Text></View> : null}
+                      <Text style={styles.publishedReviewDate}>{formatProfileDate(review.updatedAt)}</Text>
+                      <Text style={styles.publishedReviewBody} numberOfLines={3}>{review.review || 'قيّمت هذا العنوان دون إضافة تعليق مكتوب.'}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+
+          {activeTab === 'saved' ? (
+            <View style={styles.profileContentSection}>
+              <Text style={styles.sectionHeadingTitle}>المحفوظات</Text>
+              <Text style={styles.sectionHeadingSubtitle}>عناوين حفظتها أو بدأت مشاهدتها وقراءتها</Text>
+              <ProfileMediaGrid items={savedItems} onOpen={(mediaType, mediaId) => openCatalogItem(navigation, { mediaType, mediaId })} emptyTitle="لا توجد عناوين محفوظة" emptyMessage="أضف فيلمًا أو مسلسلًا أو كتابًا للعودة إليه لاحقًا." />
+            </View>
+          ) : null}
+
+          {activeTab === 'completed' ? (
+            <View style={styles.profileContentSection}>
+              <Text style={styles.sectionHeadingTitle}>تمت المشاهدة أو القراءة</Text>
+              <Text style={styles.sectionHeadingSubtitle}>الأعمال والكتب التي سجلتها في يومياتك</Text>
+              <ProfileMediaGrid items={completedItems} onOpen={(mediaType, mediaId) => openCatalogItem(navigation, { mediaType, mediaId })} emptyIcon="checkmark-circle-outline" emptyTitle="لا يوجد سجل مكتمل بعد" emptyMessage="سجّل فيلمًا أو مسلسلًا أو كتابًا بعد مشاهدته أو قراءته." />
+            </View>
+          ) : null}
+
+          {activeTab === 'lists' ? (
+            <View style={styles.profileContentSection}>
+              <View style={styles.sectionHeading}><Text style={styles.sectionHeadingTitle}>قوائمك</Text><Pressable onPress={() => navigation.navigate('Lists')}><Text style={styles.viewAll}>إدارة القوائم</Text></Pressable></View>
+              {userLists.length === 0 ? <EmptyState icon="list-outline" title="لا توجد قوائم بعد" message="أنشئ قائمة لتنظيم الأفلام والمسلسلات والكتب." /> : (
+                <View style={styles.listGrid}>
+                  {userLists.map((list) => <Pressable key={list.id} style={[styles.listPreviewCard, { width: listCardWidth }]} onPress={() => navigation.navigate('Lists')}><Ionicons name="list-outline" size={21} color={colors.accent} /><Text style={styles.listPreviewTitle} numberOfLines={2}>{list.name}</Text><Text style={styles.listPreviewCount}>{list.items.length.toLocaleString('ar')} عنصر</Text></Pressable>)}
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
-              </Pressable>
-            );
-          })}
+              )}
+            </View>
+          ) : null}
         </View>
 
-        <View style={styles.contentColumns}>
-          <View style={styles.activityPanel}><View style={styles.panelHeader}><Text style={styles.panelTitle}>النشاط</Text><Ionicons name="pulse-outline" size={18} color={colors.accent} /></View>{recentReviews.length === 0 ? <Text style={styles.emptyPanel}>ستظهر تقييماتك ومراجعاتك هنا.</Text> : recentReviews.slice(0, 3).map((entry) => <Pressable key={entry.id} style={styles.activityRow} onPress={() => openCatalogItem(navigation, entry)}><View style={styles.activityAvatar}><Text style={styles.activityInitial}>{initials.slice(0, 1)}</Text></View><View style={{ flex: 1 }}><Text style={styles.activityText}>{user.name || profile.username} قيّم</Text><Text style={styles.activityTitle} numberOfLines={1}>{entry.title}</Text>{!!entry.rating && <RatingStars rating={entry.rating} size={12} />}</View></Pressable>)}</View>
-          <View style={styles.activityPanel}><View style={styles.panelHeader}><Text style={styles.panelTitle}>اليوميات</Text><Pressable onPress={() => navigation.navigate('Diary')}><Text style={styles.viewAll}>عرض الكل</Text></Pressable></View>{recentDiary.length === 0 ? <Text style={styles.emptyPanel}>ابدأ بتسجيل ما تشاهده.</Text> : recentDiary.slice(0, 3).map((entry) => <Pressable key={entry.id} style={styles.diaryRow} onPress={() => openCatalogItem(navigation, entry)}><View style={styles.dateBadge}><Text style={styles.dateMonth}>{entry.watchedDate?.slice(0, 3) || 'سجل'}</Text><Text style={styles.dateDay}>{entry.watchedDate?.slice(-2) || '—'}</Text></View><View style={{ flex: 1 }}><Text style={styles.diaryTitle} numberOfLines={1}>{entry.title}</Text><Text style={styles.diaryDate}>{entry.watchedDate}</Text>{!!entry.rating && <RatingStars rating={entry.rating} size={12} />}</View></Pressable>)}</View>
-        </View>
-
-        <View style={styles.cloudStats}><Text style={styles.cloudStatsTitle}>مزامنة بياناتك</Text><View style={styles.cloudStatsRow}><Text style={styles.cloudStatText}>{publishedReviews.length} مراجعة سحابية</Text>{remoteLibraryQuery.isError ? <Pressable onPress={() => void remoteLibraryQuery.refetch()}><Text style={styles.verifyText}>تعذر تحميل المكتبة — إعادة المحاولة</Text></Pressable> : <Text style={styles.cloudStatText}>{remoteLibraryQuery.isLoading ? 'جارٍ تحميل المكتبة…' : `${remoteLibraryQuery.data?.length ?? 0} عنصر في المكتبة`}</Text>}</View>{librarySyncError ? <Text style={styles.syncErrorText}>تعذرت مزامنة اليوميات والقوائم والمفضلة إلى ملفك العام.</Text> : null}{!emailVerified && user.email ? <Pressable onPress={handleRequestVerification} disabled={requestVerification.isPending} style={styles.verifyButton}><Ionicons name="mail-outline" size={15} color={colors.accent} /><Text style={styles.verifyText}>{requestVerification.isPending ? 'جارٍ الإرسال…' : 'تحقق من بريدك الإلكتروني'}</Text></Pressable> : null}</View>
+        {(accountQuery.isError || librarySyncError || (!emailVerified && Boolean(accountQuery.data) && Boolean(user.email))) ? (
+          <View style={styles.accountNotice}>
+            {accountQuery.isError ? <View><Text style={styles.syncErrorText}>تعذر تحميل بعض أعداد الحساب؛ ما زالت بياناتك المحلية ظاهرة.</Text><Pressable onPress={() => void accountQuery.refetch()}><Text style={styles.verifyText}>إعادة المحاولة</Text></Pressable></View> : null}
+            {librarySyncError ? <Text style={styles.syncErrorText}>تعذرت مزامنة المحفوظات واليوميات والقوائم مع ملفك العام.</Text> : null}
+            {!emailVerified && accountQuery.data && user.email ? <Pressable onPress={handleRequestVerification} disabled={requestVerification.isPending} style={styles.verifyButton}><Ionicons name="mail-outline" size={15} color={colors.accent} /><Text style={styles.verifyText}>{requestVerification.isPending ? 'جارٍ الإرسال…' : 'تحقق من بريدك الإلكتروني'}</Text></Pressable> : null}
+          </View>
+        ) : null}
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
       <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
@@ -287,10 +296,6 @@ function MenuItem({ icon, label, onPress, danger, disabled }: { icon: React.Comp
   );
 }
 
-function ProfileTab({ icon, label, active, onPress }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; active?: boolean; onPress?: () => void }) {
-  return <Pressable onPress={onPress} accessibilityRole="tab" accessibilityState={{ selected: !!active }} style={[styles.profileTab, active && styles.profileTabActive]}><Ionicons name={icon} size={21} color={active ? colors.accent : colors.textDim} /><Text style={[styles.profileTabLabel, active && styles.profileTabLabelActive]}>{label}</Text></Pressable>;
-}
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   topNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
@@ -303,40 +308,25 @@ const styles = StyleSheet.create({
   identitySecondary: { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border },
   identitySecondaryText: { color: colors.text, fontSize: fontSizes.xs, fontWeight: '800' },
   pressed: { opacity: 0.72, transform: [{ scale: 0.97 }] },
-  profileTabs: { paddingHorizontal: spacing.md, gap: spacing.xs, borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: spacing.xl },
-  profileTab: { minWidth: 86, alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: spacing.sm, paddingVertical: spacing.md, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  profileTabActive: { borderBottomColor: colors.accent },
-  profileTabLabel: { color: colors.textDim, fontSize: 11, fontWeight: '700' },
-  profileTabLabelActive: { color: colors.accent },
   referenceSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, marginBottom: spacing.md },
   referenceSectionTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800' },
   viewAll: { color: colors.accent, fontSize: fontSizes.sm, fontWeight: '800' },
   posterRail: { paddingHorizontal: spacing.lg, gap: spacing.sm },
-  contentColumns: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg, marginTop: spacing.xl },
-  activityPanel: { flex: 1, minWidth: 0, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
-  panelHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
-  panelTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800' },
-  emptyPanel: { color: colors.textDim, fontSize: 12, lineHeight: 18, padding: spacing.md },
-  activityRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
-  activityAvatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
-  activityInitial: { color: colors.bg, fontSize: 13, fontWeight: '900' },
-  activityText: { color: colors.textDim, fontSize: 11 },
-  activityTitle: { color: colors.text, fontSize: 13, fontWeight: '800', marginVertical: 2 },
-  dateBadge: { width: 46, height: 48, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh, alignItems: 'center', justifyContent: 'center' },
-  dateMonth: { color: colors.textDim, fontSize: 10, fontWeight: '800' },
-  dateDay: { color: colors.text, fontSize: 17, fontWeight: '800' },
   skeletonReviews: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
-  favoriteItem: { position: 'relative', width: 100 },
+  favoriteItem: { position: 'relative', width: 112 },
   removeFavorite: { position: 'absolute', top: 7, right: 7, width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.bg },
   skeletonTitle: { color: colors.textDim, fontSize: fontSizes.md, fontWeight: '800', marginBottom: spacing.md },
-  cloudStats: { marginHorizontal: spacing.lg, marginTop: spacing.sm, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
-  cloudStatsTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '800', marginBottom: spacing.sm },
-  cloudStatsRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  tabBody: { paddingBottom: spacing.sm },
+  profileContentSection: { paddingHorizontal: spacing.lg, marginBottom: spacing.xl },
+  listGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
+  listPreviewCard: { minHeight: 104, justifyContent: 'center', gap: spacing.xs, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  listPreviewTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '800', textAlign: 'right' },
+  listPreviewCount: { color: colors.textFaint, fontSize: fontSizes.xs, textAlign: 'right' },
+  accountNotice: { marginHorizontal: spacing.lg, marginTop: spacing.sm, marginBottom: spacing.md, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, gap: spacing.xs },
   syncErrorText: { color: colors.danger, fontSize: fontSizes.xs, marginTop: spacing.sm, textAlign: 'right' },
   verifyButton: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.md, alignSelf: 'flex-start' as const },
   verifyText: { color: colors.accent, fontSize: fontSizes.xs, fontWeight: '800' as const },
-  cloudStatText: { color: colors.textDim, fontSize: 12 },
-  publishedReviewsSection: { marginBottom: spacing.xl },
+  publishedReviewsSection: { marginBottom: spacing.xl, paddingHorizontal: spacing.lg },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
   sectionHeadingTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800', textAlign: 'right' },
   sectionHeadingSubtitle: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: 3, textAlign: 'right' },

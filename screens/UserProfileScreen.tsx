@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,9 +14,11 @@ import { trpc } from '../lib/trpc';
 import { catalogPosterUrl, normalizeReviewMediaType, openCatalogItem } from '../lib/catalog-navigation';
 import { ReviewMediaType } from '../types/tmdb';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
-import { ProfileIdentity } from '../components/ProfileIdentity';
+import { ProfileBio, ProfileIdentity } from '../components/ProfileIdentity';
 import { ProfileStatsGrid } from '../components/ProfileStatsGrid';
-import { ProfileTopReviews } from '../components/ProfileTopReviews';
+import { ProfileMediaGrid } from '../components/ProfileMediaGrid';
+import { ProfileSectionTabs, ProfileSectionTab } from '../components/ProfileSectionTabs';
+import { ProfileMediaItem, ProfileMediaStatus, mergeProfileMediaItems } from '../lib/profile-media';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
@@ -73,9 +75,8 @@ function RemoteUserProfile({
 }) {
   const profileQuery = trpc.social.profile.useQuery({ userId });
   const reviewsQuery = trpc.social.userReviews.useQuery({ userId }, { enabled: Boolean(profileQuery.data) });
-  const topReviewsQuery = trpc.social.userTopReviews.useQuery({ userId }, { enabled: Boolean(profileQuery.data) });
-  const mediaStatusesQuery = trpc.social.userMediaStatuses.useQuery({ userId }, { enabled: Boolean(profileQuery.data) });
   const publicLibraryQuery = trpc.social.userLibrary.useQuery({ userId }, { enabled: Boolean(profileQuery.data) });
+  const mediaStatusesQuery = trpc.social.userMediaStatuses.useQuery({ userId }, { enabled: Boolean(profileQuery.data) });
   const followMutation = trpc.social.toggleFollow.useMutation({
     onSuccess: () => { void profileQuery.refetch(); },
     onError: () => Alert.alert('تعذرت المتابعة', 'تحقق من اتصالك ثم حاول مرة أخرى.'),
@@ -97,7 +98,14 @@ function RemoteUserProfile({
   });
   const [menuOpen, setMenuOpen] = useState(false);
   const [revealedSpoilers, setRevealedSpoilers] = useState<Record<number, boolean>>({});
-  const [activeProfileTab, setActiveProfileTab] = useState<'profile' | 'diary' | 'lists' | 'reviews'>('profile');
+  const [activeTab, setActiveTab] = useState<ProfileSectionTab>('reviews');
+  const rawPublicLibrary = publicLibraryQuery.data ?? { likes: [], watchlist: [], diary: [], lists: [] };
+  const mediaStatuses = (mediaStatusesQuery.data ?? []) as ProfileMediaStatus[];
+  const publicLibrary = useMemo(() => ({
+    ...rawPublicLibrary,
+    watchlist: mergeProfileMediaItems(rawPublicLibrary.watchlist, mediaStatuses, ['watchlist', 'watching']),
+    diary: mergeProfileMediaItems(rawPublicLibrary.diary, mediaStatuses, ['watched']),
+  }), [rawPublicLibrary, mediaStatuses]);
 
   const confirmBlock = () => {
     setMenuOpen(false);
@@ -132,6 +140,7 @@ function RemoteUserProfile({
 
   const displayName = profile.name?.trim() || profile.username || 'مستخدم Blinkr';
   const joinedDate = formatArabicDate(profile.joinedAt);
+  const favoriteItems = rawPublicLibrary.likes.slice(0, 5);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -153,6 +162,7 @@ function RemoteUserProfile({
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <ProfileIdentity
+          showBio={false}
           name={displayName}
           username={profile.username || `user${userId}`}
           bio={profile.bio}
@@ -188,107 +198,76 @@ function RemoteUserProfile({
         <ProfileStatsGrid
           followers={profile.followerCount ?? 0}
           following={profile.followingCount ?? 0}
+          reviews={profile.reviewCount ?? 0}
+          onReviewsPress={() => setActiveTab('reviews')}
         />
+        <ProfileBio bio={profile.bio} fallback="لم يضف هذا المستخدم نبذة شخصية بعد." />
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.profileTabs}>
-          <ProfileTab icon="person-circle-outline" label="الملف" active={activeProfileTab === 'profile'} onPress={() => setActiveProfileTab('profile')} />
-          <ProfileTab icon="book-outline" label="اليوميات" active={activeProfileTab === 'diary'} onPress={() => setActiveProfileTab('diary')} />
-          <ProfileTab icon="list-outline" label="القوائم" active={activeProfileTab === 'lists'} onPress={() => setActiveProfileTab('lists')} />
-          <ProfileTab icon="star-outline" label="التقييمات" active={activeProfileTab === 'reviews'} onPress={() => setActiveProfileTab('reviews')} />
-        </ScrollView>
+        <View style={styles.favoritesSection}>
+          <View style={styles.favoritesHeader}><Text style={styles.sectionTitle}>المفضلات</Text><Text style={styles.sectionSubtitle}>أحدث خمسة عناوين أضافها هذا المستخدم</Text></View>
+          {publicLibraryQuery.isLoading ? <View style={styles.reviewLoading}><ActivityIndicator color={colors.accent} /><Text style={styles.loadingText}>جارٍ تحميل المفضلات…</Text></View> : publicLibraryQuery.isError ? (
+            <View style={styles.inlineError}><Text style={styles.emptyText}>تعذر تحميل المفضلات.</Text><Pressable onPress={() => void publicLibraryQuery.refetch()}><Text style={styles.retryText}>إعادة المحاولة</Text></Pressable></View>
+          ) : favoriteItems.length ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.favoriteRail}>
+              {favoriteItems.map((item) => <PosterCard key={`${item.mediaType}-${item.mediaId}`} item={{ id: item.mediaId, mediaType: item.mediaType, title: item.title, posterPath: item.posterPath, date: item.date ?? undefined, voteAverage: 0 }} width={104} onPress={() => onOpenMedia(item.mediaType, item.mediaId)} />)}
+            </ScrollView>
+          ) : <Text style={styles.emptyText}>لم يضف هذا المستخدم مفضلات بعد.</Text>}
+        </View>
 
-        {(activeProfileTab === 'profile' || activeProfileTab === 'diary' || activeProfileTab === 'lists') ? (
+        <ProfileSectionTabs activeTab={activeTab} onChange={setActiveTab} />
+
+        {activeTab === 'reviews' ? (
+          <View>
+            <View style={styles.sectionHeader}><View><Text style={styles.sectionTitle}>المراجعات المنشورة</Text><Text style={styles.sectionSubtitle}>آراء هذا المستخدم في الأفلام والمسلسلات والكتب</Text></View></View>
+            {reviewsQuery.isLoading ? (
+              <View style={styles.reviewLoading}><ActivityIndicator color={colors.accent} /><Text style={styles.loadingText}>جارٍ تحميل المراجعات…</Text></View>
+            ) : reviewsQuery.isError ? (
+              <View style={styles.inlineError}><Text style={styles.emptyText}>تعذر تحميل المراجعات.</Text><Pressable onPress={() => void reviewsQuery.refetch()}><Text style={styles.retryText}>إعادة المحاولة</Text></Pressable></View>
+            ) : !reviewsQuery.data?.length ? (
+              <View style={styles.emptyReviews}><Ionicons name="chatbox-ellipses-outline" size={26} color={colors.textFaint} /><Text style={styles.emptyTitle}>لا توجد مراجعات بعد</Text><Text style={styles.emptyText}>ستظهر هنا المراجعات التي ينشرها هذا المستخدم.</Text></View>
+            ) : (
+              <View style={styles.reviewsList}>
+                {reviewsQuery.data.map((item) => {
+                  const review = item.review;
+                  const mediaType = normalizeReviewMediaType(review.mediaType);
+                  const poster = catalogPosterUrl(mediaType, review.posterPath, 'w200');
+                  const reviewDate = formatArabicDate(review.updatedAt);
+                  const spoilerVisible = !review.spoiler || revealedSpoilers[review.id];
+                  return (
+                    <View key={review.id} style={styles.reviewCard}>
+                      <Pressable style={styles.reviewTop} onPress={() => onOpenMedia(mediaType, review.mediaId)} accessibilityRole="button">
+                        {poster ? <Image source={{ uri: poster }} style={styles.poster} contentFit="cover" /> : <View style={[styles.poster, styles.posterFallback]}><Ionicons name={mediaType === 'book' ? 'book-outline' : 'film-outline'} size={25} color={colors.textFaint} /></View>}
+                        <View style={styles.reviewInfo}><Text style={styles.reviewTitle} numberOfLines={2}>{review.title}</Text><View style={styles.ratingPill}><Ionicons name="star" size={13} color={colors.gold} /><Text style={styles.ratingText}>{review.rating}/10</Text></View>{reviewDate ? <Text style={styles.reviewDate}>{reviewDate}</Text> : null}</View>
+                        <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
+                      </Pressable>
+                      {review.spoiler && !spoilerVisible ? (
+                        <Pressable style={styles.spoilerNotice} onPress={() => setRevealedSpoilers((current) => ({ ...current, [review.id]: true }))}><Ionicons name="warning-outline" size={15} color={colors.gold} /><Text style={styles.spoilerText}>تحتوي المراجعة على حرق — اضغط لإظهارها</Text></Pressable>
+                      ) : review.review ? <Text style={styles.reviewBody} numberOfLines={5}>{review.review}</Text> : <Text style={styles.reviewBodyMuted}>قيّم هذا العنوان دون إضافة تعليق مكتوب.</Text>}
+                      <View style={styles.reviewFooter}><Text style={styles.reviewMeta}>{item.commentCount.toLocaleString('ar')} تعليق</Text><Pressable style={styles.likeButton} disabled={likeMutation.isPending} onPress={() => likeMutation.mutate({ reviewId: review.id })} accessibilityRole="button" accessibilityLabel={item.likedByMe ? 'إلغاء الإعجاب بالمراجعة' : 'أعجبني'}><Ionicons name={item.likedByMe ? 'heart' : 'heart-outline'} size={17} color={item.likedByMe ? colors.danger : colors.textDim} /><Text style={styles.reviewMeta}>{item.likeCount.toLocaleString('ar')}</Text></Pressable></View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        ) : (
           <PublicMediaSection
-            tab={activeProfileTab}
+            tab={activeTab}
             displayName={displayName}
-            items={mediaStatusesQuery.data ?? []}
-            library={publicLibraryQuery.data ?? { likes: [], watchlist: [], diary: [], lists: [] }}
-            loading={mediaStatusesQuery.isLoading || publicLibraryQuery.isLoading}
-            error={mediaStatusesQuery.isError || publicLibraryQuery.isError}
-            onRetry={() => { void mediaStatusesQuery.refetch(); void publicLibraryQuery.refetch(); }}
+            library={publicLibrary}
+            loading={publicLibraryQuery.isLoading}
+            error={publicLibraryQuery.isError}
+            onRetry={() => { void publicLibraryQuery.refetch(); void mediaStatusesQuery.refetch(); }}
             onOpen={onOpenMedia}
           />
-        ) : null}
-
-        {(activeProfileTab === 'profile' || activeProfileTab === 'reviews') ? <ProfileTopReviews
-          items={(topReviewsQuery.data ?? []).map((item) => ({ ...item, mediaType: normalizeReviewMediaType(item.mediaType) }))}
-          loading={topReviewsQuery.isLoading}
-          error={topReviewsQuery.isError}
-          onRetry={() => void topReviewsQuery.refetch()}
-          onOpen={onOpenMedia}
-          subtitle={`أبرز اختيارات ${displayName} من المراجعات المنشورة`}
-        /> : null}
-
-        {(activeProfileTab === 'profile' || activeProfileTab === 'reviews') ? <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionTitle}>أحدث المراجعات</Text>
-          <Text style={styles.sectionSubtitle}>آراء هذا المستخدم في الأفلام والمسلسلات والكتب</Text>
-          </View>
-          <Ionicons name="film-outline" size={21} color={colors.accent} />
-        </View> : null}
-
-        {reviewsQuery.isLoading && (activeProfileTab === 'profile' || activeProfileTab === 'reviews') ? (
-          <View style={styles.reviewLoading}><ActivityIndicator color={colors.accent} /><Text style={styles.loadingText}>جارٍ تحميل المراجعات…</Text></View>
-        ) : reviewsQuery.isError && (activeProfileTab === 'profile' || activeProfileTab === 'reviews') ? (
-          <View style={styles.inlineError}><Text style={styles.emptyText}>تعذر تحميل المراجعات.</Text><Pressable onPress={() => reviewsQuery.refetch()}><Text style={styles.retryText}>إعادة المحاولة</Text></Pressable></View>
-        ) : (activeProfileTab === 'profile' || activeProfileTab === 'reviews') && !reviewsQuery.data?.length ? (
-          <View style={styles.emptyReviews}><Ionicons name="chatbox-ellipses-outline" size={26} color={colors.textFaint} /><Text style={styles.emptyTitle}>لا توجد مراجعات بعد</Text><Text style={styles.emptyText}>ستظهر هنا المراجعات التي ينشرها هذا المستخدم.</Text></View>
-        ) : (activeProfileTab === 'profile' || activeProfileTab === 'reviews') ? (
-          <View style={styles.reviewsList}>
-            {(reviewsQuery.data ?? []).map((item) => {
-              const review = item.review;
-              const mediaType = normalizeReviewMediaType(review.mediaType);
-              const poster = catalogPosterUrl(mediaType, review.posterPath, 'w200');
-              const reviewDate = formatArabicDate(review.updatedAt);
-              const spoilerVisible = !review.spoiler || revealedSpoilers[review.id];
-              return (
-                <View key={review.id} style={styles.reviewCard}>
-                  <Pressable style={styles.reviewTop} onPress={() => onOpenMedia(mediaType, review.mediaId)} accessibilityRole="button">
-                    {poster ? <Image source={{ uri: poster }} style={styles.poster} contentFit="cover" /> : <View style={[styles.poster, styles.posterFallback]}><Ionicons name={mediaType === 'book' ? 'book-outline' : 'film-outline'} size={25} color={colors.textFaint} /></View>}
-                    <View style={styles.reviewInfo}>
-                      <Text style={styles.reviewTitle} numberOfLines={2}>{review.title}</Text>
-                      <View style={styles.ratingPill}><Ionicons name="star" size={13} color={colors.gold} /><Text style={styles.ratingText}>{review.rating}/10</Text></View>
-                      {reviewDate ? <Text style={styles.reviewDate}>{reviewDate}</Text> : null}
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
-                  </Pressable>
-
-                  {review.spoiler && !spoilerVisible ? (
-                    <Pressable style={styles.spoilerNotice} onPress={() => setRevealedSpoilers((current) => ({ ...current, [review.id]: true }))}>
-                      <Ionicons name="warning-outline" size={15} color={colors.gold} />
-                      <Text style={styles.spoilerText}>تحتوي المراجعة على حرق — اضغط لإظهارها</Text>
-                    </Pressable>
-                  ) : review.review ? <Text style={styles.reviewBody} numberOfLines={5}>{review.review}</Text> : <Text style={styles.reviewBodyMuted}>قيّم هذا العنوان دون إضافة تعليق مكتوب.</Text>}
-
-                  <View style={styles.reviewFooter}>
-                    <Text style={styles.reviewMeta}>{item.commentCount.toLocaleString('ar')} تعليق</Text>
-                    <Pressable
-                      style={styles.likeButton}
-                      disabled={likeMutation.isPending}
-                      onPress={() => likeMutation.mutate({ reviewId: review.id })}
-                      accessibilityRole="button"
-                      accessibilityLabel={item.likedByMe ? 'إلغاء الإعجاب بالمراجعة' : 'أعجبني'}
-                    >
-                      <Ionicons name={item.likedByMe ? 'heart' : 'heart-outline'} size={17} color={item.likedByMe ? colors.danger : colors.textDim} />
-                      <Text style={styles.reviewMeta}>{item.likeCount.toLocaleString('ar')}</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        ) : null}
+        )}
 
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-type PublicMediaItem = {
-  mediaType: string;
-  mediaId: number;
-  title: string;
-  posterPath: string | null;
+type PublicMediaItem = ProfileMediaItem & {
   status?: string;
   updatedAt?: Date | string;
   rating?: number | null;
@@ -303,82 +282,54 @@ type PublicUserLibrary = {
   lists: Array<{ id: string; name: string; description: string; items: PublicMediaItem[] }>;
 };
 
-function ProfileTab({ icon, label, active, onPress }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; active: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="tab"
-      accessibilityState={{ selected: active }}
-      style={[styles.profileTab, active && styles.profileTabActive]}
-    >
-      <Ionicons name={icon} size={21} color={active ? colors.accent : colors.textDim} />
-      <Text style={[styles.profileTabLabel, active && styles.profileTabLabelActive]}>{label}</Text>
-    </Pressable>
-  );
-}
-
 function PublicMediaSection({
   tab,
   displayName,
-  items,
   library,
   loading,
   error,
   onRetry,
   onOpen,
 }: {
-  tab: 'profile' | 'diary' | 'lists';
+  tab: Exclude<ProfileSectionTab, 'reviews'>;
   displayName: string;
-  items: Array<PublicMediaItem & { status: string }>;
   library: PublicUserLibrary;
   loading: boolean;
   error: boolean;
   onRetry: () => void;
-  onOpen: (mediaType: 'movie' | 'tv', mediaId: number) => void;
+  onOpen: (mediaType: ReviewMediaType, mediaId: number) => void;
 }) {
-  const watched = items.filter((item) => item.status === 'watched');
-  const watchlist = items.filter((item) => item.status === 'watchlist' || item.status === 'watching');
-  const diaryEntries = library.diary.length ? library.diary : watched;
-  const sections = tab === 'diary'
-    ? [{ title: 'اليوميات', subtitle: `سجل المشاهدة وملاحظات ${displayName}`, values: diaryEntries }]
-    : tab === 'lists'
-      ? (library.lists.length
-          ? library.lists.map((list) => ({ title: list.name, subtitle: list.description || `قائمة أنشأها ${displayName}`, values: list.items }))
-          : [{ title: 'قائمة المشاهدة', subtitle: `العناوين المحفوظة لدى ${displayName}`, values: library.watchlist.length ? library.watchlist : watchlist }])
-      : [
-          ...(library.likes.length ? [{ title: 'المفضلة', subtitle: `أبرز خمسة عناوين يحبها ${displayName}`, values: library.likes.slice(0, 5) }] : []),
-          { title: 'أفلام ومسلسلات شاهدها', subtitle: `آخر ما سجله ${displayName} كمُشاهَد`, values: watched.slice(0, 8) },
-          { title: 'قائمة المشاهدة', subtitle: `عناوين يريد ${displayName} مشاهدتها`, values: (library.watchlist.length ? library.watchlist : watchlist).slice(0, 8) },
-        ];
-
   if (loading) return <View style={styles.reviewLoading}><ActivityIndicator color={colors.accent} /><Text style={styles.loadingText}>جارٍ تحميل مكتبة المشاهدة…</Text></View>;
   if (error) return <View style={styles.inlineError}><Text style={styles.emptyText}>تعذر تحميل مكتبة المشاهدة.</Text><Pressable onPress={onRetry}><Text style={styles.retryText}>إعادة المحاولة</Text></Pressable></View>;
 
-  return (
-    <View>
-      {sections.map((section) => (
-        <View key={section.title} style={styles.mediaSection}>
-          <View style={styles.sectionHeader}>
-            <View><Text style={styles.sectionTitle}>{section.title}</Text><Text style={styles.sectionSubtitle}>{section.subtitle}</Text></View>
-            <Ionicons name={section.title.includes('قائمة') ? 'bookmark-outline' : 'eye-outline'} size={21} color={colors.accent} />
+  const onOpenItem = (mediaType: ReviewMediaType, mediaId: number) => onOpen(mediaType, mediaId);
+  if (tab === 'lists') {
+    return library.lists.length ? (
+      <View>
+        {library.lists.map((list) => (
+          <View key={list.id || list.name} style={styles.publicListSection}>
+            <Text style={styles.sectionTitle}>{list.name}</Text>
+            {!!list.description && <Text style={styles.sectionSubtitle}>{list.description}</Text>}
+            <ProfileMediaGrid items={list.items} onOpen={onOpenItem} emptyIcon="list-outline" emptyTitle="هذه القائمة فارغة" emptyMessage="لم يضف المستخدم عناوين إلى هذه القائمة بعد." />
           </View>
-          {section.values.length ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mediaRail}>
-              {section.values.map((item) => {
-                const mediaType = item.mediaType === 'tv' ? 'tv' : 'movie';
-                return (
-                  <View key={`${mediaType}-${item.mediaId}`} style={styles.publicMediaCard}>
-                    <PosterCard item={{ id: item.mediaId, mediaType, title: item.title, posterPath: item.posterPath, date: undefined, voteAverage: 0 }} width={112} onPress={() => onOpen(mediaType, item.mediaId)} />
-                    {item.rating != null ? <Text style={styles.diaryRating}>تقييم {item.rating}/5</Text> : null}
-                    {item.watchedDate ? <Text style={styles.diaryDate}>{formatArabicDate(item.watchedDate)}</Text> : null}
-                    {item.review ? <Text style={styles.diaryReview} numberOfLines={4}>{item.review}</Text> : null}
-                  </View>
-                );
-              })}
-            </ScrollView>
-          ) : <View style={styles.emptyReviews}><Text style={styles.emptyTitle}>{tab === 'diary' ? 'لا يوجد سجل مشاهدة بعد' : section.title.includes('قائمة') ? 'لا توجد عناوين في القائمة بعد' : 'لا توجد عناوين مسجلة هنا بعد'}</Text><Text style={styles.emptyText}>ستظهر العناوين التي يضيفها المستخدم إلى مكتبته هنا.</Text></View>}
-        </View>
-      ))}
+        ))}
+      </View>
+    ) : <EmptyState icon="list-outline" title="لا توجد قوائم بعد" message={`لم ينشئ ${displayName} أي قوائم حتى الآن.`} />;
+  }
+
+  const saved = tab === 'saved';
+  const items = saved ? library.watchlist : library.diary;
+  return (
+    <View style={styles.publicMediaSection}>
+      <Text style={styles.sectionTitle}>{saved ? 'المحفوظات' : 'تمت المشاهدة أو القراءة'}</Text>
+      <Text style={styles.sectionSubtitle}>{saved ? `عناوين حفظها ${displayName} أو بدأ مشاهدتها وقراءتها` : `الأعمال والكتب التي سجلها ${displayName} في يومياته`}</Text>
+      <ProfileMediaGrid
+        items={items}
+        onOpen={onOpenItem}
+        emptyIcon={saved ? 'bookmark-outline' : 'checkmark-circle-outline'}
+        emptyTitle={saved ? 'لا توجد عناوين محفوظة' : 'لا يوجد سجل مكتمل بعد'}
+        emptyMessage={saved ? 'ستظهر هنا العناوين التي يحفظها هذا المستخدم.' : 'ستظهر هنا العناوين التي يسجلها بعد مشاهدتها أو قراءتها.'}
+      />
     </View>
   );
 }
@@ -394,11 +345,9 @@ const styles = StyleSheet.create({
   header: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border },
   headerTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800' },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
-  profileTabs: { alignSelf: 'stretch', gap: spacing.xs, borderBottomWidth: 1, borderBottomColor: colors.border, marginTop: spacing.lg, marginBottom: spacing.xl },
-  profileTab: { minWidth: 86, alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: spacing.sm, paddingVertical: spacing.md, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  profileTabActive: { borderBottomColor: colors.accent },
-  profileTabLabel: { color: colors.textDim, fontSize: 11, fontWeight: '700' },
-  profileTabLabelActive: { color: colors.accent },
+  favoritesSection: { marginTop: spacing.xs, marginBottom: spacing.md },
+  favoritesHeader: { marginBottom: spacing.sm },
+  favoriteRail: { gap: spacing.sm, paddingVertical: spacing.xs },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   loadingText: { color: colors.textDim, fontSize: fontSizes.sm },
   followsYouTag: { backgroundColor: colors.surfaceHigh, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 4 },
@@ -413,12 +362,8 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
   sectionTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800', textAlign: 'right' },
   sectionSubtitle: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: 3, textAlign: 'right' },
-  mediaSection: { marginBottom: spacing.xl },
-  mediaRail: { gap: spacing.sm, paddingVertical: spacing.xs },
-  publicMediaCard: { width: 112 },
-  diaryRating: { color: colors.gold, fontSize: 11, fontWeight: '800', marginTop: spacing.xs, textAlign: 'right' },
-  diaryDate: { color: colors.textFaint, fontSize: 10, marginTop: 2, textAlign: 'right' },
-  diaryReview: { color: colors.textDim, fontSize: 11, lineHeight: 16, marginTop: spacing.xs, textAlign: 'right' },
+  publicMediaSection: { marginBottom: spacing.xl },
+  publicListSection: { marginBottom: spacing.xl },
   reviewLoading: { minHeight: 100, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   inlineError: { alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.lg },
   retryText: { color: colors.accent, fontSize: fontSizes.sm, fontWeight: '800' },

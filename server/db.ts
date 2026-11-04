@@ -466,12 +466,12 @@ function publicMediaItems(value: unknown, limit: number) {
   return value.filter((item): item is Record<string, unknown> => {
     if (!item || typeof item !== "object") return false;
     const media = item as Record<string, unknown>;
-    return (media.mediaType === "movie" || media.mediaType === "tv")
+    return (media.mediaType === "movie" || media.mediaType === "tv" || media.mediaType === "book")
       && Number.isSafeInteger(Number(media.mediaId))
       && Number(media.mediaId) > 0
       && typeof media.title === "string";
   }).slice(0, limit).map((item) => ({
-    mediaType: item.mediaType as "movie" | "tv",
+    mediaType: item.mediaType as "movie" | "tv" | "book",
     mediaId: Number(item.mediaId),
     title: String(item.title).slice(0, 255),
     posterPath: typeof item.posterPath === "string" ? item.posterPath.slice(0, 255) : null,
@@ -480,6 +480,8 @@ function publicMediaItems(value: unknown, limit: number) {
     review: typeof item.review === "string" ? item.review.slice(0, 2000) : "",
     watchedDate: typeof item.watchedDate === "string" ? item.watchedDate.slice(0, 32) : null,
     createdAt: Number.isFinite(Number(item.createdAt)) ? Number(item.createdAt) : null,
+    likedAt: Number.isFinite(Number(item.likedAt)) ? Number(item.likedAt) : null,
+    addedAt: Number.isFinite(Number(item.addedAt)) ? Number(item.addedAt) : null,
   }));
 }
 
@@ -495,9 +497,14 @@ export async function getPublicUserLibrary(viewerId: number, targetUserId: numbe
     library = {};
   }
 
+  const byTimestamp = (values: unknown[], field: "likedAt" | "addedAt" | "createdAt") => [...values].sort((left, right) => {
+    const leftValue = left && typeof left === "object" ? Number((left as Record<string, unknown>)[field]) : 0;
+    const rightValue = right && typeof right === "object" ? Number((right as Record<string, unknown>)[field]) : 0;
+    return (Number.isFinite(rightValue) ? rightValue : 0) - (Number.isFinite(leftValue) ? leftValue : 0);
+  });
   const likesValue = library.likes && typeof library.likes === "object" ? Object.values(library.likes as Record<string, unknown>) : [];
   const watchlistValue = library.watchlist && typeof library.watchlist === "object" ? Object.values(library.watchlist as Record<string, unknown>) : [];
-  const diary = publicMediaItems(library.diary, 50);
+  const diary = publicMediaItems(byTimestamp(Array.isArray(library.diary) ? library.diary : [], "createdAt"), 50);
   const lists = Array.isArray(library.lists) ? library.lists.slice(0, 20).flatMap((value) => {
     if (!value || typeof value !== "object") return [];
     const list = value as Record<string, unknown>;
@@ -506,14 +513,14 @@ export async function getPublicUserLibrary(viewerId: number, targetUserId: numbe
       id: typeof list.id === "string" ? list.id.slice(0, 100) : "",
       name: list.name.slice(0, 100),
       description: typeof list.description === "string" ? list.description.slice(0, 300) : "",
-      items: publicMediaItems(list.items, 30),
+      items: publicMediaItems(byTimestamp(Array.isArray(list.items) ? list.items : [], "addedAt"), 30),
       createdAt: Number.isFinite(Number(list.createdAt)) ? Number(list.createdAt) : null,
     }];
   }) : [];
 
   return {
-    likes: publicMediaItems(likesValue, 30),
-    watchlist: publicMediaItems(watchlistValue, 50),
+    likes: publicMediaItems(byTimestamp(likesValue, "likedAt"), 30),
+    watchlist: publicMediaItems(byTimestamp(watchlistValue, "addedAt"), 50),
     diary,
     lists,
   };
