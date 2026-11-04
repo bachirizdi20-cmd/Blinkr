@@ -3,7 +3,7 @@ import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Svg, { Path } from "react-native-svg";
 import { AuthTextInput, type AuthTextInputHandle } from "@/components/AuthTextInput";
-import { createUserWithEmailAndPassword, GoogleAuthProvider, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signInWithPopup, updateProfile, type User } from "firebase/auth";
+import { createUserWithEmailAndPassword, getRedirectResult, GoogleAuthProvider, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, updateProfile, type User } from "firebase/auth";
 import { trpc } from "@/lib/trpc";
 import * as Auth from "@/lib/_core/auth";
 import { firebaseAuth } from "@/lib/firebaseAuth";
@@ -14,7 +14,14 @@ type AuthMode = "login" | "register" | "forgot";
 type FieldName = "name" | "email" | "password" | "confirmPassword";
 type FieldErrors = Partial<Record<FieldName, string>>;
 
-type GoogleFailureStage = "popup" | "session";
+type GoogleFailureStage = "popup" | "redirect" | "session";
+
+let googleRedirectResultPromise: ReturnType<typeof getRedirectResult> | null = null;
+
+function readGoogleRedirectResult() {
+  if (!googleRedirectResultPromise) googleRedirectResultPromise = getRedirectResult(firebaseAuth);
+  return googleRedirectResultPromise;
+}
 
 function friendlyAuthError(error: unknown, stage?: GoogleFailureStage) {
   const details = typeof error === "object" && error !== null ? error as {
@@ -32,9 +39,10 @@ function friendlyAuthError(error: unknown, stage?: GoogleFailureStage) {
   if (code === "auth/invalid-api-key") return "إعداد Firebase غير صالح. راجع إعدادات تطبيق الويب في مشروع Firebase.";
   if (code === "auth/email-already-in-use") return "هذا البريد لديه حساب بالفعل. اختر تسجيل الدخول؛ إذا لم يكن موثقًا سنعيد إرسال رابط التحقق.";
   if (code === "auth/account-exists-with-different-credential") return "هذا البريد مرتبط بطريقة دخول أخرى. استخدم طريقة الدخول الأصلية أولًا؛ لا تنشئ حسابًا جديدًا كي لا تفصل بياناتك.";
-  if (stage === "popup" && code === "auth/invalid-credential") return "تعذر التحقق من حساب Google. أغلق نافذة الاختيار وحاول مجددًا.";
-  if (code === "auth/popup-blocked") return "منع المتصفح نافذة تسجيل الدخول. اسمح بالنوافذ المنبثقة لهذا الموقع ثم أعد المحاولة.";
-  if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return "أُغلقت نافذة تسجيل الدخول قبل اكتمال العملية. حاول مرة أخرى.";
+  if ((stage === "popup" || stage === "redirect") && code === "auth/invalid-credential") return "تعذر التحقق من حساب Google. اختر الحساب مجددًا وحاول مرة أخرى.";
+  if (code === "auth/web-storage-unsupported" || code === "auth/operation-not-supported-in-this-environment") return "هذا المتصفح لا يسمح بإكمال تسجيل Google بهذه الطريقة. افتح Blinkr في Chrome أو Safari العادي.";
+  if (code === "auth/popup-blocked") return "منع المتصفح نافذة Google. استخدم خيار التسجيل بصفحة كاملة أدناه أو افتح Blinkr في Chrome.";
+  if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return "أُغلقت نافذة Google قبل إعادة نتيجة تسجيل الدخول. جرّب خيار التسجيل بصفحة كاملة أدناه.";
   if (code === "auth/invalid-email") return "صيغة البريد الإلكتروني غير صحيحة.";
   if (code === "auth/weak-password") return "كلمة المرور ضعيفة؛ اختر كلمة مرور أقوى من 8 أحرف.";
   if (normalized.includes("too many") || normalized.includes("too-many-requests")) return "محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.";
@@ -52,6 +60,7 @@ function friendlyAuthError(error: unknown, stage?: GoogleFailureStage) {
   if (stage === "session" && (trpcCode === "INTERNAL_SERVER_ERROR" || trpcCode === "-32603")) {
     return "تم التحقق من Google، لكن خادم Blinkr تعذر عليه إنشاء جلستك. أعد المحاولة بعد قليل. (G-SERVER)";
   }
+  if (stage === "redirect") return "تعذر إكمال تسجيل Google بعد الرجوع إلى Blinkr. افتح الموقع في Chrome أو Safari العادي ثم حاول مرة أخرى.";
   if (normalized.includes("already") || normalized.includes("exists") || normalized.includes("conflict")) {
     return "هذا البريد مسجّل بالفعل. سجّل الدخول بدلًا من ذلك.";
   }
@@ -94,6 +103,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
   const [fieldErrors, setFieldErrors] = React.useState<FieldErrors>({});
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
+  const [showGoogleRedirectFallback, setShowGoogleRedirectFallback] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = React.useState(false);
   const nameRef = React.useRef<AuthTextInputHandle>(null);
@@ -119,8 +129,39 @@ export function AuthPanel({ onAuthenticated }: Props) {
     await complete(result);
   }, [complete, firebaseSession]);
 
+  React.useEffect(() => {
+    if (Platform.OS !== "web") return;
+    let active = true;
+    void readGoogleRedirectResult().then(async (result) => {
+      if (!active || !result?.user) return;
+      setIsSubmitting(true);
+      setIsGoogleSubmitting(true);
+      setShowGoogleRedirectFallback(false);
+      try {
+        await completeFederatedSignIn(result.user);
+      } catch (redirectError) {
+        console.warn("[Auth] Google redirect completion failed", {
+          code: typeof redirectError === "object" && redirectError !== null && "code" in redirectError ? String(redirectError.code) : "unknown",
+        });
+        if (active) setError(friendlyAuthError(redirectError, "session"));
+      } finally {
+        if (active) {
+          setIsSubmitting(false);
+          setIsGoogleSubmitting(false);
+        }
+      }
+    }).catch((redirectError) => {
+      if (!active) return;
+      const code = typeof redirectError === "object" && redirectError !== null && "code" in redirectError ? String(redirectError.code) : "unknown";
+      console.warn("[Auth] Google redirect result failed", { code });
+      setError(friendlyAuthError(redirectError, "redirect"));
+    });
+    return () => { active = false; };
+  }, [completeFederatedSignIn]);
+
   const handleGoogleSignIn = async () => {
     clearFeedback();
+    setShowGoogleRedirectFallback(false);
     if (Platform.OS !== "web") {
       setError("تسجيل Google متاح حاليًا عبر نسخة Blinkr على الويب.");
       return;
@@ -129,6 +170,8 @@ export function AuthPanel({ onAuthenticated }: Props) {
     setIsSubmitting(true);
     setIsGoogleSubmitting(true);
     let stage: GoogleFailureStage = "popup";
+    const previousFirebaseUser = firebaseAuth.currentUser;
+    const previousFirebaseSignInTime = previousFirebaseUser?.metadata.lastSignInTime ?? null;
     try {
       firebaseAuth.languageCode = "ar";
       const provider = new GoogleAuthProvider();
@@ -142,8 +185,44 @@ export function AuthPanel({ onAuthenticated }: Props) {
         ? signInError.code
         : "unknown";
       console.warn("[Auth] Google sign-in failed", { stage, code });
+      const recoveredUser = firebaseAuth.currentUser;
+      const recoveredAfterPopup = code === "auth/popup-closed-by-user"
+        && recoveredUser
+        && recoveredUser.providerData.some((providerInfo) => providerInfo.providerId === "google.com")
+        && (recoveredUser.uid !== previousFirebaseUser?.uid || recoveredUser.metadata.lastSignInTime !== previousFirebaseSignInTime);
+      if (recoveredAfterPopup && recoveredUser) {
+        stage = "session";
+        try {
+          await completeFederatedSignIn(recoveredUser);
+          return;
+        } catch (sessionError) {
+          const sessionCode = typeof sessionError === "object" && sessionError !== null && "code" in sessionError ? String(sessionError.code) : "unknown";
+          console.warn("[Auth] Recovered Google sign-in session failed", { code: sessionCode });
+          setError(friendlyAuthError(sessionError, "session"));
+          return;
+        }
+      }
+      setShowGoogleRedirectFallback(code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request" || code === "auth/popup-blocked");
       setError(friendlyAuthError(signInError, stage));
     } finally {
+      setIsSubmitting(false);
+      setIsGoogleSubmitting(false);
+    }
+  };
+
+  const handleGoogleRedirectSignIn = async () => {
+    clearFeedback();
+    setIsSubmitting(true);
+    setIsGoogleSubmitting(true);
+    try {
+      firebaseAuth.languageCode = "ar";
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      await signInWithRedirect(firebaseAuth, provider);
+    } catch (redirectError) {
+      const code = typeof redirectError === "object" && redirectError !== null && "code" in redirectError ? String(redirectError.code) : "unknown";
+      console.warn("[Auth] Google redirect start failed", { code });
+      setError(friendlyAuthError(redirectError, "redirect"));
       setIsSubmitting(false);
       setIsGoogleSubmitting(false);
     }
@@ -153,6 +232,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
     setFieldErrors({});
     setError(null);
     setNotice(null);
+    setShowGoogleRedirectFallback(false);
   };
 
   const changeMode = (nextMode: AuthMode) => {
@@ -364,6 +444,18 @@ export function AuthPanel({ onAuthenticated }: Props) {
       </> : null}
 
       {error ? <View style={styles.errorBox} accessibilityRole="alert"><Ionicons name="warning-outline" size={19} color={colors.danger} /><Text style={styles.errorText}>{error}</Text></View> : null}
+      {showGoogleRedirectFallback && Platform.OS === "web" ? (
+        <Pressable
+          onPress={handleGoogleRedirectSignIn}
+          disabled={busy}
+          style={({ pressed }) => [styles.googleRedirectFallback, pressed && styles.pressed, busy && styles.disabled]}
+          accessibilityRole="button"
+          accessibilityLabel="تسجيل Google بفتح صفحة كاملة"
+        >
+          <Ionicons name="open-outline" size={18} color={colors.accent} />
+          <Text style={styles.googleRedirectFallbackText}>جرّب تسجيل Google بصفحة كاملة</Text>
+        </Pressable>
+      ) : null}
       {notice ? <View style={styles.noticeBox} accessibilityRole="alert"><Ionicons name="checkmark-circle-outline" size={19} color={colors.accent} /><Text style={styles.noticeText}>{notice}</Text></View> : null}
 
       <Pressable
@@ -401,6 +493,8 @@ const styles = {
   fieldError: { color: colors.danger, fontSize: 13, lineHeight: 19, textAlign: "right" as const, marginTop: 5, writingDirection: "rtl" as const },
   errorBox: { flexDirection: "row" as const, alignItems: "flex-start" as const, gap: 9, backgroundColor: "rgba(248, 113, 113, 0.12)", borderWidth: 1, borderColor: "rgba(248, 113, 113, 0.32)", borderRadius: radius.md, padding: spacing.md, marginTop: spacing.md },
   errorText: { flex: 1, color: colors.danger, fontSize: fontSizes.sm, lineHeight: 22, textAlign: "right" as const, writingDirection: "rtl" as const },
+  googleRedirectFallback: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 8, minHeight: 48, marginTop: spacing.sm, paddingHorizontal: spacing.md, borderWidth: 1, borderColor: colors.accent, borderRadius: 12, backgroundColor: colors.surface },
+  googleRedirectFallbackText: { color: colors.accent, fontSize: fontSizes.sm, fontWeight: "800" as const, writingDirection: "rtl" as const },
   noticeBox: { flexDirection: "row" as const, alignItems: "flex-start" as const, gap: 9, backgroundColor: "rgba(53, 211, 153, 0.10)", borderWidth: 1, borderColor: "rgba(53, 211, 153, 0.30)", borderRadius: radius.md, padding: spacing.md, marginTop: spacing.md },
   noticeText: { flex: 1, color: colors.accent, fontSize: fontSizes.sm, lineHeight: 22, textAlign: "right" as const, writingDirection: "rtl" as const },
   primary: { marginTop: spacing.lg, backgroundColor: colors.accent, borderRadius: 12, paddingHorizontal: spacing.md, paddingVertical: 15, alignItems: "center" as const, justifyContent: "center" as const, minHeight: 56 },
