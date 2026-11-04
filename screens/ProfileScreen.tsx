@@ -7,7 +7,6 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import EmptyState from '../components/EmptyState';
-import PosterCard from '../components/PosterCard';
 import { ContentStackParamList } from '../navigation/types';
 import { useLibrary } from '../context/LibraryContext';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
@@ -20,7 +19,8 @@ import { clearAccountLibraryStorage } from '../lib/library-storage';
 import { ProfileBio, ProfileIdentity } from '../components/ProfileIdentity';
 import { ProfileStatsGrid } from '../components/ProfileStatsGrid';
 import { ProfileMediaGrid } from '../components/ProfileMediaGrid';
-import { ProfileSectionTabs, ProfileSectionTab } from '../components/ProfileSectionTabs';
+import { ProfileFavoriteRail } from '../components/ProfileFavoriteRail';
+import { animateProfileTabChange, ProfileSectionTabs, ProfileSectionTab } from '../components/ProfileSectionTabs';
 import { mergeProfileMediaItems } from '../lib/profile-media';
 import { catalogPosterUrl, normalizeReviewMediaType, openCatalogItem } from '../lib/catalog-navigation';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
@@ -42,6 +42,10 @@ export default function ProfileScreen() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [librarySyncError, setLibrarySyncError] = useState(false);
   const [activeTab, setActiveTab] = useState<ProfileSectionTab>('reviews');
+  const handleProfileTabChange = (tab: ProfileSectionTab) => {
+    if (tab !== activeTab) animateProfileTabChange();
+    setActiveTab(tab);
+  };
 
   useEffect(() => {
     if (!user || !lib.loaded || accountQuery.isLoading || accountQuery.isError) return;
@@ -157,7 +161,7 @@ export default function ProfileScreen() {
         <Text style={styles.topNavTitle}>الملف الشخصي</Text>
         <Pressable onPress={() => setMenuVisible(true)} style={styles.topNavButton} accessibilityLabel="فتح قائمة الحساب"><Ionicons name="menu" size={25} color={colors.text} /></Pressable>
       </View>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.profileScrollContent}>
         <View style={styles.commonProfileContent}>
         <ProfileIdentity
           showBio={false}
@@ -169,12 +173,12 @@ export default function ProfileScreen() {
           avatar={(
             <Pressable onPress={() => navigation.navigate('EditProfile')} style={styles.avatarButton} accessibilityLabel="تغيير صورة الملف الشخصي">
               {resolveMediaUrl(displayedAvatar) ? <Image source={{ uri: resolveMediaUrl(displayedAvatar) }} style={styles.avatar} contentFit="cover" /> : <View style={[styles.avatar, { backgroundColor: profile.avatarColor }]}><Text style={styles.avatarText}>{initials}</Text></View>}
-              <View style={styles.avatarCameraBadge}><Ionicons name="camera" size={13} color={colors.bg} /></View>
+              <View style={styles.avatarCameraBadge}><Ionicons name="camera-outline" size={12} color={colors.accent} /></View>
             </Pressable>
           )}
           actions={(
             <>
-              <Pressable style={({ pressed }) => [styles.identityAction, styles.identityPrimary, pressed && styles.pressed]} onPress={() => navigation.navigate('EditProfile')}><Text style={styles.identityPrimaryText}>تعديل الملف</Text></Pressable>
+              <Pressable style={({ pressed }) => [styles.identityAction, styles.identityPrimary, pressed && styles.pressed]} onPress={() => navigation.navigate('EditProfile')}><Ionicons name="create-outline" size={15} color={colors.accent} /><Text style={styles.identityPrimaryText}>تعديل الملف</Text></Pressable>
               <Pressable style={({ pressed }) => [styles.identityAction, styles.identitySecondary, pressed && styles.pressed]} onPress={() => Share.share({ message: `تابع ${displayName} على Blinkr.` })} accessibilityLabel="مشاركة الملف"><Ionicons name="share-outline" size={17} color={colors.text} /><Text style={styles.identitySecondaryText}>مشاركة</Text></Pressable>
             </>
           )}
@@ -187,16 +191,34 @@ export default function ProfileScreen() {
           followingLabel="أتابعهم"
           onFollowersPress={() => navigation.navigate('People', { initialFilter: 'followers' })}
           onFollowingPress={() => navigation.navigate('People', { initialFilter: 'following' })}
-          onReviewsPress={() => setActiveTab('reviews')}
+          onReviewsPress={() => handleProfileTabChange('reviews')}
         />
         <ProfileBio bio={displayedBio} fallback="أضف نبذة قصيرة عن ذوقك في الأفلام والكتب." />
         </View>
 
-        <View style={styles.section}><View style={styles.referenceSectionHeader}><View><Text style={styles.referenceSectionTitle}>مفضلاتك</Text><Text style={styles.sectionHeadingSubtitle}>أحدث خمسة عناوين أضفتها إلى مفضلاتك</Text></View><Pressable onPress={() => navigation.navigate('Likes')}><Text style={styles.viewAll}>عرض الكل</Text></Pressable></View>
-          {likeItems.length === 0 ? <EmptyState icon="heart-outline" title="لا توجد مفضلات بعد" message="اضغط على القلب في أي عنوان لإضافته هنا." /> : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.posterRail}>{likeItems.map((item) => <View key={`${item.mediaType}-${item.mediaId}`} style={styles.favoriteItem}><PosterCard item={{ id: item.mediaId, mediaType: item.mediaType, title: item.title, posterPath: item.posterPath, date: item.date, voteAverage: item.voteAverage }} width={112} onPress={() => openCatalogItem(navigation, item)} /><Pressable accessibilityLabel={`إزالة ${item.title} من المفضلة`} style={styles.removeFavorite} onPress={() => lib.toggleLike(item)}><Ionicons name="heart" size={14} color={colors.bg} /></Pressable></View>)}</ScrollView>}
+        <View style={styles.section}>
+          <View style={styles.referenceSectionHeader}>
+            <View style={styles.favoriteHeading}>
+              <Text style={styles.referenceSectionTitle}>مفضلاتك</Text>
+              <Text style={styles.sectionHeadingSubtitle}>أحدث خمسة عناوين أضفتها إلى مفضلاتك</Text>
+            </View>
+            <Pressable onPress={() => navigation.navigate('Likes')} style={styles.viewAllButton} accessibilityRole="button">
+              <Text style={styles.viewAll}>عرض الكل</Text>
+              <Ionicons name="chevron-back" size={15} color={colors.accent} />
+            </Pressable>
+          </View>
+          {likeItems.length === 0 ? (
+            <View style={styles.favoriteEmpty}><EmptyState icon="heart-outline" title="لا توجد مفضلات بعد" message="اضغط على القلب في أي عنوان لإضافته هنا." /></View>
+          ) : (
+            <ProfileFavoriteRail
+              items={likeItems}
+              onOpen={(item) => openCatalogItem(navigation, item)}
+              onRemove={(item) => lib.toggleLike(item)}
+            />
+          )}
         </View>
 
-        <ProfileSectionTabs activeTab={activeTab} onChange={setActiveTab} />
+        <ProfileSectionTabs activeTab={activeTab} onChange={handleProfileTabChange} />
 
         <View style={styles.tabBody}>
           {activeTab === 'reviews' ? (
@@ -260,7 +282,6 @@ export default function ProfileScreen() {
             {!emailVerified && accountQuery.data && user.email ? <Pressable onPress={handleRequestVerification} disabled={requestVerification.isPending} style={styles.verifyButton}><Ionicons name="mail-outline" size={15} color={colors.accent} /><Text style={styles.verifyText}>{requestVerification.isPending ? 'جارٍ الإرسال…' : 'تحقق من بريدك الإلكتروني'}</Text></Pressable> : null}
           </View>
         ) : null}
-        <View style={{ height: spacing.xxl }} />
       </ScrollView>
       <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
         <View style={styles.menuOverlay}>
@@ -301,35 +322,37 @@ const styles = StyleSheet.create({
   topNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
   topNavButton: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
   topNavTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800' },
+  profileScrollContent: { paddingBottom: spacing.xl },
   commonProfileContent: { paddingHorizontal: spacing.lg },
-  identityAction: { minHeight: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: spacing.md, borderRadius: radius.md },
-  identityPrimary: { backgroundColor: colors.accent },
-  identityPrimaryText: { color: '#04120C', fontSize: fontSizes.xs, fontWeight: '800' },
+  identityAction: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: spacing.md, borderRadius: radius.pill, borderWidth: 1 },
+  identityPrimary: { backgroundColor: 'rgba(51,214,166,0.10)', borderColor: 'rgba(51,214,166,0.44)' },
+  identityPrimaryText: { color: colors.accent, fontSize: fontSizes.xs, fontWeight: '800' },
   identitySecondary: { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border },
   identitySecondaryText: { color: colors.text, fontSize: fontSizes.xs, fontWeight: '800' },
   pressed: { opacity: 0.72, transform: [{ scale: 0.97 }] },
-  referenceSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, marginBottom: spacing.md },
-  referenceSectionTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800' },
+  section: { marginBottom: spacing.lg },
+  referenceSectionHeader: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, paddingHorizontal: spacing.lg, marginBottom: spacing.md },
+  favoriteHeading: { flex: 1, minWidth: 0, alignItems: 'flex-end' },
+  referenceSectionTitle: { color: colors.text, fontSize: fontSizes.lg, lineHeight: 24, fontWeight: '800', textAlign: 'right' },
+  viewAllButton: { flexDirection: 'row-reverse', alignItems: 'center', gap: 2, minHeight: 40, paddingLeft: spacing.xs },
   viewAll: { color: colors.accent, fontSize: fontSizes.sm, fontWeight: '800' },
-  posterRail: { paddingHorizontal: spacing.lg, gap: spacing.sm },
+  favoriteEmpty: { paddingHorizontal: spacing.lg },
   skeletonReviews: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
-  favoriteItem: { position: 'relative', width: 112 },
-  removeFavorite: { position: 'absolute', top: 7, right: 7, width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.bg },
   skeletonTitle: { color: colors.textDim, fontSize: fontSizes.md, fontWeight: '800', marginBottom: spacing.md },
   tabBody: { paddingBottom: spacing.sm },
   profileContentSection: { paddingHorizontal: spacing.lg, marginBottom: spacing.xl },
   listGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
   listPreviewCard: { minHeight: 104, justifyContent: 'center', gap: spacing.xs, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   listPreviewTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '800', textAlign: 'right' },
-  listPreviewCount: { color: colors.textFaint, fontSize: fontSizes.xs, textAlign: 'right' },
+  listPreviewCount: { color: colors.textDim, fontSize: 12, lineHeight: 16, textAlign: 'right' },
   accountNotice: { marginHorizontal: spacing.lg, marginTop: spacing.sm, marginBottom: spacing.md, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, gap: spacing.xs },
   syncErrorText: { color: colors.danger, fontSize: fontSizes.xs, marginTop: spacing.sm, textAlign: 'right' },
   verifyButton: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.md, alignSelf: 'flex-start' as const },
   verifyText: { color: colors.accent, fontSize: fontSizes.xs, fontWeight: '800' as const },
   publishedReviewsSection: { marginBottom: spacing.xl, paddingHorizontal: spacing.lg },
-  sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
+  sectionHeading: { flexDirection: 'row-reverse', alignItems: 'flex-end', justifyContent: 'flex-start', marginBottom: spacing.md },
   sectionHeadingTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800', textAlign: 'right' },
-  sectionHeadingSubtitle: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: 3, textAlign: 'right' },
+  sectionHeadingSubtitle: { color: colors.textDim, fontSize: 12, lineHeight: 18, marginTop: 3, textAlign: 'right' },
   publishedReviewCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginBottom: spacing.md },
   publishedReviewPoster: { width: 58, height: 82, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh },
   publishedPosterFallback: { alignItems: 'center', justifyContent: 'center' },
@@ -337,7 +360,7 @@ const styles = StyleSheet.create({
   publishedReviewTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800', textAlign: 'right' },
   publishedRating: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.surfaceHigh, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 4 },
   publishedRatingText: { color: colors.text, fontSize: fontSizes.xs, fontWeight: '800' },
-  publishedReviewDate: { color: colors.textFaint, fontSize: 10 },
+  publishedReviewDate: { color: colors.textDim, fontSize: 11, lineHeight: 16 },
   publishedReviewBody: { color: colors.textDim, fontSize: fontSizes.xs, lineHeight: 18, textAlign: 'right', alignSelf: 'stretch' },
   publishedReviewsState: { minHeight: 90, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
   publishedReviewsEmpty: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
@@ -361,14 +384,13 @@ const styles = StyleSheet.create({
   authNote: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: spacing.md },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.lg },
   avatarButton: { position: 'relative' },
-  avatar: { width: 92, height: 92, borderRadius: 46, alignItems: 'center', justifyContent: 'center' },
-  avatarCameraBadge: { position: 'absolute', right: -2, bottom: -2, width: 25, height: 25, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent, borderWidth: 2, borderColor: colors.bg },
+  avatar: { width: 84, height: 84, borderRadius: 42, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.surfaceHigh },
+  avatarCameraBadge: { position: 'absolute', right: 0, bottom: 0, width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh, borderWidth: 2, borderColor: colors.bg },
   avatarText: { color: '#04120C', fontSize: fontSizes.xl, fontWeight: '800' },
-  section: { marginBottom: spacing.xl },
   diaryRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.sm, borderWidth: 1, borderColor: colors.border },
   diaryPoster: { width: 46, height: 66, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh },
   diaryTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '700' },
-  diaryDate: { color: colors.textFaint, fontSize: 11, marginTop: 2, marginBottom: 3 },
+  diaryDate: { color: colors.textDim, fontSize: 12, lineHeight: 16, marginTop: 2, marginBottom: 3 },
   reviewCard: { backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, gap: 4 },
   reviewTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '700' },
   reviewBody: { color: colors.textDim, fontSize: fontSizes.sm, lineHeight: 19 },
@@ -377,5 +399,5 @@ const styles = StyleSheet.create({
   listCoverPoster: { width: 60, height: 88, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh, borderWidth: 2, borderColor: colors.bg },
   listCoverEmpty: { alignItems: 'center', justifyContent: 'center' },
   listName: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '700' },
-  listCount: { color: colors.textFaint, fontSize: 11, marginTop: 1 },
+  listCount: { color: colors.textDim, fontSize: 12, lineHeight: 16, marginTop: 1 },
 });

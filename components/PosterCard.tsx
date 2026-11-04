@@ -21,10 +21,11 @@ interface Props {
   onPress: () => void;
   width?: number;
   showRating?: boolean;
+  uniform?: boolean;
 }
 
 
-export default function PosterCard({ item, onPress, width, showRating = true }: Props) {
+export default function PosterCard({ item, onPress, width, showRating = true, uniform = false }: Props) {
   const cardWidth = width ?? 108;
   const uri = item.mediaType === 'book'
     ? (item.posterPath?.startsWith('https://covers.openlibrary.org/') ? item.posterPath : null)
@@ -53,10 +54,10 @@ export default function PosterCard({ item, onPress, width, showRating = true }: 
           </View>
         )}
       </View>
-      <Text numberOfLines={2} style={[styles.title, { width: cardWidth }]}>
+      <Text numberOfLines={2} style={[styles.title, { width: cardWidth }, uniform && styles.uniformTitle]}>
         {item.title}
       </Text>
-      {!!year && <Text style={styles.year}>{year}</Text>}
+      {!!year || uniform ? <Text numberOfLines={1} style={[styles.year, uniform && styles.uniformYear]}>{year || ' '}</Text> : null}
     </Pressable>
   );
 }
@@ -93,6 +94,8 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   animeBadgeText: { color: '#04121B', fontSize: 8, fontWeight: '800', letterSpacing: 0.3 },
-  title: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '600', marginTop: spacing.xs, lineHeight: 17 },
-  year: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: 1 },
+  title: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '700', marginTop: spacing.xs, lineHeight: 18 },
+  uniformTitle: { minHeight: 36, textAlign: 'center' },
+  year: { color: colors.textDim, fontSize: 12, lineHeight: 16, marginTop: 1 },
+  uniformYear: { minHeight: 17, textAlign: 'center' },
 });

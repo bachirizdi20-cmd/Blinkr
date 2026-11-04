@@ -1,15 +1,21 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet } from 'react-native';
+import { LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, UIManager } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { colors, spacing } from '../lib/theme';
 
 export type ProfileSectionTab = 'reviews' | 'saved' | 'completed' | 'lists';
 
-const TABS: Array<{ key: ProfileSectionTab; icon: React.ComponentProps<typeof Ionicons>['name']; label: string }> = [
-  { key: 'reviews', icon: 'chatbox-ellipses-outline', label: 'المراجعات المنشورة' },
-  { key: 'saved', icon: 'bookmark-outline', label: 'المحفوظات' },
-  { key: 'completed', icon: 'checkmark-circle-outline', label: 'تمت المشاهدة أو القراءة' },
-  { key: 'lists', icon: 'list-outline', label: 'القوائم' },
+if (Platform.OS === 'android') UIManager.setLayoutAnimationEnabledExperimental?.(true);
+
+export function animateProfileTabChange() {
+  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+}
+
+const TABS: Array<{ key: ProfileSectionTab; icon: React.ComponentProps<typeof Ionicons>['name']; activeIcon: React.ComponentProps<typeof Ionicons>['name']; label: string }> = [
+  { key: 'reviews', icon: 'chatbox-ellipses-outline', activeIcon: 'chatbox-ellipses', label: 'المراجعات المنشورة' },
+  { key: 'saved', icon: 'bookmark-outline', activeIcon: 'bookmark', label: 'المحفوظات' },
+  { key: 'completed', icon: 'checkmark-circle-outline', activeIcon: 'checkmark-circle', label: 'تمت المشاهدة أو القراءة' },
+  { key: 'lists', icon: 'list-outline', activeIcon: 'list', label: 'القوائم' },
 ];
 
 export function ProfileSectionTabs({ activeTab, onChange }: { activeTab: ProfileSectionTab; onChange: (tab: ProfileSectionTab) => void }) {
@@ -31,7 +37,7 @@ export function ProfileSectionTabs({ activeTab, onChange }: { activeTab: Profile
             accessibilityLabel={tab.label}
             accessibilityState={{ selected: active }}
           >
-            <Ionicons name={tab.icon} size={23} color={active ? colors.accent : colors.textDim} />
+            <Ionicons name={active ? tab.activeIcon : tab.icon} size={22} color={active ? colors.accent : colors.textDim} />
           </Pressable>
         );
       })}
@@ -40,8 +46,8 @@ export function ProfileSectionTabs({ activeTab, onChange }: { activeTab: Profile
 }
 
 const styles = StyleSheet.create({
-  tabs: { flexGrow: 1, flexDirection: 'row', justifyContent: 'space-around', borderBottomWidth: 1, borderBottomColor: colors.border, marginTop: spacing.sm, marginBottom: spacing.lg },
-  tab: { flex: 1, minWidth: 58, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabs: { flexGrow: 1, flexDirection: 'row-reverse', justifyContent: 'space-around', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, marginTop: spacing.sm, marginBottom: spacing.md },
+  tab: { flex: 1, minWidth: 58, minHeight: 50, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent', paddingBottom: 1 },
   activeTab: { borderBottomColor: colors.accent },
   pressed: { opacity: 0.7 },
 });

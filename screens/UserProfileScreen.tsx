@@ -8,7 +8,6 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import UserAvatar from '../components/UserAvatar';
 import EmptyState from '../components/EmptyState';
 import ApiErrorState from '../components/ApiErrorState';
-import PosterCard from '../components/PosterCard';
 import { ContentStackParamList } from '../navigation/types';
 import { trpc } from '../lib/trpc';
 import { catalogPosterUrl, normalizeReviewMediaType, openCatalogItem } from '../lib/catalog-navigation';
@@ -16,8 +15,9 @@ import { ReviewMediaType } from '../types/tmdb';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { ProfileBio, ProfileIdentity } from '../components/ProfileIdentity';
 import { ProfileStatsGrid } from '../components/ProfileStatsGrid';
+import { ProfileFavoriteRail } from '../components/ProfileFavoriteRail';
 import { ProfileMediaGrid } from '../components/ProfileMediaGrid';
-import { ProfileSectionTabs, ProfileSectionTab } from '../components/ProfileSectionTabs';
+import { animateProfileTabChange, ProfileSectionTabs, ProfileSectionTab } from '../components/ProfileSectionTabs';
 import { ProfileMediaItem, ProfileMediaStatus, mergeProfileMediaItems } from '../lib/profile-media';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
 
@@ -99,6 +99,10 @@ function RemoteUserProfile({
   const [menuOpen, setMenuOpen] = useState(false);
   const [revealedSpoilers, setRevealedSpoilers] = useState<Record<number, boolean>>({});
   const [activeTab, setActiveTab] = useState<ProfileSectionTab>('reviews');
+  const handleProfileTabChange = (tab: ProfileSectionTab) => {
+    if (tab !== activeTab) animateProfileTabChange();
+    setActiveTab(tab);
+  };
   const rawPublicLibrary = publicLibraryQuery.data ?? { likes: [], watchlist: [], diary: [], lists: [] };
   const mediaStatuses = (mediaStatusesQuery.data ?? []) as ProfileMediaStatus[];
   const publicLibrary = useMemo(() => ({
@@ -168,7 +172,7 @@ function RemoteUserProfile({
           bio={profile.bio}
           joinedAt={joinedDate || null}
           bioFallback="لم يضف هذا المستخدم نبذة شخصية بعد."
-          avatar={<UserAvatar name={displayName} color={colors.accent} size={92} imageUrl={profile.avatarUrl ?? undefined} />}
+          avatar={<UserAvatar name={displayName} color={colors.accent} size={84} imageUrl={profile.avatarUrl ?? undefined} />}
           badge={profile.followsYou ? <View style={styles.followsYouTag}><Text style={styles.followsYouText}>يتابعك</Text></View> : undefined}
           actions={profile.isSelf ? <Text style={styles.selfLabel}>هذا ملفك الشخصي</Text> : (
             <>
@@ -187,9 +191,8 @@ function RemoteUserProfile({
                 <Ionicons name="chatbubble-outline" size={16} color={colors.text} />
                 <Text style={[styles.actionText, styles.secondaryButtonText]}>مراسلة</Text>
               </Pressable>
-              <Pressable style={[styles.actionButton, styles.secondaryButton]} onPress={() => void Share.share({ message: `تابع ${displayName} على Blinkr.` })} accessibilityRole="button" accessibilityLabel="مشاركة الملف">
+              <Pressable style={[styles.actionButton, styles.secondaryButton, styles.shareIconButton]} onPress={() => void Share.share({ message: `تابع ${displayName} على Blinkr.` })} accessibilityRole="button" accessibilityLabel="مشاركة الملف">
                 <Ionicons name="share-outline" size={16} color={colors.text} />
-                <Text style={[styles.actionText, styles.secondaryButtonText]}>مشاركة</Text>
               </Pressable>
             </>
           )}
@@ -199,7 +202,7 @@ function RemoteUserProfile({
           followers={profile.followerCount ?? 0}
           following={profile.followingCount ?? 0}
           reviews={profile.reviewCount ?? 0}
-          onReviewsPress={() => setActiveTab('reviews')}
+          onReviewsPress={() => handleProfileTabChange('reviews')}
         />
         <ProfileBio bio={profile.bio} fallback="لم يضف هذا المستخدم نبذة شخصية بعد." />
 
@@ -208,13 +211,11 @@ function RemoteUserProfile({
           {publicLibraryQuery.isLoading ? <View style={styles.reviewLoading}><ActivityIndicator color={colors.accent} /><Text style={styles.loadingText}>جارٍ تحميل المفضلات…</Text></View> : publicLibraryQuery.isError ? (
             <View style={styles.inlineError}><Text style={styles.emptyText}>تعذر تحميل المفضلات.</Text><Pressable onPress={() => void publicLibraryQuery.refetch()}><Text style={styles.retryText}>إعادة المحاولة</Text></Pressable></View>
           ) : favoriteItems.length ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.favoriteRail}>
-              {favoriteItems.map((item) => <PosterCard key={`${item.mediaType}-${item.mediaId}`} item={{ id: item.mediaId, mediaType: item.mediaType, title: item.title, posterPath: item.posterPath, date: item.date ?? undefined, voteAverage: 0 }} width={104} onPress={() => onOpenMedia(item.mediaType, item.mediaId)} />)}
-            </ScrollView>
+            <ProfileFavoriteRail items={favoriteItems} onOpen={(item) => onOpenMedia(item.mediaType, item.mediaId)} horizontalPadding={0} />
           ) : <Text style={styles.emptyText}>لم يضف هذا المستخدم مفضلات بعد.</Text>}
         </View>
 
-        <ProfileSectionTabs activeTab={activeTab} onChange={setActiveTab} />
+        <ProfileSectionTabs activeTab={activeTab} onChange={handleProfileTabChange} />
 
         {activeTab === 'reviews' ? (
           <View>
@@ -346,22 +347,22 @@ const styles = StyleSheet.create({
   headerTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800' },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   favoritesSection: { marginTop: spacing.xs, marginBottom: spacing.md },
-  favoritesHeader: { marginBottom: spacing.sm },
-  favoriteRail: { gap: spacing.sm, paddingVertical: spacing.xs },
+  favoritesHeader: { marginBottom: spacing.sm, alignItems: 'flex-end' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   loadingText: { color: colors.textDim, fontSize: fontSizes.sm },
   followsYouTag: { backgroundColor: colors.surfaceHigh, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 4 },
   followsYouText: { color: colors.textDim, fontSize: 10, fontWeight: '700' },
   selfLabel: { color: colors.textDim, fontSize: fontSizes.xs, fontWeight: '700', marginTop: spacing.xs, textAlign: 'right' },
-  actionButton: { minHeight: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: spacing.md, borderRadius: radius.md },
+  actionButton: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: spacing.md, borderRadius: radius.pill },
+  shareIconButton: { width: 38, paddingHorizontal: 0 },
   primaryButton: { backgroundColor: colors.accent },
   secondaryButton: { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border },
   actionText: { fontSize: fontSizes.xs, fontWeight: '800' },
   primaryButtonText: { color: '#04120C' },
   secondaryButtonText: { color: colors.text },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
-  sectionTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800', textAlign: 'right' },
-  sectionSubtitle: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: 3, textAlign: 'right' },
+  sectionHeader: { flexDirection: 'row-reverse', alignItems: 'flex-end', justifyContent: 'flex-start', marginBottom: spacing.md },
+  sectionTitle: { color: colors.text, fontSize: fontSizes.lg, lineHeight: 24, fontWeight: '800', textAlign: 'right' },
+  sectionSubtitle: { color: colors.textDim, fontSize: 12, lineHeight: 18, marginTop: 3, textAlign: 'right' },
   publicMediaSection: { marginBottom: spacing.xl },
   publicListSection: { marginBottom: spacing.xl },
   reviewLoading: { minHeight: 100, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.md },
@@ -379,13 +380,13 @@ const styles = StyleSheet.create({
   reviewTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800', textAlign: 'right' },
   ratingPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.surfaceHigh, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 4 },
   ratingText: { color: colors.text, fontSize: fontSizes.xs, fontWeight: '800' },
-  reviewDate: { color: colors.textFaint, fontSize: 10 },
+  reviewDate: { color: colors.textDim, fontSize: 11, lineHeight: 16 },
   reviewBody: { color: colors.textDim, fontSize: fontSizes.sm, lineHeight: 21, textAlign: 'right', marginTop: spacing.md },
-  reviewBodyMuted: { color: colors.textFaint, fontSize: fontSizes.xs, textAlign: 'right', marginTop: spacing.md },
+  reviewBodyMuted: { color: colors.textDim, fontSize: 12, lineHeight: 18, textAlign: 'right', marginTop: spacing.md },
   spoilerNotice: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, padding: spacing.md, marginTop: spacing.md, backgroundColor: colors.surfaceHigh, borderRadius: radius.sm },
   spoilerText: { color: colors.gold, fontSize: fontSizes.xs, fontWeight: '700', textAlign: 'right' },
   reviewFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.md, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
-  reviewMeta: { color: colors.textFaint, fontSize: fontSizes.xs },
+  reviewMeta: { color: colors.textDim, fontSize: 12, lineHeight: 17 },
   likeButton: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 5 },
   menuOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 20, elevation: 20 },
   menuCard: { position: 'absolute', top: 52, right: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingVertical: 4, elevation: 8, minWidth: 190 },

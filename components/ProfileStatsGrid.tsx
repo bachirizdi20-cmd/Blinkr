@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, fontSizes, radius, spacing } from '../lib/theme';
+import { colors, spacing } from '../lib/theme';
 
 type ProfileStatsGridProps = {
   followers: number | null;
@@ -62,17 +62,16 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row-reverse',
     alignItems: 'stretch',
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
     marginBottom: spacing.md,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
+    paddingVertical: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  item: { flex: 1, minWidth: 0, minHeight: 58, alignItems: 'center', justifyContent: 'center', gap: 2, paddingHorizontal: spacing.xs },
+  item: { flex: 1, minWidth: 0, minHeight: 54, alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: spacing.xs },
   divided: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border },
-  value: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '900', fontVariant: ['tabular-nums'] },
-  label: { color: colors.textDim, fontSize: 10, fontWeight: '700', textAlign: 'center' },
+  value: { color: colors.text, fontSize: 21, lineHeight: 26, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  label: { color: colors.textDim, fontSize: 12, lineHeight: 16, fontWeight: '600', textAlign: 'center' },
   pressed: { opacity: 0.68 },
 });
