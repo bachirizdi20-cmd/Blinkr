@@ -141,6 +141,31 @@ function hardcoverUrl(slug: unknown, id: number): string {
     : `https://hardcover.app/books/${id}`;
 }
 
+/** Keep the provider ranking within each author while alternating authors when possible. */
+function diversifyByAuthor(books: HardcoverBook[]): HardcoverBook[] {
+  const groups = new Map<string, HardcoverBook[]>();
+  for (const book of books) {
+    const authorKey = book.authorNames[0]?.trim().toLocaleLowerCase() || `book-${book.workId}`;
+    const group = groups.get(authorKey) ?? [];
+    group.push(book);
+    groups.set(authorKey, group);
+  }
+  const queues = [...groups.entries()];
+  const diversified: HardcoverBook[] = [];
+  let previousAuthor = "";
+  while (queues.length) {
+    let index = queues.findIndex(([author]) => author !== previousAuthor);
+    if (index < 0) index = 0;
+    const [author, queue] = queues[index];
+    const book = queue.shift();
+    if (book) diversified.push(book);
+    previousAuthor = author;
+    if (!queue.length) queues.splice(index, 1);
+    else queues.push(queues.splice(index, 1)[0]);
+  }
+  return diversified;
+}
+
 function normalizeBook(value: unknown, requireCover = true): HardcoverBook | null {
   if (typeof value === "string") {
     try { return normalizeBook(JSON.parse(value)); } catch { return null; }
@@ -273,7 +298,7 @@ export async function getHardcoverTrendingBooks(limit = 10): Promise<HardcoverBo
   const details = await fetchHardcover<{ books?: unknown[] }>(BOOKS_BY_ID_QUERY, { ids, limit });
   if (!Array.isArray(details.books)) throw new HardcoverError("استجاب Hardcover ببيانات كتب غير مكتملة.");
   const byId = new Map((details.books ?? []).map((value) => normalizeBook(value)).filter((book): book is HardcoverBook => book !== null).map((book) => [book.workId, book]));
-  const books = ids.flatMap((id) => byId.has(id) ? [byId.get(id)!] : []);
+  const books = diversifyByAuthor(ids.flatMap((id) => byId.has(id) ? [byId.get(id)!] : []));
   setCached(cacheKey, books, SEARCH_CACHE_TTL_MS);
   return books;
 }

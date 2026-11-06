@@ -58,7 +58,7 @@ export default function SearchScreen() {
     { query: debouncedQuery, page: bookPage, limit: 20 },
     { enabled: shouldSearch && !mediaOnly && !booksTrending && (tab === 'all' || tab === 'books'), retry: 1 },
   );
-  const trendingBooksQuery = trpc.books.trending.useQuery({ limit: 20 }, { enabled: booksTrending, retry: 1 });
+  const trendingBooksQuery = trpc.books.trending.useQuery({ limit: 100 }, { enabled: booksTrending, retry: 1 });
   const recentStorageKey = authUser ? `@blinkr/recent-searches/${authUser.id}` : null;
   const visibleTabs = booksTrending ? tabs.filter((item) => item.key === 'books') : mediaOnly ? tabs.filter((item) => item.key === 'movies' || item.key === 'tv') : tabs;
 
