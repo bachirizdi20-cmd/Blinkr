@@ -206,15 +206,15 @@ const BOOKS_BY_ID_QUERY = `query BooksById($ids: [Int!]!, $limit: Int!) {
   }
 }`;
 
-const TRENDING_QUERY = `query TrendingBooks($duration: BooksTrendingDuration!, $limit: Int!) {
-  books_trending(duration: $duration, limit: $limit) { ids error }
+const TRENDING_QUERY = `query TrendingBooks($limit: Int!) {
+  books_trending(duration: month, limit: $limit) { ids error }
 }`;
 
 export async function getHardcoverTrendingBooks(limit = 10): Promise<HardcoverBook[]> {
   const cacheKey = `trending:${limit}`;
   const cached = getCached<HardcoverBook[]>(cacheKey);
   if (cached) return cached;
-  const trending = await fetchHardcover<{ books_trending?: { ids?: unknown[]; error?: string | null } }>(TRENDING_QUERY, { duration: "month", limit });
+  const trending = await fetchHardcover<{ books_trending?: { ids?: unknown[]; error?: string | null } }>(TRENDING_QUERY, { limit });
   const ids = (Array.isArray(trending.books_trending?.ids) ? trending.books_trending.ids : [])
     .map(positiveInteger).filter((id): id is number => id !== null).slice(0, limit);
   if (ids.length === 0) return [];
