@@ -376,10 +376,10 @@ export const appRouter = router({
   }),
   books: router({
     trending: publicProcedure
-      .input(z.object({ limit: z.number().int().min(1).max(20).default(10) }).optional())
+      .input(z.object({ limit: z.number().int().min(1).max(100).default(100) }).optional())
       .query(async ({ input }) => {
         try {
-          return await getHardcoverTrendingBooks(input?.limit ?? 10);
+          return await getHardcoverTrendingBooks(input?.limit ?? 100);
         } catch (error) {
           if (error instanceof HardcoverError) throw new TRPCError({ code: error.status === 401 || error.status === 403 ? "PRECONDITION_FAILED" : error.status === 429 ? "TOO_MANY_REQUESTS" : "BAD_GATEWAY", message: error.message });
           throw new TRPCError({ code: "BAD_GATEWAY", message: "تعذر تحميل الكتب الرائجة من Hardcover." });

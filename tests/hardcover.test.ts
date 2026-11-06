@@ -70,10 +70,10 @@ describe("Hardcover integration", () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ data: { books_trending: { ids: [503, 501, 502], error: null } } }))
       .mockResolvedValueOnce(jsonResponse({ data: { books: [
-        { id: 501, title: "One", image: { url: "https://assets.hardcover.app/one.jpg" } }, { id: 502, title: "Two", image: { url: "https://assets.hardcover.app/two.jpg" } }, { id: 503, title: "Three", image: { url: "https://assets.hardcover.app/three.jpg" } },
+        { id: 501, title: "One", author_names: ["Same Author"], image: { url: "https://assets.hardcover.app/one.jpg" } }, { id: 502, title: "Two", author_names: ["Different Author"], image: { url: "https://assets.hardcover.app/two.jpg" } }, { id: 503, title: "Three", author_names: ["Same Author"], image: { url: "https://assets.hardcover.app/three.jpg" } },
       ] } }));
     vi.stubGlobal("fetch", fetchMock);
-    expect((await getHardcoverTrendingBooks(3)).map((book) => book.workId)).toEqual([503, 501, 502]);
+    expect((await getHardcoverTrendingBooks(3)).map((book) => book.workId)).toEqual([503, 502, 501]);
   });
 
   it("normalizes the details of a book including edition ISBN and fallback cover", async () => {
