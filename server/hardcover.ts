@@ -141,7 +141,7 @@ function hardcoverUrl(slug: unknown, id: number): string {
     : `https://hardcover.app/books/${id}`;
 }
 
-function normalizeBook(value: unknown): HardcoverBook | null {
+function normalizeBook(value: unknown, requireCover = true): HardcoverBook | null {
   if (typeof value === "string") {
     try { return normalizeBook(JSON.parse(value)); } catch { return null; }
   }
@@ -157,6 +157,7 @@ function normalizeBook(value: unknown): HardcoverBook | null {
   const coverEdition = book.default_cover_edition && typeof book.default_cover_edition === "object"
     ? book.default_cover_edition as Record<string, unknown> : {};
   const coverUrl = imageUrl(book.image) ?? imageUrl(book.cached_image) ?? imageUrl(coverEdition.image) ?? imageUrl(coverEdition.cached_image) ?? imageUrl(physicalEdition.image) ?? imageUrl(physicalEdition.cached_image);
+  if (requireCover && !coverUrl) return null;
   const isbns = [physicalEdition.isbn_13, coverEdition.isbn_13, physicalEdition.isbn_10, coverEdition.isbn_10, ...stringArray(book.isbns, 100)]
     .filter((isbn): isbn is string => typeof isbn === "string" && isbn.trim().length > 0);
   const authorNames = stringArray(book.author_names, 8).length > 0
@@ -271,7 +272,7 @@ export async function getHardcoverTrendingBooks(limit = 10): Promise<HardcoverBo
   if (ids.length === 0) return [];
   const details = await fetchHardcover<{ books?: unknown[] }>(BOOKS_BY_ID_QUERY, { ids, limit });
   if (!Array.isArray(details.books)) throw new HardcoverError("استجاب Hardcover ببيانات كتب غير مكتملة.");
-  const byId = new Map((details.books ?? []).map(normalizeBook).filter((book): book is HardcoverBook => book !== null).map((book) => [book.workId, book]));
+  const byId = new Map((details.books ?? []).map((value) => normalizeBook(value)).filter((book): book is HardcoverBook => book !== null).map((book) => [book.workId, book]));
   const books = ids.flatMap((id) => byId.has(id) ? [byId.get(id)!] : []);
   setCached(cacheKey, books, SEARCH_CACHE_TTL_MS);
   return books;
@@ -299,7 +300,7 @@ export async function searchHardcoverBooks(query: string, page = 1, limit = 20):
   const search = payload.search;
   if (search.error) throw new HardcoverError("تعذر البحث عن الكتب في Hardcover.");
   const indexed = searchPayload(search.results);
-  const rawResults = indexed.documents.map(normalizeBook).filter((book): book is HardcoverBook => book !== null);
+  const rawResults = indexed.documents.map((document) => normalizeBook(document, false)).filter((book): book is HardcoverBook => book !== null);
   const rawIds = Array.isArray(search.ids) ? search.ids : [];
   const ids = (rawIds.length ? rawIds : rawResults.map((book) => book.workId))
     .map(positiveInteger).filter((id): id is number => id !== null).slice(0, limit);
@@ -326,7 +327,10 @@ export async function searchHardcoverBooks(query: string, page = 1, limit = 20):
       editionCount: details.editions_count == null ? indexedBook?.editionCount ?? 0 : book.editionCount,
     });
   }
-  const results = ids.flatMap((id) => byId.has(id) ? [byId.get(id)!] : []);
+  const results = ids.flatMap((id) => {
+    const book = byId.get(id);
+    return book?.coverUrl ? [book] : [];
+  });
   const totalResults = indexed.found;
   const totalPages = Math.min(1000, indexed.found === null ? page + (results.length === limit ? 1 : 0) : Math.ceil(indexed.found / limit));
   const result = { results, page, limit, totalResults, totalPages };

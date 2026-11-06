@@ -286,16 +286,16 @@ export default function HomeScreen() {
 
         <View style={styles.bookSection}>
           <View style={styles.bookSectionHeader}>
-            <View><Text style={styles.bookSectionTitle}>كتب رائجة من Hardcover</Text><Text style={styles.bookSectionSubtitle}>اكتشف ما يقرأه مستخدمو Hardcover</Text></View>
-            <Pressable onPress={() => navigation.navigate('Search')} accessibilityRole="button"><Text style={styles.bookSectionMore}>بحث</Text></Pressable>
+            <View><Text style={styles.bookSectionTitle}>الكتب الرائجة عالميًا</Text><Text style={styles.bookSectionSubtitle}>أشهر الكتب الرائجة حول العالم</Text></View>
+            <Pressable onPress={() => navigation.navigate('Search', { booksTrending: true })} accessibilityRole="button"><Text style={styles.bookSectionMore}>الكل</Text></Pressable>
           </View>
           {hardcoverTrendingQuery.isLoading ? <View style={styles.bookLoading}><Text style={styles.bookLoadingText}>جارٍ تحميل الكتب…</Text></View> : hardcoverTrendingQuery.isError ? <Pressable onPress={() => hardcoverTrendingQuery.refetch()} style={styles.bookError}><Text style={styles.bookErrorText}>تعذر تحميل كتب Hardcover — اضغط لإعادة المحاولة.</Text></Pressable> : <FlatList
-            data={(hardcoverTrendingQuery.data ?? []) as BookSummary[]}
+            data={((hardcoverTrendingQuery.data ?? []) as BookSummary[]).filter((book) => Boolean(book.coverUrl))}
             horizontal
             showsHorizontalScrollIndicator={false}
             keyExtractor={(book) => `hardcover-${book.workId}`}
             contentContainerStyle={styles.bookList}
-            ListEmptyComponent={<View style={styles.bookLoading}><Text style={styles.bookLoadingText}>لا توجد كتب رائجة متاحة حاليًا.</Text></View>}
+            ListEmptyComponent={<View style={styles.bookLoading}><Text style={styles.bookLoadingText}>لا توجد كتب رائجة بأغلفة متاحة حاليًا.</Text></View>}
             renderItem={({ item }) => <BookCard book={item} width={112} onPress={() => navigation.navigate('BookDetail', { workId: item.workId, book: item })} />}
           />}
         </View>
