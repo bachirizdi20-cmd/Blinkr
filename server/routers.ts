@@ -14,7 +14,7 @@ import { assertLoginAllowed, clearLoginFailures, recordLoginFailure } from "./ra
 import { createAuthToken, consumeAuthToken, markEmailVerified, updateUserPassword } from "./db";
 import { sendAuthEmail } from "./email";
 import { verifyFirebaseIdToken } from "./_core/firebase-auth";
-import { getOpenLibraryWork, OpenLibraryError, searchOpenLibraryBooks } from "./open-library";
+import { HardcoverError, getHardcoverBook, searchHardcoverBooks } from "./hardcover";
 
 const tmdbPathSchema = z.string().regex(
   /^\/(?:trending|movie|tv|discover|genre|search|person|authentication)(?:\/[A-Za-z0-9_,-]+)*$/,
@@ -375,26 +375,26 @@ export const appRouter = router({
       .input(z.object({ query: z.string().trim().min(2).max(120), page: z.number().int().min(1).max(1000).default(1), limit: z.number().int().min(1).max(20).default(20) }))
       .query(async ({ input }) => {
         try {
-          return await searchOpenLibraryBooks(input.query, input.page, input.limit);
+          return await searchHardcoverBooks(input.query, input.page, input.limit);
         } catch (error) {
-          if (error instanceof OpenLibraryError) {
-            const code = error.status === 404 ? "NOT_FOUND" : error.status === 429 || error.status === 403 ? "TOO_MANY_REQUESTS" : error.message.includes("مهلة") ? "TIMEOUT" : "BAD_GATEWAY";
+          if (error instanceof HardcoverError) {
+            const code = error.status === 404 ? "NOT_FOUND" : error.status === 401 || error.status === 403 ? "PRECONDITION_FAILED" : error.status === 429 ? "TOO_MANY_REQUESTS" : error.message.includes("مهلة") ? "TIMEOUT" : "BAD_GATEWAY";
             throw new TRPCError({ code, message: error.message });
           }
-          throw new TRPCError({ code: "BAD_GATEWAY", message: "تعذر الاتصال بمصدر الكتب." });
+          throw new TRPCError({ code: "BAD_GATEWAY", message: "تعذر الاتصال بمصدر الكتب Hardcover." });
         }
       }),
     detail: publicProcedure
       .input(z.object({ workId: z.number().int().positive().max(2_147_483_647) }))
       .query(async ({ input }) => {
         try {
-          return await getOpenLibraryWork(input.workId);
+          return await getHardcoverBook(input.workId);
         } catch (error) {
-          if (error instanceof OpenLibraryError) {
-            const code = error.status === 404 ? "NOT_FOUND" : error.status === 429 || error.status === 403 ? "TOO_MANY_REQUESTS" : error.message.includes("مهلة") ? "TIMEOUT" : "BAD_GATEWAY";
+          if (error instanceof HardcoverError) {
+            const code = error.status === 404 ? "NOT_FOUND" : error.status === 401 || error.status === 403 ? "PRECONDITION_FAILED" : error.status === 429 ? "TOO_MANY_REQUESTS" : error.message.includes("مهلة") ? "TIMEOUT" : "BAD_GATEWAY";
             throw new TRPCError({ code, message: error.message });
           }
-          throw new TRPCError({ code: "BAD_GATEWAY", message: "تعذر جلب تفاصيل الكتاب." });
+          throw new TRPCError({ code: "BAD_GATEWAY", message: "تعذر جلب تفاصيل الكتاب من Hardcover." });
         }
       }),
   }),

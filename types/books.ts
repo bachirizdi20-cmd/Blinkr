@@ -14,6 +14,7 @@ export interface BookSummary {
   ratingsCount: number;
   subjects: string[];
   description?: string | null;
+  sourceUrl?: string;
 }
 
 export interface BookSearchPage {

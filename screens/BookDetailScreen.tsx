@@ -31,7 +31,7 @@ export default function BookDetailScreen() {
 
   const book: BookSummary = useMemo(() => ({
     workId,
-    workKey: fallback?.workKey ?? `/works/OL${workId}W`,
+    workKey: fallback?.workKey ?? `hardcover-${workId}`,
     title: fallback?.title ?? 'كتاب',
     authorNames: fallback?.authorNames ?? [],
     firstPublishYear: fallback?.firstPublishYear ?? null,
@@ -45,6 +45,7 @@ export default function BookDetailScreen() {
     ratingsCount: fallback?.ratingsCount ?? 0,
     subjects: detailQuery.data?.subjects ?? fallback?.subjects ?? [],
     description: detailQuery.data?.description ?? fallback?.description ?? null,
+    sourceUrl: detailQuery.data?.sourceUrl ?? fallback?.sourceUrl,
   }), [workId, fallback, detailQuery.data]);
 
   const localRead = lib.isWatched('book', workId);
@@ -112,7 +113,7 @@ export default function BookDetailScreen() {
   }
 
   if (detailQuery.isError && !fallback) {
-    return <SafeAreaView style={styles.safe}><View style={styles.topBar}><Pressable onPress={() => navigation.goBack()} style={styles.iconButton}><Ionicons name="chevron-back" size={22} color={colors.text} /></Pressable></View><ApiErrorState message="تعذر تحميل تفاصيل الكتاب من Open Library." onRetry={() => void detailQuery.refetch()} /></SafeAreaView>;
+    return <SafeAreaView style={styles.safe}><View style={styles.topBar}><Pressable onPress={() => navigation.goBack()} style={styles.iconButton}><Ionicons name="chevron-back" size={22} color={colors.text} /></Pressable></View><ApiErrorState message="تعذر تحميل تفاصيل الكتاب من Hardcover." onRetry={() => void detailQuery.refetch()} /></SafeAreaView>;
   }
 
   const info = [
@@ -151,9 +152,9 @@ export default function BookDetailScreen() {
         <Pressable onPress={openReview} style={styles.reviewButton}><Ionicons name="create-outline" size={19} color={colors.bg} /><Text style={styles.reviewButtonText}>اكتب مراجعة للكتاب</Text></Pressable>
         <Pressable onPress={() => navigation.navigate('AddToList', { mediaType: 'book', mediaId: workId, title: book.title, posterPath: book.coverUrl })} style={styles.addList}><Ionicons name="list-outline" size={18} color={colors.accent} /><Text style={styles.addListText}>أضف إلى قائمة</Text><Ionicons name="chevron-forward" size={17} color={colors.textFaint} /></Pressable>
 
-        <View style={styles.section}><Text style={styles.sectionTitle}>عن الكتاب</Text><Text style={styles.description}>{book.description || 'لم يضف Open Library وصفًا لهذا الكتاب بعد.'}</Text></View>
+        <View style={styles.section}><Text style={styles.sectionTitle}>عن الكتاب</Text><Text style={styles.description}>{book.description || 'لم يضف Hardcover وصفًا لهذا الكتاب بعد.'}</Text></View>
         {book.subjects.length ? <View style={styles.section}><Text style={styles.sectionTitle}>التصنيفات</Text><View style={styles.subjects}>{book.subjects.slice(0, 8).map((subject) => <View key={subject} style={styles.subject}><Text style={styles.subjectText}>{subject}</Text></View>)}</View></View> : null}
-        <Pressable onPress={() => Linking.openURL(`https://openlibrary.org/works/OL${workId}W`)} style={styles.sourceLink}><Text style={styles.sourceText}>عرض المصدر على Open Library</Text><Ionicons name="open-outline" size={15} color={colors.accent} /></Pressable>
+        {book.sourceUrl ? <Pressable onPress={() => Linking.openURL(book.sourceUrl!)} style={styles.sourceLink}><Text style={styles.sourceText}>عرض المصدر على Hardcover</Text><Ionicons name="open-outline" size={15} color={colors.accent} /></Pressable> : null}
         {detailQuery.isError ? <Text style={styles.muted}>تعذر جلب الوصف التفصيلي؛ نعرض البيانات المتاحة من نتائج البحث.</Text> : null}
       </ScrollView>
     </SafeAreaView>
