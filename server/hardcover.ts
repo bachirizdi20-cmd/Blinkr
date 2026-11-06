@@ -170,7 +170,7 @@ async function fetchHardcover<T>(query: string, variables: Record<string, unknow
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        Authorization: token,
         "User-Agent": HARDCOVER_USER_AGENT,
       },
       body: JSON.stringify({ query, variables }),
@@ -212,8 +212,10 @@ export async function searchHardcoverBooks(query: string, page = 1, limit = 20):
   if (cached) return cached;
   const payload = await fetchHardcover<{ search?: { ids?: unknown[]; results?: unknown[] } }>(SEARCH_QUERY, { query, page, perPage: limit });
   const search = payload.search ?? {};
-  const rawResults = (search.results ?? []).map(normalizeBook).filter((book): book is HardcoverBook => book !== null);
-  const ids = (search.ids ?? []).map(positiveInteger).filter((id): id is number => id !== null).slice(0, limit);
+  const rawResultItems = Array.isArray(search.results) ? search.results : [];
+  const rawResults = rawResultItems.map(normalizeBook).filter((book): book is HardcoverBook => book !== null);
+  const rawIds = Array.isArray(search.ids) ? search.ids : [];
+  const ids = rawIds.map(positiveInteger).filter((id): id is number => id !== null).slice(0, limit);
   const detailPayload = rawResults.length > 0 || ids.length === 0
     ? null
     : await fetchHardcover<{ books?: unknown[] }>(BOOKS_BY_ID_QUERY, { ids, limit });
