@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { posterUrl } from '../lib/tmdb';
+import { catalogPosterUrl } from '../lib/catalog-navigation';
 import { colors, radius, fontSizes, spacing } from '../lib/theme';
 import { ReviewMediaType } from '../types/tmdb';
 
@@ -28,9 +28,7 @@ interface Props {
 
 export default function PosterCard({ item, onPress, width, showRating = true, uniform = false, showMetadata = true }: Props) {
   const cardWidth = width ?? 108;
-  const uri = item.mediaType === 'book'
-    ? (item.posterPath?.startsWith('https://covers.openlibrary.org/') ? item.posterPath : null)
-    : posterUrl(item.posterPath, 'w342');
+  const uri = catalogPosterUrl(item.mediaType, item.posterPath, 'w342');
   const year = item.date ? item.date.slice(0, 4) : '';
 
   return (

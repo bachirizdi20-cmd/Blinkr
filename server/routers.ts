@@ -251,10 +251,11 @@ export const appRouter = router({
   }),
   reviews: router({
     mine: protectedProcedure.query(({ ctx }) => db.listUserReviews(ctx.user.id)),
-    getMine: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book"]), mediaId: z.number().int().positive() })).query(({ ctx, input }) => db.getUserReview(ctx.user.id, input.mediaType, input.mediaId)),
+    getMine: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book"]), mediaId: z.number().int().positive(), mediaSource: z.literal("hardcover").optional() })).query(({ ctx, input }) => db.getUserReview(ctx.user.id, input.mediaType, input.mediaId, input.mediaSource)),
     save: protectedProcedure.input(z.object({
       mediaType: z.enum(["movie", "tv", "book"]),
       mediaId: z.number().int().positive(),
+      mediaSource: z.literal("hardcover").optional(),
       title: z.string().trim().min(1).max(255),
       posterPath: z.string().max(255).nullable().optional(),
       rating: z.number().int().min(0).max(10),
@@ -265,6 +266,7 @@ export const appRouter = router({
       userId: ctx.user.id,
       mediaType: input.mediaType,
       mediaId: input.mediaId,
+      mediaSource: input.mediaSource ?? null,
       title: input.title,
       posterPath: input.posterPath ?? null,
       rating: input.rating,
@@ -272,8 +274,8 @@ export const appRouter = router({
       spoiler: input.spoiler,
       watchedDate: input.watchedDate ? new Date(input.watchedDate) : null,
     })),
-    delete: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book"]), mediaId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
-      await db.deleteUserReview(ctx.user.id, input.mediaType, input.mediaId);
+    delete: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book"]), mediaId: z.number().int().positive(), mediaSource: z.literal("hardcover").optional() })).mutation(async ({ ctx, input }) => {
+      await db.deleteUserReview(ctx.user.id, input.mediaType, input.mediaId, input.mediaSource);
       return { success: true } as const;
     }),
   }),
@@ -317,7 +319,7 @@ export const appRouter = router({
     }),
     deleteMessage: protectedProcedure.input(z.object({ messageId: z.number().int().positive() })).mutation(({ ctx, input }) => db.deleteChatMessage(ctx.user.id, input.messageId)),
     deleteConversation: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive() })).mutation(({ ctx, input }) => db.deleteConversation(ctx.user.id, input.otherUserId)),
-    shareMedia: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive(), mediaType: z.enum(['movie', 'tv', 'book']), mediaId: z.number().int().positive(), title: z.string().trim().min(1).max(255), posterPath: z.string().max(255).nullable().optional(), rating: z.number().min(0).max(10), overview: z.string().max(1200).nullable().optional() })).mutation(async ({ ctx, input }) => {
+    shareMedia: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive(), mediaType: z.enum(['movie', 'tv', 'book']), mediaId: z.number().int().positive(), mediaSource: z.literal("hardcover").optional(), title: z.string().trim().min(1).max(255), posterPath: z.string().max(255).nullable().optional(), rating: z.number().min(0).max(10), overview: z.string().max(1200).nullable().optional() })).mutation(async ({ ctx, input }) => {
       const conversation = await db.getOrCreateConversation(ctx.user.id, input.otherUserId);
       if (!conversation) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Conversation unavailable' });
       return db.createChatMessage({ conversationId: conversation.id, senderId: ctx.user.id, text: null, sharedMediaType: input.mediaType, sharedMediaId: input.mediaId, sharedTitle: input.title, sharedPosterPath: input.posterPath ?? null, sharedRating: Math.round(input.rating * 10), sharedOverview: input.overview ?? null }, input.otherUserId);
@@ -350,10 +352,11 @@ export const appRouter = router({
   }),
   library: router({
     mine: protectedProcedure.query(({ ctx }) => db.listUserMediaStatuses(ctx.user.id)),
-    getStatus: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book"]), mediaId: z.number().int().positive() })).query(({ ctx, input }) => db.getUserMediaStatus(ctx.user.id, input.mediaType, input.mediaId)),
+    getStatus: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book"]), mediaId: z.number().int().positive(), mediaSource: z.literal("hardcover").optional() })).query(({ ctx, input }) => db.getUserMediaStatus(ctx.user.id, input.mediaType, input.mediaId, input.mediaSource)),
     setStatus: protectedProcedure.input(z.object({
       mediaType: z.enum(["movie", "tv", "book"]),
       mediaId: z.number().int().positive(),
+      mediaSource: z.literal("hardcover").optional(),
       title: z.string().trim().min(1).max(255),
       posterPath: z.string().max(255).nullable().optional(),
       status: z.enum(["watched", "watching", "watchlist"]),
@@ -361,12 +364,13 @@ export const appRouter = router({
       userId: ctx.user.id,
       mediaType: input.mediaType,
       mediaId: input.mediaId,
+      mediaSource: input.mediaSource ?? null,
       title: input.title,
       posterPath: input.posterPath ?? null,
       status: input.status,
     })),
-    removeStatus: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book"]), mediaId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
-      await db.deleteMediaStatus(ctx.user.id, input.mediaType, input.mediaId);
+    removeStatus: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book"]), mediaId: z.number().int().positive(), mediaSource: z.literal("hardcover").optional() })).mutation(async ({ ctx, input }) => {
+      await db.deleteMediaStatus(ctx.user.id, input.mediaType, input.mediaId, input.mediaSource);
       return { success: true } as const;
     }),
   }),
@@ -377,7 +381,7 @@ export const appRouter = router({
         try {
           return await getHardcoverTrendingBooks(input?.limit ?? 10);
         } catch (error) {
-          if (error instanceof HardcoverError) throw new TRPCError({ code: error.status === 401 || error.status === 403 ? "PRECONDITION_FAILED" : "BAD_GATEWAY", message: error.message });
+          if (error instanceof HardcoverError) throw new TRPCError({ code: error.status === 401 || error.status === 403 ? "PRECONDITION_FAILED" : error.status === 429 ? "TOO_MANY_REQUESTS" : "BAD_GATEWAY", message: error.message });
           throw new TRPCError({ code: "BAD_GATEWAY", message: "تعذر تحميل الكتب الرائجة من Hardcover." });
         }
       }),

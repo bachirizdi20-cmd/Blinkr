@@ -85,6 +85,13 @@
       "when": 1793645442694,
       "tag": "0011_avatar_blob_storage",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1793998159943,
+      "tag": "0012_keen_nick_fury",
+      "breakpoints": true
     }
   ]
 }

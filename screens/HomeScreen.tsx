@@ -116,6 +116,7 @@ export default function HomeScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     load();
+    void hardcoverTrendingQuery.refetch();
   };
 
   const openDetail = (item: NormalizedItem) => {
@@ -294,6 +295,7 @@ export default function HomeScreen() {
             showsHorizontalScrollIndicator={false}
             keyExtractor={(book) => `hardcover-${book.workId}`}
             contentContainerStyle={styles.bookList}
+            ListEmptyComponent={<View style={styles.bookLoading}><Text style={styles.bookLoadingText}>لا توجد كتب رائجة متاحة حاليًا.</Text></View>}
             renderItem={({ item }) => <BookCard book={item} width={112} onPress={() => navigation.navigate('BookDetail', { workId: item.workId, book: item })} />}
           />}
         </View>

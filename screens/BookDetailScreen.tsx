@@ -6,8 +6,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ContentStackParamList } from '../navigation/types';
-import { BookSummary } from '../types/books';
 import { trpc } from '../lib/trpc';
+import { isBookDetailCompatible, mergeBookDetails } from '../lib/book-utils';
 import { useAuth } from '../hooks/use-auth';
 import { useLibrary } from '../context/LibraryContext';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
@@ -23,30 +23,15 @@ export default function BookDetailScreen() {
   const { workId, book: fallback } = route.params;
   const { user } = useAuth();
   const lib = useLibrary();
+  const mediaSource = 'hardcover' as const;
   const detailQuery = trpc.books.detail.useQuery({ workId }, { retry: 1 });
-  const statusQuery = trpc.library.getStatus.useQuery({ mediaType: 'book', mediaId: workId }, { enabled: Boolean(user), retry: false });
-  const myReviewQuery = trpc.reviews.getMine.useQuery({ mediaType: 'book', mediaId: workId }, { enabled: Boolean(user), retry: false });
+  const statusQuery = trpc.library.getStatus.useQuery({ mediaType: 'book', mediaId: workId, mediaSource }, { enabled: Boolean(user), retry: false });
+  const myReviewQuery = trpc.reviews.getMine.useQuery({ mediaType: 'book', mediaId: workId, mediaSource }, { enabled: Boolean(user), retry: false });
   const setStatusMutation = trpc.library.setStatus.useMutation();
   const removeStatusMutation = trpc.library.removeStatus.useMutation();
 
-  const book: BookSummary = useMemo(() => ({
-    workId,
-    workKey: fallback?.workKey ?? `hardcover-${workId}`,
-    title: fallback?.title ?? 'كتاب',
-    authorNames: fallback?.authorNames ?? [],
-    firstPublishYear: fallback?.firstPublishYear ?? null,
-    firstPublishDate: detailQuery.data?.firstPublishDate ?? fallback?.firstPublishDate ?? null,
-    coverId: detailQuery.data?.coverId ?? fallback?.coverId ?? null,
-    coverUrl: detailQuery.data?.coverUrl ?? fallback?.coverUrl ?? null,
-    isbn: fallback?.isbn ?? null,
-    pageCount: fallback?.pageCount ?? null,
-    editionCount: fallback?.editionCount ?? 0,
-    ratingsAverage: fallback?.ratingsAverage ?? null,
-    ratingsCount: fallback?.ratingsCount ?? 0,
-    subjects: detailQuery.data?.subjects ?? fallback?.subjects ?? [],
-    description: detailQuery.data?.description ?? fallback?.description ?? null,
-    sourceUrl: detailQuery.data?.sourceUrl ?? fallback?.sourceUrl,
-  }), [workId, fallback, detailQuery.data]);
+  const detailCompatible = isBookDetailCompatible(fallback, detailQuery.data);
+  const book = useMemo(() => mergeBookDetails(workId, fallback, detailCompatible ? detailQuery.data : null), [workId, fallback, detailQuery.data, detailCompatible]);
 
   const localRead = lib.isWatched('book', workId);
   const isRead = localRead || statusQuery.data?.status === 'watched';
@@ -66,8 +51,8 @@ export default function BookDetailScreen() {
       return;
     }
     try {
-      if (status) await setStatusMutation.mutateAsync({ ...mediaRef, status });
-      else await removeStatusMutation.mutateAsync({ mediaType: 'book', mediaId: workId });
+      if (status) await setStatusMutation.mutateAsync({ ...mediaRef, mediaSource, status });
+      else await removeStatusMutation.mutateAsync({ mediaType: 'book', mediaId: workId, mediaSource });
       await statusQuery.refetch();
     } catch (error) {
       Alert.alert('تعذرت مزامنة الحالة', error instanceof Error ? error.message : 'احتفظنا بالتغيير المحلي. حاول مرة أخرى.');
@@ -104,6 +89,7 @@ export default function BookDetailScreen() {
   const openReview = () => navigation.navigate('ReviewModal', {
     mediaType: 'book',
     mediaId: workId,
+    mediaSource,
     title: book.title,
     posterPath: book.coverUrl,
   });
@@ -127,7 +113,7 @@ export default function BookDetailScreen() {
       <View style={styles.topBar}>
         <Pressable onPress={() => navigation.goBack()} style={styles.iconButton} accessibilityLabel="رجوع"><Ionicons name="chevron-back" size={22} color={colors.text} /></Pressable>
         <Text style={styles.topTitle}>تفاصيل الكتاب</Text>
-        <Pressable onPress={() => navigation.navigate('People', { shareMedia: { mediaType: 'book', mediaId: workId, title: book.title, posterPath: book.coverUrl, rating, overview: book.description } })} style={styles.iconButton} accessibilityLabel="مشاركة الكتاب"><Ionicons name="share-social-outline" size={19} color={colors.text} /></Pressable>
+        <Pressable onPress={() => navigation.navigate('People', { shareMedia: { mediaType: 'book', mediaId: workId, mediaSource, title: book.title, posterPath: book.coverUrl, rating, overview: book.description } })} style={styles.iconButton} accessibilityLabel="مشاركة الكتاب"><Ionicons name="share-social-outline" size={19} color={colors.text} /></Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.hero}>
@@ -138,7 +124,7 @@ export default function BookDetailScreen() {
             <Text style={styles.title}>{book.title}</Text>
             {book.authorNames.length > 0 ? <Text style={styles.authors}>{book.authorNames.join('، ')}</Text> : <Text style={styles.muted}>المؤلف غير محدد</Text>}
             {info.map((line) => <Text key={line} style={styles.meta}>{line}</Text>)}
-            {book.ratingsAverage != null && book.ratingsCount > 0 ? <View style={styles.ratingRow}><Ionicons name="star" size={16} color={colors.gold} /><Text style={styles.rating}>{book.ratingsAverage.toFixed(1)} / 5</Text><Text style={styles.muted}>({book.ratingsCount.toLocaleString('ar')})</Text></View> : null}
+            {book.ratingsAverage != null && book.ratingsCount > 0 ? <View style={styles.ratingRow}><Ionicons name="star" size={16} color={colors.gold} /><Text style={styles.rating}>{book.ratingsAverage.toFixed(1)} / 5</Text><Text style={styles.muted}>({book.ratingsCount.toLocaleString('ar')}) · Hardcover</Text></View> : null}
             {rating > 0 ? <Text style={styles.yourRating}>تقييمك: {rating}/10</Text> : null}
           </View>
         </View>
@@ -152,10 +138,11 @@ export default function BookDetailScreen() {
         <Pressable onPress={openReview} style={styles.reviewButton}><Ionicons name="create-outline" size={19} color={colors.bg} /><Text style={styles.reviewButtonText}>اكتب مراجعة للكتاب</Text></Pressable>
         <Pressable onPress={() => navigation.navigate('AddToList', { mediaType: 'book', mediaId: workId, title: book.title, posterPath: book.coverUrl })} style={styles.addList}><Ionicons name="list-outline" size={18} color={colors.accent} /><Text style={styles.addListText}>أضف إلى قائمة</Text><Ionicons name="chevron-forward" size={17} color={colors.textFaint} /></Pressable>
 
-        <View style={styles.section}><Text style={styles.sectionTitle}>عن الكتاب</Text><Text style={styles.description}>{book.description || 'لم يضف Hardcover وصفًا لهذا الكتاب بعد.'}</Text></View>
+        <View style={styles.section}><Text style={styles.sectionTitle}>عن الكتاب</Text><Text style={styles.description}>{book.description || 'لا يتوفر وصف لهذا الكتاب بعد.'}</Text></View>
         {book.subjects.length ? <View style={styles.section}><Text style={styles.sectionTitle}>التصنيفات</Text><View style={styles.subjects}>{book.subjects.slice(0, 8).map((subject) => <View key={subject} style={styles.subject}><Text style={styles.subjectText}>{subject}</Text></View>)}</View></View> : null}
         {book.sourceUrl ? <Pressable onPress={() => Linking.openURL(book.sourceUrl!)} style={styles.sourceLink}><Text style={styles.sourceText}>عرض المصدر على Hardcover</Text><Ionicons name="open-outline" size={15} color={colors.accent} /></Pressable> : null}
-        {detailQuery.isError ? <Text style={styles.muted}>تعذر جلب الوصف التفصيلي؛ نعرض البيانات المتاحة من نتائج البحث.</Text> : null}
+        {!detailCompatible ? <Text style={styles.muted}>تعذر التحقق من مصدر الكتاب المحفوظ؛ نعرض بياناته المحفوظة فقط.</Text> : null}
+        {detailQuery.isError ? <Pressable onPress={() => void detailQuery.refetch()} accessibilityRole="button"><Text style={styles.muted}>تعذر جلب التفاصيل؛ نعرض البيانات المتاحة. اضغط لإعادة المحاولة.</Text></Pressable> : null}
       </ScrollView>
     </SafeAreaView>
   );

@@ -3,7 +3,6 @@ import { useWindowDimensions, View, StyleSheet } from 'react-native';
 import PosterCard from './PosterCard';
 import EmptyState from './EmptyState';
 import { ProfileMediaItem } from '../lib/profile-media';
-import { ReviewMediaType } from '../types/tmdb';
 import { spacing } from '../lib/theme';
 
 export function ProfileMediaGrid({
@@ -14,7 +13,7 @@ export function ProfileMediaGrid({
   emptyIcon = 'bookmark-outline',
 }: {
   items: ProfileMediaItem[];
-  onOpen: (mediaType: ReviewMediaType, mediaId: number) => void;
+  onOpen: (item: ProfileMediaItem) => void;
   emptyTitle: string;
   emptyMessage: string;
   emptyIcon?: React.ComponentProps<typeof EmptyState>['icon'];
@@ -43,7 +42,7 @@ export function ProfileMediaGrid({
               voteAverage: item.voteAverage ?? undefined,
             }}
             width={cardWidth}
-            onPress={() => onOpen(item.mediaType, item.mediaId)}
+            onPress={() => onOpen(item)}
           />
         </View>
       ))}

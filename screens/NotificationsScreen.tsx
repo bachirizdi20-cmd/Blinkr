@@ -11,6 +11,7 @@ import { ContentStackParamList } from '../navigation/types';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { resolveMediaUrl } from '../lib/media-url';
 import { matchesNotificationFilter, NOTIFICATION_COPY, type NotificationFilter, type NotificationKind } from '../lib/notification-utils';
+import { openCatalogItem } from '../lib/catalog-navigation';
 import GeneralErrorState from '../components/GeneralErrorState';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
 
@@ -114,7 +115,7 @@ export default function NotificationsScreen() {
     if (!item.readAt) markOneRead.mutate({ notificationId: item.id });
     if (item.kind === 'message' && item.actorId) navigation.navigate('Conversation', { userId: `remote-${item.actorId}` });
     else if (item.kind === 'follow' && item.actorId) navigation.navigate('UserProfile', { userId: `remote-${item.actorId}` });
-    else if (item.reviewMediaType === 'book' && item.reviewMediaId) navigation.navigate('BookDetail', { workId: item.reviewMediaId, book: { workId: item.reviewMediaId, title: item.reviewTitle ?? 'كتاب', coverUrl: item.reviewPosterPath } });
+    else if (item.reviewMediaType === 'book' && item.reviewMediaId) openCatalogItem(navigation, { mediaType: 'book', mediaId: item.reviewMediaId, title: item.reviewTitle ?? undefined, posterPath: item.reviewPosterPath });
     else if ((item.reviewMediaType === 'movie' || item.reviewMediaType === 'tv') && item.reviewMediaId) navigation.navigate('Detail', { mediaType: item.reviewMediaType, id: item.reviewMediaId });
   };
 

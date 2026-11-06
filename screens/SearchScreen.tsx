@@ -50,7 +50,7 @@ export default function SearchScreen() {
     const timer = setTimeout(() => setDebouncedQuery(trimmed), 350);
     return () => clearTimeout(timer);
   }, [trimmed]);
-  const shouldSearch = debouncedQuery.length >= 2;
+  const shouldSearch = debouncedQuery.length >= 2 && trimmed === debouncedQuery;
   const peopleQuery = trpc.social.users.useQuery({ query: debouncedQuery }, { enabled: Boolean(authUser) && shouldSearch && !mediaOnly, retry: 1 });
   const reviewsQuery = trpc.social.searchReviews.useQuery({ query: debouncedQuery }, { enabled: Boolean(authUser) && shouldSearch && !mediaOnly, retry: 1 });
   const booksQuery = trpc.books.search.useQuery(
@@ -97,10 +97,10 @@ export default function SearchScreen() {
   }, [trimmed, shouldSearch]);
 
   useEffect(() => {
-    if (!booksQuery.data || booksQuery.data.page !== bookPage) return;
+    if (!shouldSearch || !booksQuery.data || booksQuery.data.page !== bookPage) return;
     const next = booksQuery.data.results;
     setBookResults((current) => bookPage === 1 ? next : [...current, ...next.filter((book) => !current.some((item) => item.workId === book.workId))]);
-  }, [booksQuery.data, bookPage]);
+  }, [booksQuery.data, bookPage, shouldSearch]);
 
   useEffect(() => {
     let active = true;
@@ -129,10 +129,10 @@ export default function SearchScreen() {
   const reviews = reviewsQuery.data ?? [];
   const books = bookResults;
   const isLoading = tab === 'all'
-    ? mediaLoading || booksQuery.isLoading || (Boolean(authUser) && (peopleQuery.isLoading || reviewsQuery.isLoading))
+    ? mediaLoading || (booksQuery.isLoading && books.length === 0) || (Boolean(authUser) && (peopleQuery.isLoading || reviewsQuery.isLoading))
     : tab === 'people' ? peopleQuery.isLoading
       : tab === 'reviews' ? reviewsQuery.isLoading
-        : tab === 'books' ? booksQuery.isLoading
+        : tab === 'books' ? booksQuery.isLoading && books.length === 0
           : mediaLoading;
   const hasError = tab === 'people' ? peopleQuery.error
     : tab === 'reviews' ? reviewsQuery.error
@@ -141,7 +141,7 @@ export default function SearchScreen() {
           : null;
   const allHasError = Boolean(mediaError || booksQuery.error || (authUser && (peopleQuery.error || reviewsQuery.error)));
   const hasAnySearchResults = media.length > 0 || people.length > 0 || reviews.length > 0 || books.length > 0;
-  const fatalSearchError = tab === 'all' ? allHasError && !hasAnySearchResults : Boolean(hasError);
+  const fatalSearchError = tab === 'all' ? allHasError && !hasAnySearchResults : Boolean(hasError) && (tab !== 'books' || books.length === 0);
   const retrySearch = () => {
     if (tab === 'people') { void peopleQuery.refetch(); return; }
     if (tab === 'reviews') { void reviewsQuery.refetch(); return; }
@@ -172,8 +172,10 @@ export default function SearchScreen() {
           {tab === 'all' && allHasError ? <View style={styles.partialError}><Text style={styles.partialErrorText}>تعذر تحميل بعض النتائج. يمكنك مراجعة النتائج المتاحة أو إعادة المحاولة.</Text><Pressable onPress={retrySearch} accessibilityRole="button"><Text style={styles.partialRetry}>إعادة المحاولة</Text></Pressable></View> : null}
           {(tab === 'all' || tab === 'people') && people.length > 0 ? <Section title="الأشخاص" action={() => setTab('people')}><View>{people.slice(0, tab === 'people' ? 50 : 5).map((person: any) => <Pressable key={person.id} style={styles.personRow} onPress={() => navigation.navigate('UserProfile', { userId: String(person.id) })}><UserAvatar name={person.name || person.username} color={colors.accent} size={42} /><View style={styles.resultCopy}><Text style={styles.resultTitle}>{person.name || person.username}</Text><Text style={styles.resultMeta}>@{person.username}</Text>{person.bio ? <Text style={styles.resultSub} numberOfLines={1}>{person.bio}</Text> : null}</View><Ionicons name="chevron-forward" size={18} color={colors.textFaint} /></Pressable>)}</View></Section> : null}
           {(tab === 'all' || tab === 'movies' || tab === 'tv') && media.length > 0 ? <Section title={tab === 'all' ? 'الأفلام والمسلسلات' : tab === 'movies' ? 'الأفلام' : 'المسلسلات'} action={() => setTab(tab === 'tv' ? 'tv' : 'movies')}><View style={styles.mediaGrid}>{media.slice(0, tab === 'all' ? 6 : 30).map((item) => <PosterCard key={`${item.mediaType}-${item.id}`} item={item} width={108} onPress={() => navigation.navigate('Detail', { mediaType: item.mediaType, id: item.id })} />)}</View></Section> : null}
-          {(tab === 'all' || tab === 'books') && books.length > 0 ? <Section title="الكتب" action={() => setTab('books')}><View style={styles.mediaGrid}>{books.slice(0, tab === 'all' ? 6 : 20).map((book) => <BookCard key={book.workId} book={book} width={108} onPress={() => navigation.navigate('BookDetail', { workId: book.workId, book })} />)}</View></Section> : null}
+          {(tab === 'all' || tab === 'books') && books.length > 0 ? <Section title="الكتب" action={() => setTab('books')}><View style={styles.mediaGrid}>{(tab === 'all' ? books.slice(0, 6) : books).map((book) => <BookCard key={book.workId} book={book} width={108} onPress={() => navigation.navigate('BookDetail', { workId: book.workId, book })} />)}</View></Section> : null}
           {tab === 'books' && booksQuery.data && bookPage < booksQuery.data.totalPages ? <Pressable disabled={booksQuery.isFetching} style={styles.loadMore} onPress={() => setBookPage((page) => page + 1)}>{booksQuery.isFetching ? <ActivityIndicator color={colors.accent} /> : <Text style={styles.loadMoreText}>عرض المزيد من الكتب</Text>}</Pressable> : null}
+          {tab === 'books' && booksQuery.isFetching && !booksQuery.data && books.length > 0 ? <ActivityIndicator color={colors.accent} /> : null}
+          {tab === 'books' && booksQuery.isError && books.length > 0 ? <Pressable onPress={() => void booksQuery.refetch()} accessibilityRole="button"><Text style={styles.inlineError}>تعذر تحميل المزيد من الكتب — اضغط لإعادة المحاولة.</Text></Pressable> : null}
           {(tab === 'all' || tab === 'reviews') && reviews.length > 0 ? <Section title="المراجعات" action={() => setTab('reviews')}><View>{reviews.slice(0, tab === 'all' ? 5 : 50).map((row: any) => <Pressable key={row.review.id} style={styles.reviewRow} onPress={() => openCatalogItem(navigation, { mediaType: (row.review.mediaType === 'book' ? 'book' : row.review.mediaType === 'tv' ? 'tv' : 'movie') as ReviewMediaType, mediaId: row.review.mediaId, title: row.review.title, posterPath: row.review.posterPath })}><UserAvatar name={row.displayName || row.username} color={colors.accent} size={38} /><View style={styles.resultCopy}><Text style={styles.reviewAuthor}>{row.displayName || row.username} <Text style={styles.reviewMuted}>قيّم</Text></Text><Text style={styles.resultTitle} numberOfLines={1}>{row.review.title}</Text><Text style={styles.reviewText} numberOfLines={2}>{row.review.review}</Text><Text style={styles.rating}>★ {row.review.rating.toFixed(1)}</Text></View></Pressable>)}</View></Section> : null}
           {tab === 'all' && mediaError ? <Pressable onPress={() => setMediaRetry((attempt) => attempt + 1)} accessibilityRole="button"><Text style={styles.inlineError}>تعذر تحميل نتائج الأفلام والمسلسلات — اضغط لإعادة المحاولة.</Text></Pressable> : null}
           {tab === 'all' && booksQuery.error ? <Pressable onPress={() => void booksQuery.refetch()} accessibilityRole="button"><Text style={styles.inlineError}>تعذر تحميل نتائج الكتب — اضغط لإعادة المحاولة.</Text></Pressable> : null}

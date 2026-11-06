@@ -21,6 +21,6 @@ export interface BookSearchPage {
   results: BookSummary[];
   page: number;
   limit: number;
-  totalResults: number;
+  totalResults: number | null;
   totalPages: number;
 }

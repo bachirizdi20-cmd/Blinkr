@@ -226,13 +226,13 @@ export default function ProfileScreen() {
 
           {activeTab === 'saved' ? (
             <View style={styles.profileContentSection}>
-              <ProfileMediaGrid items={savedItems} onOpen={(mediaType, mediaId) => openCatalogItem(navigation, { mediaType, mediaId })} emptyTitle="لا توجد عناوين محفوظة" emptyMessage="أضف فيلمًا أو مسلسلًا أو كتابًا للعودة إليه لاحقًا." />
+              <ProfileMediaGrid items={savedItems} onOpen={(item) => openCatalogItem(navigation, item)} emptyTitle="لا توجد عناوين محفوظة" emptyMessage="أضف فيلمًا أو مسلسلًا أو كتابًا للعودة إليه لاحقًا." />
             </View>
           ) : null}
 
           {activeTab === 'completed' ? (
             <View style={styles.profileContentSection}>
-              <ProfileMediaGrid items={completedItems} onOpen={(mediaType, mediaId) => openCatalogItem(navigation, { mediaType, mediaId })} emptyIcon="checkmark-circle-outline" emptyTitle="لا يوجد سجل مكتمل بعد" emptyMessage="سجّل فيلمًا أو مسلسلًا أو كتابًا بعد مشاهدته أو قراءته." />
+              <ProfileMediaGrid items={completedItems} onOpen={(item) => openCatalogItem(navigation, item)} emptyIcon="checkmark-circle-outline" emptyTitle="لا يوجد سجل مكتمل بعد" emptyMessage="سجّل فيلمًا أو مسلسلًا أو كتابًا بعد مشاهدته أو قراءته." />
             </View>
           ) : null}
         </View>

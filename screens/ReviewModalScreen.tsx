@@ -20,22 +20,22 @@ import { useLibrary } from '../context/LibraryContext';
 import { useAuth } from '../hooks/use-auth';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { trpc } from '../lib/trpc';
-import { ReviewMediaType } from '../types/tmdb';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
+import { catalogPosterUrl } from '../lib/catalog-navigation';
 
 type RouteT = RouteProp<ContentStackParamList, 'ReviewModal'>;
 
 export default function ReviewModalScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
-  const { mediaType, mediaId, title, posterPath, genreIds, entryId } = route.params;
+  const { mediaType, mediaId, mediaSource, title, posterPath, genreIds, entryId } = route.params;
   const { user } = useAuth();
   const lib = useLibrary();
   const existing = entryId
     ? lib.diary.find((entry) => entry.id === entryId)
     : lib.getDiaryForMedia(mediaType, mediaId).sort((a, b) => b.createdAt - a.createdAt)[0];
   const savedReviewQuery = trpc.reviews.getMine.useQuery(
-    { mediaType, mediaId },
+    { mediaType, mediaId, ...(mediaSource ? { mediaSource } : {}) },
     { enabled: Boolean(user), retry: false },
   );
   const saveReviewMutation = trpc.reviews.save.useMutation();
@@ -48,7 +48,7 @@ export default function ReviewModalScreen() {
   const [edited, setEdited] = useState(false);
   const listCount = lib.lists.filter((list) => lib.isItemInList(list.id, mediaType, mediaId)).length;
   const mediaLabel = mediaType === 'book' ? 'كتاب' : mediaType === 'tv' ? 'مسلسل' : 'فيلم';
-  const imageUri = posterPath ? (posterPath.startsWith('http') ? posterPath : `https://image.tmdb.org/t/p/w342${posterPath}`) : undefined;
+  const imageUri = catalogPosterUrl(mediaType, posterPath, 'w342');
   const isEditing = Boolean(existing || savedReviewQuery.data);
 
   useEffect(() => {
@@ -77,6 +77,7 @@ export default function ReviewModalScreen() {
       await saveReviewMutation.mutateAsync({
         mediaType,
         mediaId,
+        ...(mediaSource ? { mediaSource } : {}),
         title,
         posterPath: posterPath ?? null,
         rating,
@@ -114,7 +115,7 @@ export default function ReviewModalScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
-            await deleteReviewMutation.mutateAsync({ mediaType, mediaId });
+            await deleteReviewMutation.mutateAsync({ mediaType, mediaId, ...(mediaSource ? { mediaSource } : {}) });
             if (existing) lib.deleteDiaryEntry(existing.id);
             navigation.goBack();
           } catch (error) {
