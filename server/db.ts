@@ -750,10 +750,11 @@ export async function upsertUserData(userId: number, patch: Partial<Omit<InsertU
   return await getUserData(userId);
 }
 
-export async function getUserReview(userId: number, mediaType: string, mediaId: number): Promise<Review | undefined> {
+export async function getUserReview(userId: number, mediaType: string, mediaId: number, mediaSource?: string | null): Promise<Review | undefined> {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(reviews).where(and(eq(reviews.userId, userId), eq(reviews.mediaType, mediaType), eq(reviews.mediaId, mediaId))).limit(1);
+  const sourceCondition = mediaSource ? eq(reviews.mediaSource, mediaSource) : isNull(reviews.mediaSource);
+  const result = await db.select().from(reviews).where(and(eq(reviews.userId, userId), eq(reviews.mediaType, mediaType), eq(reviews.mediaId, mediaId), sourceCondition)).limit(1);
   return result[0];
 }
 
@@ -766,19 +767,20 @@ export async function listUserReviews(userId: number): Promise<Review[]> {
 export async function upsertReview(input: Omit<InsertReview, 'id' | 'createdAt' | 'updatedAt'>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const existing = await getUserReview(input.userId, input.mediaType, input.mediaId);
+  const existing = await getUserReview(input.userId, input.mediaType, input.mediaId, input.mediaSource);
   if (existing) {
     await db.update(reviews).set({ title: input.title, posterPath: input.posterPath, rating: input.rating, review: input.review, spoiler: input.spoiler, watchedDate: input.watchedDate }).where(eq(reviews.id, existing.id));
-    return getUserReview(input.userId, input.mediaType, input.mediaId);
+    return getUserReview(input.userId, input.mediaType, input.mediaId, input.mediaSource);
   }
   await db.insert(reviews).values(input);
-  return getUserReview(input.userId, input.mediaType, input.mediaId);
+  return getUserReview(input.userId, input.mediaType, input.mediaId, input.mediaSource);
 }
 
-export async function deleteUserReview(userId: number, mediaType: string, mediaId: number) {
+export async function deleteUserReview(userId: number, mediaType: string, mediaId: number, mediaSource?: string | null) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.delete(reviews).where(and(eq(reviews.mediaType, mediaType), eq(reviews.mediaId, mediaId), eq(reviews.userId, userId)));
+  const sourceCondition = mediaSource ? eq(reviews.mediaSource, mediaSource) : isNull(reviews.mediaSource);
+  await db.delete(reviews).where(and(eq(reviews.mediaType, mediaType), eq(reviews.mediaId, mediaId), eq(reviews.userId, userId), sourceCondition));
 }
 
 export async function listUserMediaStatuses(userId: number): Promise<MediaStatus[]> {
@@ -787,29 +789,31 @@ export async function listUserMediaStatuses(userId: number): Promise<MediaStatus
   return db.select().from(mediaStatuses).where(eq(mediaStatuses.userId, userId)).orderBy(desc(mediaStatuses.updatedAt));
 }
 
-export async function getUserMediaStatus(userId: number, mediaType: string, mediaId: number): Promise<MediaStatus | undefined> {
+export async function getUserMediaStatus(userId: number, mediaType: string, mediaId: number, mediaSource?: string | null): Promise<MediaStatus | undefined> {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(mediaStatuses).where(and(eq(mediaStatuses.userId, userId), eq(mediaStatuses.mediaType, mediaType), eq(mediaStatuses.mediaId, mediaId))).limit(1);
+  const sourceCondition = mediaSource ? eq(mediaStatuses.mediaSource, mediaSource) : isNull(mediaStatuses.mediaSource);
+  const result = await db.select().from(mediaStatuses).where(and(eq(mediaStatuses.userId, userId), eq(mediaStatuses.mediaType, mediaType), eq(mediaStatuses.mediaId, mediaId), sourceCondition)).limit(1);
   return result[0];
 }
 
 export async function upsertMediaStatus(input: Omit<InsertMediaStatus, 'id' | 'createdAt' | 'updatedAt'>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const existing = await getUserMediaStatus(input.userId, input.mediaType, input.mediaId);
+  const existing = await getUserMediaStatus(input.userId, input.mediaType, input.mediaId, input.mediaSource);
   if (existing) {
     await db.update(mediaStatuses).set({ title: input.title, posterPath: input.posterPath, status: input.status }).where(eq(mediaStatuses.id, existing.id));
-    return getUserMediaStatus(input.userId, input.mediaType, input.mediaId);
+    return getUserMediaStatus(input.userId, input.mediaType, input.mediaId, input.mediaSource);
   }
   await db.insert(mediaStatuses).values(input);
-  return getUserMediaStatus(input.userId, input.mediaType, input.mediaId);
+  return getUserMediaStatus(input.userId, input.mediaType, input.mediaId, input.mediaSource);
 }
 
-export async function deleteMediaStatus(userId: number, mediaType: string, mediaId: number) {
+export async function deleteMediaStatus(userId: number, mediaType: string, mediaId: number, mediaSource?: string | null) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.delete(mediaStatuses).where(and(eq(mediaStatuses.userId, userId), eq(mediaStatuses.mediaType, mediaType), eq(mediaStatuses.mediaId, mediaId)));
+  const sourceCondition = mediaSource ? eq(mediaStatuses.mediaSource, mediaSource) : isNull(mediaStatuses.mediaSource);
+  await db.delete(mediaStatuses).where(and(eq(mediaStatuses.userId, userId), eq(mediaStatuses.mediaType, mediaType), eq(mediaStatuses.mediaId, mediaId), sourceCondition));
 }
 
 export async function deleteUserAccount(userId: number) {

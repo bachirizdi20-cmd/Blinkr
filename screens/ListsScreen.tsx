@@ -8,7 +8,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import EmptyState from '../components/EmptyState';
 import { ContentStackParamList } from '../navigation/types';
 import { useLibrary, UserList } from '../context/LibraryContext';
-import { posterUrl } from '../lib/tmdb';
+import { catalogPosterUrl } from '../lib/catalog-navigation';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
 
@@ -84,7 +84,7 @@ export default function ListsScreen() {
             >
               <View style={styles.coverRow}>
                 {item.items.slice(0, 4).map((it, idx) => (
-                  <Image key={idx} source={{ uri: posterUrl(it.posterPath, 'w200') ?? undefined }} style={[styles.cover, { marginLeft: idx === 0 ? 0 : -20 }]} contentFit="cover" />
+                  <Image key={idx} source={{ uri: catalogPosterUrl(it.mediaType, it.posterPath, 'w200') ?? undefined }} style={[styles.cover, { marginLeft: idx === 0 ? 0 : -20 }]} contentFit="cover" />
                 ))}
                 {item.items.length === 0 && (
                   <View style={[styles.cover, styles.coverEmpty]}>

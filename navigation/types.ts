@@ -24,12 +24,13 @@ export type ContentStackParamList = {
   EditProfile: undefined;
   Settings: undefined;
   Conversation: { userId: string };
-  People: { initialFilter?: PeopleFilter; shareMedia?: { mediaType: ReviewMediaType; mediaId: number; title: string; posterPath: string | null; rating: number; overview?: string | null } } | undefined;
+  People: { initialFilter?: PeopleFilter; shareMedia?: { mediaType: ReviewMediaType; mediaId: number; mediaSource?: 'hardcover'; title: string; posterPath: string | null; rating: number; overview?: string | null } } | undefined;
   Notifications: undefined;
   UserProfile: { userId: string };
   ReviewModal: {
     mediaType: ReviewMediaType;
     mediaId: number;
+    mediaSource?: 'hardcover';
     title: string;
     posterPath: string | null;
     genreIds?: number[];

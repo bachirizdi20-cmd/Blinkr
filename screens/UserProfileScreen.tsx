@@ -11,7 +11,7 @@ import ApiErrorState from '../components/ApiErrorState';
 import { ContentStackParamList } from '../navigation/types';
 import { trpc } from '../lib/trpc';
 import { catalogPosterUrl, normalizeReviewMediaType, openCatalogItem } from '../lib/catalog-navigation';
-import { ReviewMediaType } from '../types/tmdb';
+import type { CatalogItemLink } from '../lib/catalog-navigation';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { ProfileBio, ProfileIdentity } from '../components/ProfileIdentity';
 import { ProfileStatsGrid } from '../components/ProfileStatsGrid';
@@ -37,7 +37,7 @@ export default function UserProfileScreen() {
         userId={numericId}
         onBack={() => navigation.goBack()}
         onMessage={() => navigation.navigate('Conversation', { userId: `remote-${numericId}` })}
-        onOpenMedia={(mediaType, mediaId) => openCatalogItem(navigation, { mediaType, mediaId })}
+        onOpenMedia={(item) => openCatalogItem(navigation, item)}
       />
     );
   }
@@ -71,7 +71,7 @@ function RemoteUserProfile({
   userId: number;
   onBack: () => void;
   onMessage: () => void;
-  onOpenMedia: (mediaType: ReviewMediaType, mediaId: number) => void;
+  onOpenMedia: (item: CatalogItemLink) => void;
 }) {
   const profileQuery = trpc.social.profile.useQuery({ userId });
   const reviewsQuery = trpc.social.userReviews.useQuery({ userId }, { enabled: Boolean(profileQuery.data) });
@@ -212,7 +212,7 @@ function RemoteUserProfile({
           {publicLibraryQuery.isLoading ? <View style={styles.reviewLoading}><ActivityIndicator color={colors.accent} /><Text style={styles.loadingText}>جارٍ تحميل المفضلات…</Text></View> : publicLibraryQuery.isError ? (
             <View style={styles.inlineError}><Text style={styles.emptyText}>تعذر تحميل المفضلات.</Text><Pressable onPress={() => void publicLibraryQuery.refetch()}><Text style={styles.retryText}>إعادة المحاولة</Text></Pressable></View>
           ) : favoriteItems.length ? (
-            <ProfileFavoriteRail items={favoriteItems} onOpen={(item) => onOpenMedia(item.mediaType, item.mediaId)} horizontalPadding={0} availableWidthPadding={spacing.lg} />
+            <ProfileFavoriteRail items={favoriteItems} onOpen={onOpenMedia} horizontalPadding={0} availableWidthPadding={spacing.lg} />
           ) : <Text style={styles.emptyText}>لم يضف هذا المستخدم مفضلات بعد.</Text>}
         </View>
 
@@ -236,7 +236,7 @@ function RemoteUserProfile({
                   const spoilerVisible = !review.spoiler || revealedSpoilers[review.id];
                   return (
                     <View key={review.id} style={styles.reviewCard}>
-                      <Pressable style={styles.reviewTop} onPress={() => onOpenMedia(mediaType, review.mediaId)} accessibilityRole="button">
+                      <Pressable style={styles.reviewTop} onPress={() => onOpenMedia({ mediaType, mediaId: review.mediaId, title: review.title, posterPath: review.posterPath })} accessibilityRole="button">
                         {poster ? <Image source={{ uri: poster }} style={styles.poster} contentFit="cover" /> : <View style={[styles.poster, styles.posterFallback]}><Ionicons name={mediaType === 'book' ? 'book-outline' : 'film-outline'} size={25} color={colors.textFaint} /></View>}
                         <View style={styles.reviewInfo}><Text style={styles.reviewTitle} numberOfLines={2}>{review.title}</Text><View style={styles.ratingPill}><Ionicons name="star" size={13} color={colors.gold} /><Text style={styles.ratingText}>{review.rating}/10</Text></View>{reviewDate ? <Text style={styles.reviewDate}>{reviewDate}</Text> : null}</View>
                         <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
@@ -294,19 +294,18 @@ function PublicMediaSection({
   loading: boolean;
   error: boolean;
   onRetry: () => void;
-  onOpen: (mediaType: ReviewMediaType, mediaId: number) => void;
+  onOpen: (item: CatalogItemLink) => void;
 }) {
   if (loading) return <View style={styles.reviewLoading}><ActivityIndicator color={colors.accent} /><Text style={styles.loadingText}>جارٍ تحميل مكتبة المشاهدة…</Text></View>;
   if (error) return <View style={styles.inlineError}><Text style={styles.emptyText}>تعذر تحميل مكتبة المشاهدة.</Text><Pressable onPress={onRetry}><Text style={styles.retryText}>إعادة المحاولة</Text></Pressable></View>;
 
-  const onOpenItem = (mediaType: ReviewMediaType, mediaId: number) => onOpen(mediaType, mediaId);
   const saved = tab === 'saved';
   const items = saved ? library.watchlist : library.diary;
   return (
     <View style={styles.publicMediaSection}>
       <ProfileMediaGrid
         items={items}
-        onOpen={onOpenItem}
+        onOpen={onOpen}
         emptyIcon={saved ? 'bookmark-outline' : 'checkmark-circle-outline'}
         emptyTitle={saved ? 'لا توجد عناوين محفوظة' : 'لا يوجد سجل مكتمل بعد'}
         emptyMessage={saved ? 'ستظهر هنا العناوين التي يحفظها هذا المستخدم.' : 'ستظهر هنا العناوين التي يسجلها بعد مشاهدتها أو قراءتها.'}

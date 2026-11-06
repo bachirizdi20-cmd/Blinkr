@@ -149,6 +149,7 @@ export const reviews = mysqlTable("reviews", {
   userId: int("userId").notNull(),
   mediaType: varchar("mediaType", { length: 8 }).notNull(),
   mediaId: int("mediaId").notNull(),
+  mediaSource: varchar("mediaSource", { length: 32 }),
   title: varchar("title", { length: 255 }).notNull(),
   posterPath: varchar("posterPath", { length: 255 }),
   rating: int("rating").notNull(),
@@ -158,7 +159,7 @@ export const reviews = mysqlTable("reviews", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => ({
-  userMediaIdx: uniqueIndex("reviews_user_media_idx").on(table.userId, table.mediaType, table.mediaId),
+  userMediaIdx: uniqueIndex("reviews_user_media_idx").on(table.userId, table.mediaType, table.mediaId, table.mediaSource),
 }));
 
 export type Review = typeof reviews.$inferSelect;
@@ -169,13 +170,14 @@ export const mediaStatuses = mysqlTable("media_statuses", {
   userId: int("userId").notNull(),
   mediaType: varchar("mediaType", { length: 8 }).notNull(),
   mediaId: int("mediaId").notNull(),
+  mediaSource: varchar("mediaSource", { length: 32 }),
   title: varchar("title", { length: 255 }).notNull(),
   posterPath: varchar("posterPath", { length: 255 }),
   status: varchar("status", { length: 16 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => ({
-  userMediaIdx: uniqueIndex("media_statuses_user_media_idx").on(table.userId, table.mediaType, table.mediaId),
+  userMediaIdx: uniqueIndex("media_statuses_user_media_idx").on(table.userId, table.mediaType, table.mediaId, table.mediaSource),
 }));
 
 export type MediaStatus = typeof mediaStatuses.$inferSelect;

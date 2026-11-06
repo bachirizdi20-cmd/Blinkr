@@ -17,7 +17,8 @@ export const ENV = {
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   tmdbApiReadToken: process.env.TMDB_API_READ_TOKEN ?? "",
-  hardcoverApiToken: process.env.Hardcover_API ?? process.env.HARDCOVER_API_TOKEN ?? process.env.HARDCOVER_API_KEY ?? "",
+  hardcoverApiToken: [process.env.Hardcover_API, process.env.HARDCOVER_API_TOKEN, process.env.HARDCOVER_API_KEY]
+    .find((value) => Boolean(value?.trim()))?.trim() ?? "",
   firebaseProjectId: process.env.FIREBASE_PROJECT_ID ?? "",
   databaseHostOverride: process.env.DATABASE_HOST_OVERRIDE ?? "",
   databasePortOverride: process.env.DATABASE_PORT_OVERRIDE ?? "",

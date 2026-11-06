@@ -3,6 +3,7 @@ import type { ContentStackParamList } from "../navigation/types";
 import type { ReviewMediaType } from "../types/tmdb";
 import type { BookSummary } from "../types/books";
 import { posterUrl } from "./tmdb";
+import { bookCoverUrl } from "./book-utils";
 
 export function normalizeReviewMediaType(value: unknown): ReviewMediaType {
   return value === "book" ? "book" : value === "tv" ? "tv" : "movie";
@@ -10,9 +11,9 @@ export function normalizeReviewMediaType(value: unknown): ReviewMediaType {
 
 export function catalogPosterUrl(mediaType: ReviewMediaType, posterPath: string | null | undefined, size: "w200" | "w342" | "w500" = "w342"): string | null {
   if (mediaType === "book") {
-    return posterPath?.startsWith("https://covers.openlibrary.org/") ? posterPath : null;
+    return bookCoverUrl(posterPath);
   }
-  return posterUrl(posterPath ?? null, size);
+  return bookCoverUrl(posterPath) ?? posterUrl(posterPath ?? null, size);
 }
 
 export interface CatalogItemLink {
@@ -20,8 +21,8 @@ export interface CatalogItemLink {
   mediaId: number;
   title?: string;
   posterPath?: string | null;
-  date?: string;
-  voteAverage?: number;
+  date?: string | null;
+  voteAverage?: number | null;
   book?: Partial<BookSummary>;
 }
 
@@ -30,23 +31,16 @@ export function openCatalogItem(
   item: CatalogItemLink,
 ) {
   if (item.mediaType === "book") {
+    const fallback: Partial<BookSummary> | undefined = item.book || item.title || item.posterPath || item.date ? {
+      workId: item.mediaId,
+      ...(item.title ? { title: item.title } : {}),
+      ...(item.date ? { firstPublishYear: Number(item.date.slice(0, 4)) || null } : {}),
+      coverUrl: item.posterPath ?? null,
+      ...item.book,
+    } : undefined;
     navigation.navigate("BookDetail", {
       workId: item.mediaId,
-      book: item.book ?? {
-        workId: item.mediaId,
-        workKey: `/works/OL${item.mediaId}W`,
-        ...(item.title ? { title: item.title } : {}),
-        authorNames: [],
-        ...(item.date ? { firstPublishYear: Number(item.date.slice(0, 4)) || null } : {}),
-        coverId: null,
-        coverUrl: item.posterPath ?? null,
-        isbn: null,
-        pageCount: null,
-        editionCount: 0,
-        ratingsAverage: item.voteAverage ?? null,
-        ratingsCount: 0,
-        subjects: [],
-      },
+      book: fallback,
     });
     return;
   }

@@ -36,6 +36,7 @@ export default function CreateScreen() {
   const [debouncedQuery, setDebouncedQuery] = useState(trimmed);
   const bookMode = category === 'book';
   const searching = debouncedQuery.length >= 2;
+  const bookSearchReady = searching && trimmed === debouncedQuery;
   const path = searching ? '/search/multi' : '/trending/all/week';
 
   useEffect(() => {
@@ -49,7 +50,7 @@ export default function CreateScreen() {
   );
   const bookQuery = trpc.books.search.useQuery(
     { query: debouncedQuery, page: bookPage, limit: 20 },
-    { retry: 1, enabled: bookMode && searching },
+    { retry: 1, enabled: bookMode && bookSearchReady },
   );
 
   useEffect(() => { setPage(1); setItems([]); setBookPage(1); setBooks([]); }, [trimmed]);
@@ -58,10 +59,10 @@ export default function CreateScreen() {
     setItems((current) => page === 1 ? next : [...current, ...next.filter((item: TmdbItem) => !current.some((existing) => existing.id === item.id && (existing.media_type ?? '') === (item.media_type ?? '')))]);
   }, [tmdbQuery.data, page]);
   useEffect(() => {
-    if (!bookQuery.data || bookQuery.data.page !== bookPage) return;
+    if (!bookSearchReady || !bookQuery.data || bookQuery.data.page !== bookPage) return;
     const next = bookQuery.data.results;
     setBooks((current) => bookPage === 1 ? next : [...current, ...next.filter((book) => !current.some((existing) => existing.workId === book.workId))]);
-  }, [bookQuery.data, bookPage]);
+  }, [bookQuery.data, bookPage, bookSearchReady]);
 
   const results = useMemo(() => items.filter((item) => {
     const type = item.media_type ?? (item.title ? 'movie' : 'tv');
@@ -101,8 +102,8 @@ export default function CreateScreen() {
         {query.length > 0 ? <Pressable onPress={() => handleQueryChange('')} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textFaint} /></Pressable> : null}
       </View>
       <FlatList horizontal showsHorizontalScrollIndicator={false} data={CATEGORIES} keyExtractor={(item) => item.key} contentContainerStyle={styles.categories} renderItem={({ item }) => <Pressable onPress={() => setCategory(item.key)} style={[styles.category, category === item.key && styles.categoryActive]} accessibilityRole="tab" accessibilityState={{ selected: category === item.key }}><Ionicons name={item.icon} size={16} color={category === item.key ? colors.bg : colors.textDim} /><Text style={[styles.categoryText, category === item.key && styles.categoryTextActive]}>{item.label}</Text></Pressable>} />
-      {bookMode && !searching ? (
-        <EmptyState icon="book-outline" title="ابحث عن كتاب" message="اكتب اسم كتاب أو مؤلف للعثور على بياناته وغلافه من Open Library." />
+      {bookMode && !bookSearchReady ? (
+        <EmptyState icon="book-outline" title="ابحث عن كتاب" message="اكتب اسم كتاب أو مؤلف للعثور على بياناته وغلافه من Hardcover." />
       ) : loading && (bookMode ? books.length === 0 : items.length === 0) ? (
         <View style={styles.loading}><ActivityIndicator color={colors.accent} size="large" /><Text style={styles.loadingText}>{bookMode ? 'جارٍ البحث عن الكتب…' : searching ? 'جارٍ البحث عن العناوين…' : 'جارٍ تحميل العناوين الرائجة…'}</Text></View>
       ) : failed && (bookMode ? books.length === 0 : items.length === 0) ? (
