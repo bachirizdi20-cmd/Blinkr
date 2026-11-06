@@ -70,7 +70,7 @@ describe("Hardcover integration", () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ data: { books_trending: { ids: [503, 501, 502], error: null } } }))
       .mockResolvedValueOnce(jsonResponse({ data: { books: [
-        { id: 501, title: "One" }, { id: 502, title: "Two" }, { id: 503, title: "Three" },
+        { id: 501, title: "One", image: { url: "https://assets.hardcover.app/one.jpg" } }, { id: 502, title: "Two", image: { url: "https://assets.hardcover.app/two.jpg" } }, { id: 503, title: "Three", image: { url: "https://assets.hardcover.app/three.jpg" } },
       ] } }));
     vi.stubGlobal("fetch", fetchMock);
     expect((await getHardcoverTrendingBooks(3)).map((book) => book.workId)).toEqual([503, 501, 502]);
@@ -117,11 +117,11 @@ describe("Hardcover integration", () => {
       .mockResolvedValueOnce(jsonResponse({ data: { books: [{ id: 901237, title: "Unsafe", image: { url: "https://127.0.0.1/private" } }] } }));
     vi.stubGlobal("fetch", fetchMock);
     await expect(getHardcoverBook(901236)).rejects.toThrow("غير مكتملة");
-    expect((await getHardcoverBook(901237)).coverUrl).toBeNull();
+    await expect(getHardcoverBook(901237)).rejects.toThrow("لم يُعثر على الكتاب في Hardcover.");
   });
 
   it("coalesces simultaneous identical requests", async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({ data: { books: [{ id: 901238, title: "Shared request" }] } }));
+    const fetchMock = vi.fn(async () => jsonResponse({ data: { books: [{ id: 901238, title: "Shared request", image: { url: "https://assets.hardcover.app/shared.jpg" } }] } }));
     vi.stubGlobal("fetch", fetchMock);
     const [first, second] = await Promise.all([getHardcoverBook(901238), getHardcoverBook(901238)]);
     expect(first).toEqual(second);
