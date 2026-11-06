@@ -192,8 +192,8 @@ async function fetchHardcover<T>(query: string, variables: Record<string, unknow
   }
 }
 
-const SEARCH_QUERY = `query SearchBooks($query: String!, $page: Int!, $perPage: Int!) {
-  search(query: $query, query_type: "Book", page: $page, per_page: $perPage) {
+const SEARCH_QUERY = `query SearchBooks($query: String!, $page: Int!, $per_page: Int!) {
+  search(query: $query, query_type: "Book", page: $page, per_page: $per_page) {
     ids
     results
   }
@@ -210,7 +210,7 @@ export async function searchHardcoverBooks(query: string, page = 1, limit = 20):
   const cacheKey = `search:${query}:${page}:${limit}`;
   const cached = getCached<HardcoverSearchResult>(cacheKey);
   if (cached) return cached;
-  const payload = await fetchHardcover<{ search?: { ids?: unknown[]; results?: unknown[] } }>(SEARCH_QUERY, { query, page, perPage: limit });
+  const payload = await fetchHardcover<{ search?: { ids?: unknown[]; results?: unknown[] } }>(SEARCH_QUERY, { query, page, per_page: limit });
   const search = payload.search ?? {};
   const rawResultItems = Array.isArray(search.results) ? search.results : [];
   const rawResults = rawResultItems.map(normalizeBook).filter((book): book is HardcoverBook => book !== null);
