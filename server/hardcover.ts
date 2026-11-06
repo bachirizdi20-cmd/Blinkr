@@ -123,6 +123,9 @@ function hardcoverUrl(slug: unknown, id: number): string {
 }
 
 function normalizeBook(value: unknown): HardcoverBook | null {
+  if (typeof value === "string") {
+    try { return normalizeBook(JSON.parse(value)); } catch { return null; }
+  }
   if (!value || typeof value !== "object") return null;
   const book = value as Record<string, unknown>;
   const workId = positiveInteger(book.id);
@@ -190,8 +193,16 @@ async function fetchHardcover<T>(query: string, variables: Record<string, unknow
 }
 
 const SEARCH_QUERY = `query SearchBooks($query: String!, $page: Int!, $perPage: Int!) {
-  search(query: $query, query_type: "Book", page: $page, per_page: $perPage, fields: "title,subtitle,description,author_names,isbns,release_year,release_date,pages,rating,ratings_count,image,genres,slug") {
+  search(query: $query, query_type: "Book", page: $page, per_page: $perPage) {
+    ids
     results
+  }
+}`;
+
+const BOOKS_BY_ID_QUERY = `query BooksById($ids: [Int!]!, $limit: Int!) {
+  books(where: { id: { _in: $ids } }, limit: $limit) {
+    id title subtitle description pages rating ratings_count release_date release_year slug image { url }
+    editions_count contributions { author { name } }
   }
 }`;
 
@@ -199,9 +210,14 @@ export async function searchHardcoverBooks(query: string, page = 1, limit = 20):
   const cacheKey = `search:${query}:${page}:${limit}`;
   const cached = getCached<HardcoverSearchResult>(cacheKey);
   if (cached) return cached;
-  const payload = await fetchHardcover<{ search?: { results?: unknown[] } }>(SEARCH_QUERY, { query, page, perPage: limit });
-  const rawResults = payload.search?.results ?? [];
-  const results = rawResults.map(normalizeBook).filter((book): book is HardcoverBook => book !== null);
+  const payload = await fetchHardcover<{ search?: { ids?: unknown[]; results?: unknown[] } }>(SEARCH_QUERY, { query, page, perPage: limit });
+  const search = payload.search ?? {};
+  const rawResults = (search.results ?? []).map(normalizeBook).filter((book): book is HardcoverBook => book !== null);
+  const ids = (search.ids ?? []).map(positiveInteger).filter((id): id is number => id !== null).slice(0, limit);
+  const detailPayload = rawResults.length > 0 || ids.length === 0
+    ? null
+    : await fetchHardcover<{ books?: unknown[] }>(BOOKS_BY_ID_QUERY, { ids, limit });
+  const results = (detailPayload?.books ?? rawResults).map(normalizeBook).filter((book): book is HardcoverBook => book !== null);
   const result = { results, page, limit, totalResults: results.length, totalPages: results.length < limit ? page : page + 1 };
   setCached(cacheKey, result, SEARCH_CACHE_TTL_MS);
   return result;
