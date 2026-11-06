@@ -18,6 +18,7 @@ import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import SectionRow from '../components/SectionRow';
+import BookCard from '../components/BookCard';
 import ApiErrorState from '../components/ApiErrorState';
 import { ContentStackParamList } from '../navigation/types';
 import {
@@ -34,6 +35,7 @@ import { useAuth } from '../hooks/use-auth';
 import { trpc } from '../lib/trpc';
 import { colors, fontSizes, spacing, radius } from '../lib/theme';
 import { resolveMediaUrl } from '../lib/media-url';
+import { BookSummary } from '../types/books';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type Category = 'all' | 'movie' | 'tv' | 'anime';
@@ -55,6 +57,7 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const { movieGenres } = useMetadata();
   const notificationsQuery = trpc.social.notifications.useQuery(undefined, { enabled: Boolean(user) });
+  const hardcoverTrendingQuery = trpc.books.trending.useQuery({ limit: 10 }, { retry: 1 });
   const unreadNotifications = (notificationsQuery.data ?? []).filter((item) => !item.readAt).length;
   const [category, setCategory] = useState<Category>('all');
   const [refreshing, setRefreshing] = useState(false);
@@ -279,6 +282,21 @@ export default function HomeScreen() {
         )}
 
         <SocialReviewFeed onOpenDetail={(review) => openCatalogItem(navigation, review)} enabled={Boolean(user)} />
+
+        <View style={styles.bookSection}>
+          <View style={styles.bookSectionHeader}>
+            <View><Text style={styles.bookSectionTitle}>كتب رائجة من Hardcover</Text><Text style={styles.bookSectionSubtitle}>اكتشف ما يقرأه مستخدمو Hardcover</Text></View>
+            <Pressable onPress={() => navigation.navigate('Search')} accessibilityRole="button"><Text style={styles.bookSectionMore}>بحث</Text></Pressable>
+          </View>
+          {hardcoverTrendingQuery.isLoading ? <View style={styles.bookLoading}><Text style={styles.bookLoadingText}>جارٍ تحميل الكتب…</Text></View> : hardcoverTrendingQuery.isError ? <Pressable onPress={() => hardcoverTrendingQuery.refetch()} style={styles.bookError}><Text style={styles.bookErrorText}>تعذر تحميل كتب Hardcover — اضغط لإعادة المحاولة.</Text></Pressable> : <FlatList
+            data={(hardcoverTrendingQuery.data ?? []) as BookSummary[]}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(book) => `hardcover-${book.workId}`}
+            contentContainerStyle={styles.bookList}
+            renderItem={({ item }) => <BookCard book={item} width={112} onPress={() => navigation.navigate('BookDetail', { workId: item.workId, book: item })} />}
+          />}
+        </View>
 
         {error ? <ApiErrorState message={error} onRetry={load} /> : null}
         {visibleSections.map((s) => (
@@ -564,4 +582,14 @@ const styles = StyleSheet.create({
   commentComposer: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
   commentInput: { flex: 1, minHeight: 38, color: colors.text, backgroundColor: colors.bg, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, fontSize: fontSizes.sm },
   commentSend: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  bookSection: { marginBottom: spacing.lg },
+  bookSectionHeader: { paddingHorizontal: spacing.lg, marginBottom: spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  bookSectionTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '900' },
+  bookSectionSubtitle: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: 3 },
+  bookSectionMore: { color: colors.accent, fontSize: fontSizes.sm, fontWeight: '800' },
+  bookList: { paddingHorizontal: spacing.lg, gap: spacing.md },
+  bookLoading: { height: 180, alignItems: 'center', justifyContent: 'center' },
+  bookLoadingText: { color: colors.textFaint, fontSize: fontSizes.sm },
+  bookError: { marginHorizontal: spacing.lg, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surface },
+  bookErrorText: { color: colors.accent, fontSize: fontSizes.sm },
 });

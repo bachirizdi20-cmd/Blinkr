@@ -14,7 +14,7 @@ import { assertLoginAllowed, clearLoginFailures, recordLoginFailure } from "./ra
 import { createAuthToken, consumeAuthToken, markEmailVerified, updateUserPassword } from "./db";
 import { sendAuthEmail } from "./email";
 import { verifyFirebaseIdToken } from "./_core/firebase-auth";
-import { HardcoverError, getHardcoverBook, searchHardcoverBooks } from "./hardcover";
+import { HardcoverError, getHardcoverBook, getHardcoverTrendingBooks, searchHardcoverBooks } from "./hardcover";
 
 const tmdbPathSchema = z.string().regex(
   /^\/(?:trending|movie|tv|discover|genre|search|person|authentication)(?:\/[A-Za-z0-9_,-]+)*$/,
@@ -371,6 +371,16 @@ export const appRouter = router({
     }),
   }),
   books: router({
+    trending: publicProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(20).default(10) }).optional())
+      .query(async ({ input }) => {
+        try {
+          return await getHardcoverTrendingBooks(input?.limit ?? 10);
+        } catch (error) {
+          if (error instanceof HardcoverError) throw new TRPCError({ code: error.status === 401 || error.status === 403 ? "PRECONDITION_FAILED" : "BAD_GATEWAY", message: error.message });
+          throw new TRPCError({ code: "BAD_GATEWAY", message: "تعذر تحميل الكتب الرائجة من Hardcover." });
+        }
+      }),
     search: publicProcedure
       .input(z.object({ query: z.string().trim().min(2).max(120), page: z.number().int().min(1).max(1000).default(1), limit: z.number().int().min(1).max(20).default(20) }))
       .query(async ({ input }) => {

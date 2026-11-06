@@ -206,6 +206,24 @@ const BOOKS_BY_ID_QUERY = `query BooksById($ids: [Int!]!, $limit: Int!) {
   }
 }`;
 
+const TRENDING_QUERY = `query TrendingBooks($duration: BooksTrendingDuration!, $limit: Int!) {
+  books_trending(duration: $duration, limit: $limit) { ids error }
+}`;
+
+export async function getHardcoverTrendingBooks(limit = 10): Promise<HardcoverBook[]> {
+  const cacheKey = `trending:${limit}`;
+  const cached = getCached<HardcoverBook[]>(cacheKey);
+  if (cached) return cached;
+  const trending = await fetchHardcover<{ books_trending?: { ids?: unknown[]; error?: string | null } }>(TRENDING_QUERY, { duration: "month", limit });
+  const ids = (Array.isArray(trending.books_trending?.ids) ? trending.books_trending.ids : [])
+    .map(positiveInteger).filter((id): id is number => id !== null).slice(0, limit);
+  if (ids.length === 0) return [];
+  const details = await fetchHardcover<{ books?: unknown[] }>(BOOKS_BY_ID_QUERY, { ids, limit });
+  const books = (details.books ?? []).map(normalizeBook).filter((book): book is HardcoverBook => book !== null);
+  setCached(cacheKey, books, SEARCH_CACHE_TTL_MS);
+  return books;
+}
+
 export async function searchHardcoverBooks(query: string, page = 1, limit = 20): Promise<HardcoverSearchResult> {
   const cacheKey = `search:${query}:${page}:${limit}`;
   const cached = getCached<HardcoverSearchResult>(cacheKey);
