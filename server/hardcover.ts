@@ -285,6 +285,15 @@ const TRENDING_QUERY = `query TrendingBooks($limit: Int!) {
   books_trending(duration: month, limit: $limit) { ids error }
 }`;
 
+const AUTHOR_BOOKS_QUERY = `query BooksByAuthor($author: String!, $excludeId: Int!, $limit: Int!) {
+  books(where: { _and: [{ id: { _neq: $excludeId } }, { contributions: { author: { name: { _eq: $author } } } }] }, order_by: { users_count: desc }, limit: $limit) {
+    id title subtitle description pages rating ratings_count release_date release_year slug image { url } cached_image cached_tags
+    editions_count contributions { author { name } contributor_role { slug } }
+    default_physical_edition { isbn_13 isbn_10 image { url } cached_image }
+    default_cover_edition { isbn_13 isbn_10 image { url } cached_image }
+  }
+}`;
+
 export async function getHardcoverTrendingBooks(limit = 10): Promise<HardcoverBook[]> {
   const cacheKey = `trending:${limit}`;
   const cached = getCached<HardcoverBook[]>(cacheKey);
@@ -299,6 +308,37 @@ export async function getHardcoverTrendingBooks(limit = 10): Promise<HardcoverBo
   if (!Array.isArray(details.books)) throw new HardcoverError("استجاب Hardcover ببيانات كتب غير مكتملة.");
   const byId = new Map((details.books ?? []).map((value) => normalizeBook(value)).filter((book): book is HardcoverBook => book !== null).map((book) => [book.workId, book]));
   const books = diversifyByAuthor(ids.flatMap((id) => byId.has(id) ? [byId.get(id)!] : []));
+  setCached(cacheKey, books, SEARCH_CACHE_TTL_MS);
+  return books;
+}
+
+export async function getHardcoverAuthorBooks(author: string, excludeId: number, limit = 50): Promise<HardcoverBook[]> {
+  const normalizedAuthor = author.trim();
+  if (!normalizedAuthor) return [];
+  const cacheKey = `author:${normalizedAuthor.toLowerCase()}:${excludeId}:${limit}`;
+  const cached = getCached<HardcoverBook[]>(cacheKey);
+  if (cached) return cached;
+  const payload = await fetchHardcover<{ books?: unknown[] }>(AUTHOR_BOOKS_QUERY, { author: normalizedAuthor, excludeId, limit });
+  if (!Array.isArray(payload.books)) throw new HardcoverError("استجاب Hardcover ببيانات كتب المؤلف غير مكتملة.");
+  const books = payload.books.map((value) => normalizeBook(value)).filter((book): book is HardcoverBook => book !== null);
+  setCached(cacheKey, books, SEARCH_CACHE_TTL_MS);
+  return books;
+}
+
+export async function getHardcoverSimilarBooks(workId: number, subjects: string[], authorName?: string, limit = 20): Promise<HardcoverBook[]> {
+  const terms = [...subjects, authorName ?? ""].map((term) => term.trim()).filter(Boolean).slice(0, 3);
+  const cacheKey = `similar:${workId}:${terms.join("|").toLowerCase()}:${limit}`;
+  const cached = getCached<HardcoverBook[]>(cacheKey);
+  if (cached) return cached;
+  const found = new Map<number, HardcoverBook>();
+  for (const term of terms) {
+    const result = await searchHardcoverBooks(term, 1, limit);
+    for (const book of result.results) {
+      if (book.workId !== workId && !found.has(book.workId)) found.set(book.workId, book);
+    }
+    if (found.size >= limit) break;
+  }
+  const books = [...found.values()].slice(0, limit);
   setCached(cacheKey, books, SEARCH_CACHE_TTL_MS);
   return books;
 }

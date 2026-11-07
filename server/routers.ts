@@ -14,7 +14,7 @@ import { assertLoginAllowed, clearLoginFailures, recordLoginFailure } from "./ra
 import { createAuthToken, consumeAuthToken, markEmailVerified, updateUserPassword } from "./db";
 import { sendAuthEmail } from "./email";
 import { verifyFirebaseIdToken } from "./_core/firebase-auth";
-import { HardcoverError, getHardcoverBook, getHardcoverTrendingBooks, searchHardcoverBooks } from "./hardcover";
+import { HardcoverError, getHardcoverAuthorBooks, getHardcoverBook, getHardcoverSimilarBooks, getHardcoverTrendingBooks, searchHardcoverBooks } from "./hardcover";
 
 const tmdbPathSchema = z.string().regex(
   /^\/(?:trending|movie|tv|discover|genre|search|person|authentication)(?:\/[A-Za-z0-9_,-]+)*$/,
@@ -409,6 +409,26 @@ export const appRouter = router({
             throw new TRPCError({ code, message: error.message });
           }
           throw new TRPCError({ code: "BAD_GATEWAY", message: "تعذر جلب تفاصيل الكتاب من Hardcover." });
+        }
+      }),
+    author: publicProcedure
+      .input(z.object({ author: z.string().trim().min(1).max(160), excludeWorkId: z.number().int().positive(), limit: z.number().int().min(1).max(50).default(50) }))
+      .query(async ({ input }) => {
+        try {
+          return await getHardcoverAuthorBooks(input.author, input.excludeWorkId, input.limit);
+        } catch (error) {
+          if (error instanceof HardcoverError) throw new TRPCError({ code: error.status === 429 ? "TOO_MANY_REQUESTS" : "BAD_GATEWAY", message: error.message });
+          throw new TRPCError({ code: "BAD_GATEWAY", message: "تعذر تحميل كتب المؤلف من Hardcover." });
+        }
+      }),
+    similar: publicProcedure
+      .input(z.object({ workId: z.number().int().positive(), subjects: z.array(z.string().trim().min(1).max(80)).max(8).default([]), authorName: z.string().trim().max(160).optional(), limit: z.number().int().min(1).max(20).default(20) }))
+      .query(async ({ input }) => {
+        try {
+          return await getHardcoverSimilarBooks(input.workId, input.subjects, input.authorName, input.limit);
+        } catch (error) {
+          if (error instanceof HardcoverError) throw new TRPCError({ code: error.status === 429 ? "TOO_MANY_REQUESTS" : "BAD_GATEWAY", message: error.message });
+          throw new TRPCError({ code: "BAD_GATEWAY", message: "تعذر تحميل الكتب المشابهة من Hardcover." });
         }
       }),
   }),
