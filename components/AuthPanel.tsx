@@ -4,7 +4,6 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import Svg, { Path } from "react-native-svg";
 import { AuthTextInput, type AuthTextInputHandle } from "@/components/AuthTextInput";
 import * as Google from "expo-auth-session/providers/google";
-import { ResponseType } from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import { createUserWithEmailAndPassword, getRedirectResult, GoogleAuthProvider, reload, sendEmailVerification, sendPasswordResetEmail, signInWithCredential, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, updateProfile, type User } from "firebase/auth";
 import { trpc } from "@/lib/trpc";
@@ -125,12 +124,13 @@ export function AuthPanel({ onAuthenticated }: Props) {
 
   const firebaseSession = trpc.auth.firebaseSession.useMutation();
   const busy = isSubmitting || firebaseSession.isPending;
-  const [googleRequest, , promptGoogleAsync] = Google.useAuthRequest({
+  const nativeGoogleRedirect = `com.googleusercontent.apps.${googleOAuthClientIds.android.replace(".apps.googleusercontent.com", "")}:/oauthredirect`;
+  const [googleRequest, , promptGoogleAsync] = Google.useIdTokenAuthRequest({
     androidClientId: googleOAuthClientIds.android,
     webClientId: googleOAuthClientIds.web,
-    responseType: ResponseType.IdToken,
     scopes: ["openid", "profile", "email"],
-  });
+    selectAccount: true,
+  }, { native: nativeGoogleRedirect });
 
   const completeFederatedSignIn = React.useCallback(async (user: User) => {
     const idToken = await user.getIdToken(true);
@@ -187,7 +187,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
           if (response.type !== "dismiss" && response.type !== "cancel") setError("تعذر إكمال تسجيل Google. حاول مرة أخرى.");
           return;
         }
-        const idToken = response.params?.id_token ?? response.authentication?.idToken;
+        const idToken = response.authentication?.idToken ?? response.params?.id_token;
         if (!idToken) {
           setError("لم يُرجع Google رمز التحقق. تأكد من إعداد OAuth في Firebase.");
           return;
