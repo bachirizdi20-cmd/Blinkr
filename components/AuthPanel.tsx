@@ -3,10 +3,14 @@ import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Svg, { Path } from "react-native-svg";
 import { AuthTextInput, type AuthTextInputHandle } from "@/components/AuthTextInput";
-import { createUserWithEmailAndPassword, getRedirectResult, GoogleAuthProvider, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, updateProfile, type User } from "firebase/auth";
+import * as Google from "expo-auth-session/providers/google";
+import { ResponseType } from "expo-auth-session";
+import * as WebBrowser from "expo-web-browser";
+import { createUserWithEmailAndPassword, getRedirectResult, GoogleAuthProvider, reload, sendEmailVerification, sendPasswordResetEmail, signInWithCredential, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, updateProfile, type User } from "firebase/auth";
 import { trpc } from "@/lib/trpc";
 import * as Auth from "@/lib/_core/auth";
 import { firebaseAuth } from "@/lib/firebaseAuth";
+import { googleOAuthClientIds } from "@/lib/firebaseApp";
 import { colors, fontSizes, radius, spacing } from "@/lib/theme";
 
 type Props = { onAuthenticated: () => Promise<void> | void };
@@ -17,6 +21,8 @@ type FieldErrors = Partial<Record<FieldName, string>>;
 type GoogleFailureStage = "popup" | "redirect" | "session";
 
 let googleRedirectResultPromise: ReturnType<typeof getRedirectResult> | null = null;
+
+WebBrowser.maybeCompleteAuthSession();
 
 function readGoogleRedirectResult() {
   if (!googleRedirectResultPromise) googleRedirectResultPromise = getRedirectResult(firebaseAuth);
@@ -119,6 +125,12 @@ export function AuthPanel({ onAuthenticated }: Props) {
 
   const firebaseSession = trpc.auth.firebaseSession.useMutation();
   const busy = isSubmitting || firebaseSession.isPending;
+  const [googleRequest, , promptGoogleAsync] = Google.useAuthRequest({
+    androidClientId: googleOAuthClientIds.android,
+    webClientId: googleOAuthClientIds.web,
+    responseType: ResponseType.IdToken,
+    scopes: ["openid", "profile", "email"],
+  });
 
   const completeFederatedSignIn = React.useCallback(async (user: User) => {
     const idToken = await user.getIdToken(true);
@@ -163,7 +175,35 @@ export function AuthPanel({ onAuthenticated }: Props) {
     clearFeedback();
     setShowGoogleRedirectFallback(false);
     if (Platform.OS !== "web") {
-      setError("تسجيل Google متاح حاليًا عبر نسخة Blinkr على الويب.");
+      if (!googleRequest) {
+        setError("جارٍ تجهيز تسجيل Google. حاول مرة أخرى بعد لحظة.");
+        return;
+      }
+      setIsSubmitting(true);
+      setIsGoogleSubmitting(true);
+      try {
+        const response = await promptGoogleAsync();
+        if (response.type !== "success") {
+          if (response.type !== "dismiss" && response.type !== "cancel") setError("تعذر إكمال تسجيل Google. حاول مرة أخرى.");
+          return;
+        }
+        const idToken = response.params?.id_token ?? response.authentication?.idToken;
+        if (!idToken) {
+          setError("لم يُرجع Google رمز التحقق. تأكد من إعداد OAuth في Firebase.");
+          return;
+        }
+        const credential = GoogleAuthProvider.credential(idToken);
+        const result = await signInWithCredential(firebaseAuth, credential);
+        await completeFederatedSignIn(result.user);
+      } catch (nativeGoogleError) {
+        console.warn("[Auth] Native Google sign-in failed", {
+          code: typeof nativeGoogleError === "object" && nativeGoogleError !== null && "code" in nativeGoogleError ? String(nativeGoogleError.code) : "unknown",
+        });
+        setError(friendlyAuthError(nativeGoogleError, "session"));
+      } finally {
+        setIsSubmitting(false);
+        setIsGoogleSubmitting(false);
+      }
       return;
     }
 
@@ -312,7 +352,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
             : "أدخل بيانات حسابك للمتابعة إلى Blinkr."}
       </Text>
 
-      {Platform.OS === "web" && !isForgot ? <>
+      {!isForgot ? <>
         <View style={styles.socialButtons}>
           <Pressable
             onPress={handleGoogleSignIn}

@@ -6,7 +6,7 @@ import type { ExpoConfig } from "expo/config";
 // e.g., "my-app" created at 2024-01-15 10:30:45 -> "space.manus.my.app.t20240115103045"
 // Bundle ID can only contain letters, numbers, and dots
 // Android requires each dot-separated segment to start with a letter
-const rawBundleId = "com.app.agonagent";
+const rawBundleId = "com.blinkr.space";
 const bundleId =
   rawBundleId
     .replace(/[-_]/g, ".") // Replace hyphens/underscores with dots
@@ -65,6 +65,7 @@ const config: ExpoConfig = {
     predictiveBackGestureEnabled: false,
     softwareKeyboardLayoutMode: "resize",
     package: env.androidPackage,
+    googleServicesFile: "./google-services.json",
     permissions: ["POST_NOTIFICATIONS"],
     intentFilters: [
       {
@@ -135,6 +136,11 @@ const config: ExpoConfig = {
     typedRoutes: true,
     reactCompiler: true,
     ...(process.env.EXPO_BASE_URL ? { baseUrl: process.env.EXPO_BASE_URL } : {}),
+  },
+  extra: {
+    eas: {
+      projectId: "bf4210b1-e796-4261-a1a9-c8886f020d37",
+    },
   },
 };
 
