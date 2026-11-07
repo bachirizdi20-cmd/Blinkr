@@ -4,10 +4,6 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import Svg, { Path } from "react-native-svg";
 import { AuthTextInput, type AuthTextInputHandle } from "@/components/AuthTextInput";
 import * as Google from "expo-auth-session/providers/google";
-<<<<<<< HEAD
-=======
-import { ResponseType } from "expo-auth-session";
->>>>>>> origin/main
 import * as WebBrowser from "expo-web-browser";
 import { createUserWithEmailAndPassword, getRedirectResult, GoogleAuthProvider, reload, sendEmailVerification, sendPasswordResetEmail, signInWithCredential, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, updateProfile, type User } from "firebase/auth";
 import { trpc } from "@/lib/trpc";
@@ -191,11 +187,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
           if (response.type !== "dismiss" && response.type !== "cancel") setError("تعذر إكمال تسجيل Google. حاول مرة أخرى.");
           return;
         }
-<<<<<<< HEAD
         const idToken = response.authentication?.idToken ?? response.params?.id_token;
-=======
-        const idToken = response.params?.id_token ?? response.authentication?.idToken;
->>>>>>> origin/main
         if (!idToken) {
           setError("لم يُرجع Google رمز التحقق. تأكد من إعداد OAuth في Firebase.");
           return;
