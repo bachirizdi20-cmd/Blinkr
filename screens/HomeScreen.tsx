@@ -14,7 +14,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import Svg, { Circle, Path } from 'react-native-svg';
 import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -466,7 +466,13 @@ function FeedReviewCard({
 
 function OkayHandIcon({ active }: { active: boolean }) {
   const color = active ? colors.accent : colors.textDim;
-  return <MaterialCommunityIcons name="hand-okay" size={21} color={color} accessibilityLabel="رمز التفاعل" />;
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" accessibilityLabel="رمز التفاعل">
+      <Circle cx={7.2} cy={14.2} r={3.8} fill="none" stroke={color} strokeWidth={1.8} />
+      <Path d="M10.2 13.8c1.1.8 1.8 1.1 2.8 1.1h3.5c1.3 0 2.5-.7 3.1-1.8l1.1-2c.4-.7-.6-1.4-1.1-.7l-.8 1.1V7.2c0-.8-1.1-1-1.4-.2l-.9 2.5V5.2c0-.9-1.3-1-1.5-.1l-.8 4.4V5.8c0-.9-1.3-1-1.5-.1l-1 5.2-1.1 1.3" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M10.2 13.8 8.8 12" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+  );
 }
 
 function formatSocialTime(value: number) {
