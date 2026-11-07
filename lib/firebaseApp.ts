@@ -11,4 +11,9 @@ export const firebaseConfig = {
   measurementId: "G-RGJ80DW2JY",
 };
 
+export const googleOAuthClientIds = {
+  android: "358102487595-0bqcjimq81fismoseihmo4mnopbsun6b.apps.googleusercontent.com",
+  web: "358102487595-i20cpabbj9evlekrk5a4escoubs209go.apps.googleusercontent.com",
+};
+
 export const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);

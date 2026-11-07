@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "358102487595",
+    "project_id": "blinkr-c7f8d",
+    "storage_bucket": "blinkr-c7f8d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:358102487595:android:b6f8ebc60454114da0106e",
+        "android_client_info": {
+          "package_name": "com.blinkr.space"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "358102487595-0bqcjimq81fismoseihmo4mnopbsun6b.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.blinkr.space",
+            "certificate_hash": "b7c13ee30b02e95148d00d2680ee68f63c088e85"
+          }
+        },
+        {
+          "client_id": "358102487595-i20cpabbj9evlekrk5a4escoubs209go.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAQf74xpdk2RHUKln6TSSFG7rJmu3qz19E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "358102487595-i20cpabbj9evlekrk5a4escoubs209go.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
