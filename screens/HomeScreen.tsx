@@ -14,6 +14,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import Svg, { Path } from 'react-native-svg';
 import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -426,9 +427,9 @@ function FeedReviewCard({
       </Pressable>
       <Text style={styles.socialReviewText}>{review.review}</Text>
       <View style={styles.socialActions}>
-        <Pressable style={styles.socialAction} onPress={() => toggleLikeMutation.mutate({ reviewId: review.id })} accessibilityRole="button" accessibilityLabel={likedByMe ? 'إلغاء الإعجاب بالمراجعة' : 'الإعجاب بالمراجعة'}>
-          <Ionicons name={likedByMe ? 'heart' : 'heart-outline'} size={20} color={likedByMe ? colors.danger : colors.textDim} />
-          <Text style={[styles.socialActionText, likedByMe && { color: colors.danger }]}>{likeCount}</Text>
+        <Pressable style={styles.socialAction} onPress={() => toggleLikeMutation.mutate({ reviewId: review.id })} accessibilityRole="button" accessibilityLabel={likedByMe ? 'إلغاء التفاعل مع المراجعة' : 'التفاعل مع المراجعة'}>
+          <OkayHandIcon active={likedByMe} />
+          <Text style={[styles.socialActionText, likedByMe && { color: colors.accent }]}>{likeCount}</Text>
         </Pressable>
         <Pressable style={styles.socialAction} onPress={() => setCommentOpen((current) => !current)} accessibilityRole="button" accessibilityLabel="التعليق على المراجعة">
           <Ionicons name="chatbubble-outline" size={19} color={colors.textDim} />
@@ -460,6 +461,23 @@ function FeedReviewCard({
         </View>
       )}
     </Animated.View>
+  );
+}
+
+function OkayHandIcon({ active }: { active: boolean }) {
+  const color = active ? colors.accent : colors.textDim;
+  return (
+    <Svg width={21} height={21} viewBox="0 0 24 24" accessibilityLabel="رمز التفاعل">
+      <Path
+        d="M8.25 10.15V6.6a1.35 1.35 0 0 1 2.7 0v3.15m0-.7V4.85a1.35 1.35 0 0 1 2.7 0v4.2m0-.55V5.8a1.35 1.35 0 0 1 2.7 0v3.85m0-.35V7.55a1.3 1.3 0 0 1 2.6 0v6.1c0 3.55-2.35 6.05-5.8 6.05h-1.9c-1.65 0-3.15-.8-4.08-2.15l-2.35-3.4a1.42 1.42 0 0 1 2.3-1.65l1.13 1.5V10.15Z"
+        fill="none"
+        stroke={color}
+        strokeWidth={1.7}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path d="M7.2 10.15c-1.25-1.15-2.9-.8-3.55.4-.48.88-.2 1.95.5 2.75" fill="none" stroke={color} strokeWidth={1.7} strokeLinecap="round" />
+    </Svg>
   );
 }
 
