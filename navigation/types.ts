@@ -11,6 +11,7 @@ export type ContentStackParamList = {
   ProfileMain: undefined;
   Detail: { mediaType: MediaType; id: number };
   BookDetail: { workId: number; book?: Partial<BookSummary> };
+  AuthorBooks: { authorName: string; excludeWorkId: number };
   Season: { tvId: number; seasonNumber: number; tvName: string };
   Person: { personId: number; name: string };
   CategoryList: { title: string; feed: FeedDescriptor };

@@ -13,6 +13,7 @@ import { useLibrary } from '../context/LibraryContext';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import ApiErrorState from '../components/ApiErrorState';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
+import BookCard from '../components/BookCard';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type RouteT = RouteProp<ContentStackParamList, 'BookDetail'>;
@@ -32,6 +33,10 @@ export default function BookDetailScreen() {
 
   const detailCompatible = isBookDetailCompatible(fallback, detailQuery.data);
   const book = useMemo(() => mergeBookDetails(workId, fallback, detailCompatible ? detailQuery.data : null), [workId, fallback, detailQuery.data, detailCompatible]);
+  const similarQuery = trpc.books.similar.useQuery(
+    { workId, subjects: book.subjects.slice(0, 5), authorName: book.authorNames[0], limit: 20 },
+    { enabled: Boolean(book.coverUrl), retry: 1 },
+  );
 
   const localRead = lib.isWatched('book', workId);
   const isRead = localRead || statusQuery.data?.status === 'watched';
@@ -122,7 +127,7 @@ export default function BookDetailScreen() {
           </View>
           <View style={styles.heroCopy}>
             <Text style={styles.title}>{book.title}</Text>
-            {book.authorNames.length > 0 ? <Text style={styles.authors}>{book.authorNames.join('، ')}</Text> : <Text style={styles.muted}>المؤلف غير محدد</Text>}
+            {book.authorNames.length > 0 ? <View style={styles.authorRow}>{book.authorNames.map((author) => <Pressable key={author} onPress={() => navigation.navigate('AuthorBooks', { authorName: author, excludeWorkId: workId })} accessibilityRole="button" accessibilityLabel={`عرض كتب ${author}`}><Text style={styles.authors}>{author}</Text></Pressable>)}</View> : <Text style={styles.muted}>المؤلف غير محدد</Text>}
             {info.map((line) => <Text key={line} style={styles.meta}>{line}</Text>)}
             {book.ratingsAverage != null && book.ratingsCount > 0 ? <View style={styles.ratingRow}><Ionicons name="star" size={16} color={colors.gold} /><Text style={styles.rating}>{book.ratingsAverage.toFixed(1)} / 5</Text><Text style={styles.muted}>({book.ratingsCount.toLocaleString('ar')}) · Hardcover</Text></View> : null}
             {rating > 0 ? <Text style={styles.yourRating}>تقييمك: {rating}/10</Text> : null}
@@ -140,6 +145,10 @@ export default function BookDetailScreen() {
 
         <View style={styles.section}><Text style={styles.sectionTitle}>عن الكتاب</Text><Text style={styles.description}>{book.description || 'لا يتوفر وصف لهذا الكتاب بعد.'}</Text></View>
         {book.subjects.length ? <View style={styles.section}><Text style={styles.sectionTitle}>التصنيفات</Text><View style={styles.subjects}>{book.subjects.slice(0, 8).map((subject) => <View key={subject} style={styles.subject}><Text style={styles.subjectText}>{subject}</Text></View>)}</View></View> : null}
+        <View style={styles.similarSection}>
+          <Text style={styles.sectionTitle}>كتب مشابهة</Text>
+          {similarQuery.isLoading ? <Text style={styles.muted}>جارٍ تحميل الكتب المشابهة…</Text> : similarQuery.isError ? <Pressable onPress={() => void similarQuery.refetch()}><Text style={styles.muted}>تعذر تحميل الكتب المشابهة — اضغط لإعادة المحاولة.</Text></Pressable> : similarQuery.data?.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.similarList}>{similarQuery.data.filter((item) => Boolean(item.coverUrl)).map((item) => <BookCard key={item.workId} book={item} width={112} onPress={() => navigation.push('BookDetail', { workId: item.workId, book: item })} />)}</ScrollView> : <Text style={styles.muted}>لا توجد كتب مشابهة بأغلفة متاحة حاليًا.</Text>}
+        </View>
         {book.sourceUrl ? <Pressable onPress={() => Linking.openURL(book.sourceUrl!)} style={styles.sourceLink}><Text style={styles.sourceText}>عرض المصدر على Hardcover</Text><Ionicons name="open-outline" size={15} color={colors.accent} /></Pressable> : null}
         {!detailCompatible ? <Text style={styles.muted}>تعذر التحقق من مصدر الكتاب المحفوظ؛ نعرض بياناته المحفوظة فقط.</Text> : null}
         {detailQuery.isError ? <Pressable onPress={() => void detailQuery.refetch()} accessibilityRole="button"><Text style={styles.muted}>تعذر جلب التفاصيل؛ نعرض البيانات المتاحة. اضغط لإعادة المحاولة.</Text></Pressable> : null}
@@ -159,6 +168,7 @@ const styles = StyleSheet.create({
   cover: { width: '100%', height: '100%' },
   coverFallback: { alignItems: 'center', justifyContent: 'center', gap: spacing.sm, padding: spacing.sm },
   heroCopy: { flex: 1, gap: spacing.sm },
+  authorRow: { gap: 3 },
   title: { color: colors.text, fontSize: fontSizes.xl, lineHeight: 28, fontWeight: '900' },
   authors: { color: colors.accent, fontSize: fontSizes.md, lineHeight: 21, fontWeight: '700' },
   meta: { color: colors.textDim, fontSize: fontSizes.sm },
@@ -177,6 +187,8 @@ const styles = StyleSheet.create({
   addList: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 48, marginTop: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   addListText: { flex: 1, color: colors.text, fontSize: fontSizes.sm, fontWeight: '700' },
   section: { marginTop: spacing.xl },
+  similarSection: { marginTop: spacing.xl },
+  similarList: { paddingRight: spacing.sm },
   sectionTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '900', marginBottom: spacing.sm },
   description: { color: colors.textDim, fontSize: fontSizes.md, lineHeight: 24 },
   subjects: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
