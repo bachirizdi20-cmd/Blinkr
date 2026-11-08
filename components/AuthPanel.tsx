@@ -3,8 +3,13 @@ import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Svg, { Path } from "react-native-svg";
 import { AuthTextInput, type AuthTextInputHandle } from "@/components/AuthTextInput";
-import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
+import {
+  GoogleOneTapSignIn,
+  isCancelledResponse,
+  isSuccessResponse,
+  statusCodes as googleStatusCodes,
+} from "react-native-nitro-google-signin";
 import { createUserWithEmailAndPassword, getRedirectResult, GoogleAuthProvider, reload, sendEmailVerification, sendPasswordResetEmail, signInWithCredential, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, updateProfile, type User } from "firebase/auth";
 import { trpc } from "@/lib/trpc";
 import * as Auth from "@/lib/_core/auth";
@@ -48,6 +53,9 @@ function friendlyAuthError(error: unknown, stage?: GoogleFailureStage) {
   if (code === "auth/web-storage-unsupported" || code === "auth/operation-not-supported-in-this-environment") return "هذا المتصفح لا يسمح بإكمال تسجيل Google بهذه الطريقة. افتح Blinkr في Chrome أو Safari العادي.";
   if (code === "auth/popup-blocked") return "منع المتصفح نافذة Google. استخدم خيار التسجيل بصفحة كاملة أدناه أو افتح Blinkr في Chrome.";
   if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return "أُغلقت نافذة Google قبل إعادة نتيجة تسجيل الدخول. جرّب خيار التسجيل بصفحة كاملة أدناه.";
+  if (code === googleStatusCodes.DEVELOPER_ERROR) return "إعداد Google Android غير متطابق. تأكد من package name وبصمة SHA-1 ثم أعد تنزيل google-services.json.";
+  if (code === googleStatusCodes.PLAY_SERVICES_NOT_AVAILABLE) return "خدمات Google Play غير متاحة أو قديمة على هذا الجهاز.";
+  if (code === googleStatusCodes.SIGN_IN_CANCELLED) return "أُغلقت نافذة اختيار حساب Google قبل إكمال تسجيل الدخول.";
   if (code === "auth/invalid-email") return "صيغة البريد الإلكتروني غير صحيحة.";
   if (code === "auth/weak-password") return "كلمة المرور ضعيفة؛ اختر كلمة مرور أقوى من 8 أحرف.";
   if (normalized.includes("too many") || normalized.includes("too-many-requests")) return "محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.";
@@ -124,13 +132,14 @@ export function AuthPanel({ onAuthenticated }: Props) {
 
   const firebaseSession = trpc.auth.firebaseSession.useMutation();
   const busy = isSubmitting || firebaseSession.isPending;
-  const nativeGoogleRedirect = `com.googleusercontent.apps.${googleOAuthClientIds.android.replace(".apps.googleusercontent.com", "")}:/oauthredirect`;
-  const [googleRequest, , promptGoogleAsync] = Google.useIdTokenAuthRequest({
-    androidClientId: googleOAuthClientIds.android,
-    webClientId: googleOAuthClientIds.web,
-    scopes: ["openid", "profile", "email"],
-    selectAccount: true,
-  }, { native: nativeGoogleRedirect });
+
+  React.useEffect(() => {
+    if (Platform.OS === "web") return;
+    GoogleOneTapSignIn.configure({
+      webClientId: googleOAuthClientIds.web,
+      scopes: ["openid", "profile", "email"],
+    });
+  }, []);
 
   const completeFederatedSignIn = React.useCallback(async (user: User) => {
     const idToken = await user.getIdToken(true);
@@ -175,19 +184,20 @@ export function AuthPanel({ onAuthenticated }: Props) {
     clearFeedback();
     setShowGoogleRedirectFallback(false);
     if (Platform.OS !== "web") {
-      if (!googleRequest) {
-        setError("جارٍ تجهيز تسجيل Google. حاول مرة أخرى بعد لحظة.");
-        return;
-      }
       setIsSubmitting(true);
       setIsGoogleSubmitting(true);
       try {
-        const response = await promptGoogleAsync();
-        if (response.type !== "success") {
-          if (response.type !== "dismiss" && response.type !== "cancel") setError("تعذر إكمال تسجيل Google. حاول مرة أخرى.");
+        await GoogleOneTapSignIn.checkPlayServices();
+        const response = await GoogleOneTapSignIn.createAccount();
+        if (isCancelledResponse(response)) {
+          setError("أُغلقت نافذة اختيار حساب Google قبل إكمال تسجيل الدخول.");
           return;
         }
-        const idToken = response.authentication?.idToken ?? response.params?.id_token;
+        if (!isSuccessResponse(response)) {
+          setError("لم يُرجع Google رمز التحقق. حاول اختيار الحساب مرة أخرى.");
+          return;
+        }
+        const idToken = response.data.idToken;
         if (!idToken) {
           setError("لم يُرجع Google رمز التحقق. تأكد من إعداد OAuth في Firebase.");
           return;

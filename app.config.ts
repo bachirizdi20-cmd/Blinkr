@@ -79,16 +79,6 @@ const config: ExpoConfig = {
         ],
         category: ["BROWSABLE", "DEFAULT"],
       },
-      {
-        action: "VIEW",
-        data: [
-          {
-            scheme: "com.googleusercontent.apps.358102487595-0bqcjimq81fismoseihmo4mnopbsun6b",
-            pathPrefix: "/oauthredirect",
-          },
-        ],
-        category: ["BROWSABLE", "DEFAULT"],
-      },
     ],
   },
   web: {
@@ -100,6 +90,7 @@ const config: ExpoConfig = {
     "expo-router",
     "expo-font",
     "expo-web-browser",
+    "react-native-nitro-google-signin",
     [
       "expo-image-picker",
       {
