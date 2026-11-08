@@ -4,6 +4,7 @@ import { ContentStackParamList } from './types';
 import DetailScreen from '../screens/DetailScreen';
 import BookDetailScreen from '../screens/BookDetailScreen';
 import AuthorBooksScreen from '../screens/AuthorBooksScreen';
+import ComicDetailScreen from '../screens/ComicDetailScreen';
 import SeasonScreen from '../screens/SeasonScreen';
 import PersonScreen from '../screens/PersonScreen';
 import CategoryListScreen from '../screens/CategoryListScreen';
@@ -49,6 +50,7 @@ export default function ContentStackNavigator({ initialRouteName, HomeComponent 
       <Stack.Screen name="Detail" component={DetailScreen} options={{ headerShown: false }} />
       <Stack.Screen name="BookDetail" component={BookDetailScreen} options={{ headerShown: false }} />
       <Stack.Screen name="AuthorBooks" component={AuthorBooksScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ComicDetail" component={ComicDetailScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Season" component={SeasonScreen} options={{ title: '' }} />
       <Stack.Screen name="Person" component={PersonScreen} options={{ title: '' }} />
       <Stack.Screen name="CategoryList" component={CategoryListScreen} options={({ route }: any) => ({ title: route.params?.title ?? '' })} />

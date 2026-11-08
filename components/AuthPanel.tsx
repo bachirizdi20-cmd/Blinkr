@@ -4,6 +4,12 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import Svg, { Path } from "react-native-svg";
 import { AuthTextInput, type AuthTextInputHandle } from "@/components/AuthTextInput";
 import * as WebBrowser from "expo-web-browser";
+import {
+  GoogleOneTapSignIn,
+  isCancelledResponse,
+  isSuccessResponse,
+  statusCodes as googleStatusCodes,
+} from "react-native-nitro-google-signin";
 import { createUserWithEmailAndPassword, getRedirectResult, GoogleAuthProvider, reload, sendEmailVerification, sendPasswordResetEmail, signInWithCredential, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, updateProfile, type User } from "firebase/auth";
 import { trpc } from "@/lib/trpc";
 import * as Auth from "@/lib/_core/auth";

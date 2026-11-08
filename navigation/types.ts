@@ -2,6 +2,7 @@ import { MediaType, ReviewMediaType } from '../types/tmdb';
 import { FeedDescriptor } from '../lib/tmdb';
 import { PeopleFilter } from '../types/social';
 import { BookSummary } from '../types/books';
+import { ComicSummary } from '../types/comics';
 
 export type ContentStackParamList = {
   HomeMain: undefined;
@@ -12,6 +13,7 @@ export type ContentStackParamList = {
   Detail: { mediaType: MediaType; id: number };
   BookDetail: { workId: number; book?: Partial<BookSummary> };
   AuthorBooks: { authorName: string; excludeWorkId: number };
+  ComicDetail: { id: number; comic?: Partial<ComicSummary> };
   Season: { tvId: number; seasonNumber: number; tvName: string };
   Person: { personId: number; name: string };
   CategoryList: { title: string; feed: FeedDescriptor };

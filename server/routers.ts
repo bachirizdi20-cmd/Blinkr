@@ -15,6 +15,7 @@ import { createAuthToken, consumeAuthToken, markEmailVerified, updateUserPasswor
 import { sendAuthEmail } from "./email";
 import { verifyFirebaseIdToken } from "./_core/firebase-auth";
 import { HardcoverError, getHardcoverAuthorBooks, getHardcoverBook, getHardcoverSimilarBooks, getHardcoverTrendingBooks, searchHardcoverBooks } from "./hardcover";
+import { ComicVineError, getComicVineComic, getSimilarComicVine, getTrendingComicVine, searchComicVine } from "./comic-vine";
 
 const tmdbPathSchema = z.string().regex(
   /^\/(?:trending|movie|tv|discover|genre|search|person|authentication)(?:\/[A-Za-z0-9_,-]+)*$/,
@@ -431,6 +432,24 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_GATEWAY", message: "تعذر تحميل الكتب المشابهة من Hardcover." });
         }
       }),
+  }),
+  comics: router({
+    trending: publicProcedure.input(z.object({ limit: z.number().int().min(1).max(20).default(12) }).optional()).query(async ({ input }) => {
+      try { return await getTrendingComicVine(input?.limit ?? 12); }
+      catch (error) { throw new TRPCError({ code: error instanceof ComicVineError && (error.status === 401 || error.status === 403) ? "PRECONDITION_FAILED" : "BAD_GATEWAY", message: error instanceof ComicVineError ? error.message : "تعذر تحميل الكوميك الرائجة." }); }
+    }),
+    search: publicProcedure.input(z.object({ query: z.string().trim().min(2).max(120), page: z.number().int().min(1).max(100).default(1), limit: z.number().int().min(1).max(20).default(20) })).query(async ({ input }) => {
+      try { return await searchComicVine(input.query, input.page, input.limit); }
+      catch (error) { throw new TRPCError({ code: "BAD_GATEWAY", message: error instanceof ComicVineError ? error.message : "تعذر البحث في Comic Vine." }); }
+    }),
+    detail: publicProcedure.input(z.object({ id: z.number().int().positive() })).query(async ({ input }) => {
+      try { return await getComicVineComic(input.id); }
+      catch (error) { throw new TRPCError({ code: error instanceof ComicVineError && error.status === 404 ? "NOT_FOUND" : "BAD_GATEWAY", message: error instanceof ComicVineError ? error.message : "تعذر جلب تفاصيل الكوميك." }); }
+    }),
+    similar: publicProcedure.input(z.object({ id: z.number().int().positive(), title: z.string().min(1), publisher: z.string().nullable().optional(), limit: z.number().int().min(1).max(12).default(8) })).query(async ({ input }) => {
+      try { return await getSimilarComicVine(input.id, input.title, input.publisher ?? null, input.limit); }
+      catch (error) { throw new TRPCError({ code: "BAD_GATEWAY", message: error instanceof ComicVineError ? error.message : "تعذر تحميل الكوميك المشابهة." }); }
+    }),
   }),
   tmdb: router({
     get: publicProcedure
