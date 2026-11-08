@@ -4,16 +4,11 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import Svg, { Path } from "react-native-svg";
 import { AuthTextInput, type AuthTextInputHandle } from "@/components/AuthTextInput";
 import * as WebBrowser from "expo-web-browser";
-import {
-  GoogleOneTapSignIn,
-  isCancelledResponse,
-  isSuccessResponse,
-  statusCodes as googleStatusCodes,
-} from "react-native-nitro-google-signin";
 import { createUserWithEmailAndPassword, getRedirectResult, GoogleAuthProvider, reload, sendEmailVerification, sendPasswordResetEmail, signInWithCredential, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, updateProfile, type User } from "firebase/auth";
 import { trpc } from "@/lib/trpc";
 import * as Auth from "@/lib/_core/auth";
 import { firebaseAuth } from "@/lib/firebaseAuth";
+import { configureGoogleNative, googleStatusCodes, signInWithGoogleNative } from "@/lib/googleNative";
 import { googleOAuthClientIds } from "@/lib/firebaseApp";
 import { colors, fontSizes, radius, spacing } from "@/lib/theme";
 
@@ -135,10 +130,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
 
   React.useEffect(() => {
     if (Platform.OS === "web") return;
-    GoogleOneTapSignIn.configure({
-      webClientId: googleOAuthClientIds.web,
-      scopes: ["openid", "profile", "email"],
-    });
+    configureGoogleNative(googleOAuthClientIds.web);
   }, []);
 
   const completeFederatedSignIn = React.useCallback(async (user: User) => {
@@ -187,19 +179,9 @@ export function AuthPanel({ onAuthenticated }: Props) {
       setIsSubmitting(true);
       setIsGoogleSubmitting(true);
       try {
-        await GoogleOneTapSignIn.checkPlayServices();
-        const response = await GoogleOneTapSignIn.createAccount();
-        if (isCancelledResponse(response)) {
-          setError("أُغلقت نافذة اختيار حساب Google قبل إكمال تسجيل الدخول.");
-          return;
-        }
-        if (!isSuccessResponse(response)) {
-          setError("لم يُرجع Google رمز التحقق. حاول اختيار الحساب مرة أخرى.");
-          return;
-        }
-        const idToken = response.data.idToken;
+        const idToken = await signInWithGoogleNative();
         if (!idToken) {
-          setError("لم يُرجع Google رمز التحقق. تأكد من إعداد OAuth في Firebase.");
+          setError("أُغلقت نافذة اختيار حساب Google قبل إكمال تسجيل الدخول.");
           return;
         }
         const credential = GoogleAuthProvider.credential(idToken);
