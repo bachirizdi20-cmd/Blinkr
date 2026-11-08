@@ -20,6 +20,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import SectionRow from '../components/SectionRow';
 import BookCard from '../components/BookCard';
+import ComicCard from '../components/ComicCard';
 import ApiErrorState from '../components/ApiErrorState';
 import { ContentStackParamList } from '../navigation/types';
 import {
@@ -37,6 +38,7 @@ import { trpc } from '../lib/trpc';
 import { colors, fontSizes, spacing, radius } from '../lib/theme';
 import { resolveMediaUrl } from '../lib/media-url';
 import { BookSummary } from '../types/books';
+import { ComicSummary } from '../types/comics';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type Category = 'all' | 'movie' | 'tv' | 'anime';
@@ -59,6 +61,7 @@ export default function HomeScreen() {
   const { movieGenres } = useMetadata();
   const notificationsQuery = trpc.social.notifications.useQuery(undefined, { enabled: Boolean(user) });
   const hardcoverTrendingQuery = trpc.books.trending.useQuery({ limit: 100 }, { retry: 1 });
+  const comicTrendingQuery = trpc.comics.trending.useQuery({ limit: 12 }, { retry: 1 });
   const unreadNotifications = (notificationsQuery.data ?? []).filter((item) => !item.readAt).length;
   const [category, setCategory] = useState<Category>('all');
   const [refreshing, setRefreshing] = useState(false);
@@ -299,6 +302,11 @@ export default function HomeScreen() {
             ListEmptyComponent={<View style={styles.bookLoading}><Text style={styles.bookLoadingText}>لا توجد كتب رائجة بأغلفة متاحة حاليًا.</Text></View>}
             renderItem={({ item }) => <BookCard book={item} width={112} onPress={() => navigation.navigate('BookDetail', { workId: item.workId, book: item })} />}
           />}
+        </View>
+
+        <View style={styles.bookSection}>
+          <View style={styles.bookSectionHeader}><View><Text style={styles.bookSectionTitle}>الكوميك الرائجة</Text><Text style={styles.bookSectionSubtitle}>من Comic Vine</Text></View><Pressable onPress={() => navigation.navigate('Search')}><Text style={styles.bookSectionMore}>بحث</Text></Pressable></View>
+          {comicTrendingQuery.isLoading ? <View style={styles.bookLoading}><Text style={styles.bookLoadingText}>جارٍ تحميل الكوميك…</Text></View> : comicTrendingQuery.isError ? <Pressable onPress={() => comicTrendingQuery.refetch()} style={styles.bookError}><Text style={styles.bookErrorText}>تعذر تحميل الكوميك — اضغط لإعادة المحاولة.</Text></Pressable> : <FlatList data={(comicTrendingQuery.data ?? []) as ComicSummary[]} horizontal showsHorizontalScrollIndicator={false} keyExtractor={(comic) => `comic-${comic.id}`} contentContainerStyle={styles.bookList} renderItem={({ item }) => <ComicCard comic={item} width={112} onPress={() => navigation.navigate('ComicDetail', { id: item.id, comic: item })} />} />}
         </View>
 
         {error ? <ApiErrorState message={error} onRetry={load} /> : null}
