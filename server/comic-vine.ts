@@ -54,7 +54,7 @@ function text(value: unknown): string | null {
 }
 
 function idOf(value: unknown): number | null {
-  const id = typeof value === "number" ? value : typeof value === "string" && /^\d+$/.test(value) ? Number(value) : NaN;
+  const id = typeof value === "number" ? value : typeof value === "string" && /^\d+$/.test(value) ? Number(value) : typeof value === "string" && /\d+$/.test(value) ? Number(value.match(/\d+$/)?.[0]) : NaN;
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
