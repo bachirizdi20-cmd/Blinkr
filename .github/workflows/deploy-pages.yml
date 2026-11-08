@@ -21,12 +21,30 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Export Expo web app
+        env:
+          EXPO_BASE_URL: /Blinkr
+          EXPO_PUBLIC_API_BASE_URL: https://blinkr-5o8q.onrender.com
+        run: pnpm exec expo export --platform web --output-dir dist
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload static site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: dist
       - name: Deploy to Pages
         id: deployment
         uses: actions/deploy-pages@v4
