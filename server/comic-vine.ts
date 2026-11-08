@@ -148,8 +148,16 @@ export async function getComicVineComic(id: number): Promise<ComicVineComic> {
   const key = `detail:${id}`;
   const hit = cached<ComicVineComic>(key);
   if (hit) return hit;
-  const payload = await request<{ results?: unknown }>(`issue/${id}/`, {});
-  const result = normalize(payload.results);
+  let raw: unknown;
+  try {
+    const payload = await request<{ results?: unknown }>(`issue/${id}/`, {});
+    raw = payload.results;
+  } catch (error) {
+    if (!(error instanceof ComicVineError) || error.status === 401 || error.status === 403) throw error;
+    const payload = await request<{ results?: unknown }>(`volume/${id}/`, {});
+    raw = payload.results;
+  }
+  const result = normalize(raw);
   if (!result) throw new ComicVineError("لم يُعثر على الكوميك في Comic Vine.", 404);
   put(key, result, DETAIL_TTL);
   return result;
