@@ -99,6 +99,7 @@ const config: ExpoConfig = {
   plugins: [
     "expo-router",
     "expo-font",
+    "expo-asset",
     "expo-web-browser",
     "react-native-nitro-google-signin",
     [
