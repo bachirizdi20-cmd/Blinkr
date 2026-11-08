@@ -127,7 +127,9 @@ export async function searchComicVine(query: string, page = 1, limit = 20): Prom
   const hit = cached<ComicVinePage>(key);
   if (hit) return hit;
   const payload = await request<{ number_of_total_results?: number; results?: unknown[] }>("search/", { query, resources: "issue,volume", page, limit });
-  const results = (payload.results ?? []).map(normalize).filter((item): item is ComicVineComic => item !== null);
+  const results = (payload.results ?? [])
+    .map(normalize)
+    .filter((item): item is ComicVineComic => item !== null && Boolean(item.coverUrl));
   const totalResults = payload.number_of_total_results ?? results.length;
   const result = { results, page, limit, totalResults, totalPages: Math.max(1, Math.ceil(totalResults / limit)) };
   put(key, result);
@@ -139,7 +141,9 @@ export async function getTrendingComicVine(limit = 12): Promise<ComicVineComic[]
   const hit = cached<ComicVineComic[]>(key);
   if (hit) return hit;
   const payload = await request<{ results?: unknown[] }>("volumes/", { sort: "rating:desc", limit, page: 1 });
-  const results = (payload.results ?? []).map(normalize).filter((item): item is ComicVineComic => item !== null);
+  const results = (payload.results ?? [])
+    .map(normalize)
+    .filter((item): item is ComicVineComic => item !== null && Boolean(item.coverUrl));
   put(key, results);
   return results;
 }
@@ -166,5 +170,5 @@ export async function getComicVineComic(id: number): Promise<ComicVineComic> {
 export async function getSimilarComicVine(id: number, title: string, publisher: string | null, limit = 8): Promise<ComicVineComic[]> {
   const query = publisher || title.split(/[:#-]/)[0].trim();
   const page = await searchComicVine(query || title, 1, limit + 4);
-  return page.results.filter((item) => item.id !== id).slice(0, limit);
+  return page.results.filter((item) => item.id !== id && Boolean(item.coverUrl)).slice(0, limit);
 }
