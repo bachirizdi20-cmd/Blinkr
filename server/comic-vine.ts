@@ -150,11 +150,11 @@ export async function getComicVineComic(id: number): Promise<ComicVineComic> {
   if (hit) return hit;
   let raw: unknown;
   try {
-    const payload = await request<{ results?: unknown }>(`issue/${id}/`, {});
+    const payload = await request<{ results?: unknown }>(`issue/4000-${id}/`, {});
     raw = payload.results;
   } catch (error) {
     if (!(error instanceof ComicVineError) || error.status === 401 || error.status === 403) throw error;
-    const payload = await request<{ results?: unknown }>(`volume/${id}/`, {});
+    const payload = await request<{ results?: unknown }>(`volume/4050-${id}/`, {});
     raw = payload.results;
   }
   const result = normalize(raw);
