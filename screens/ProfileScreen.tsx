@@ -77,14 +77,14 @@ export default function ProfileScreen() {
   if (!user) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <View style={styles.authScreen}>
+        <ScrollView contentContainerStyle={styles.authScreen} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <View style={styles.authIcon}><Ionicons name="person-circle-outline" size={54} color={colors.accent} /></View>
           <Text style={styles.authTitle}>مساحتك في Blinkr</Text>
           <Text style={styles.authBody}>سجّل الدخول لحفظ يومياتك وقوائم المشاهدة ومتابعة أصدقائك ومزامنة نشاطك.</Text>
           {!!authError && <Text style={styles.authError}>تعذّر التحقق من جلستك. حاول مرة أخرى.</Text>}
-          <AuthPanel onAuthenticated={refresh} />
+          <View style={styles.authPanelCard}><AuthPanel onAuthenticated={refresh} /></View>
           <Text style={styles.authNote}>جلستك محمية ويمكن مزامنتها عبر أجهزتك.</Text>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -327,11 +327,12 @@ const styles = StyleSheet.create({
   menuDivider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.xs, marginHorizontal: spacing.md },
   authLoading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl },
   authLoadingText: { color: colors.textDim, fontSize: fontSizes.sm },
-  authScreen: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl, paddingBottom: spacing.xxl },
+  authScreen: { flexGrow: 1, width: '100%', alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing.xxl },
   authIcon: { width: 94, height: 94, borderRadius: 47, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.lg },
   authTitle: { color: colors.text, fontSize: fontSizes.xxl, fontWeight: '800', textAlign: 'center' },
   authBody: { color: colors.textDim, fontSize: fontSizes.md, lineHeight: 23, textAlign: 'center', marginTop: spacing.sm, maxWidth: 340 },
   authError: { color: colors.danger, fontSize: fontSizes.sm, textAlign: 'center', marginTop: spacing.md },
+  authPanelCard: { width: '100%', maxWidth: 420, marginTop: spacing.lg, padding: spacing.lg, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl },
   authButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, minHeight: 50, width: '100%', maxWidth: 340, backgroundColor: colors.accent, borderRadius: radius.pill, marginTop: spacing.xl, paddingHorizontal: spacing.lg },
   authButtonText: { color: colors.bg, fontSize: fontSizes.md, fontWeight: '800' },
   authNote: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: spacing.md },

@@ -19,7 +19,9 @@ export const ENV = {
   tmdbApiReadToken: process.env.TMDB_API_READ_TOKEN ?? "",
   hardcoverApiToken: [process.env.Hardcover_API, process.env.HARDCOVER_API_TOKEN, process.env.HARDCOVER_API_KEY].find((value) => Boolean(value?.trim()))?.trim() ?? "",
   comicVineApiKey: process.env.COMICVIN_API ?? process.env.COMICVINE_API_KEY ?? process.env.COMIC_VINE_API_KEY ?? process.env.ComicVine_API ?? process.env.Comic_Vine_API ?? process.env.Comic_Vine ?? "",
-  firebaseProjectId: process.env.FIREBASE_PROJECT_ID ?? "",
+  // Keep the public Firebase project ID as a safe fallback so Google sessions
+  // continue to verify if Render's optional variable is missing after deploy.
+  firebaseProjectId: process.env.FIREBASE_PROJECT_ID?.trim() || "blinkr-c7f8d",
   databaseHostOverride: process.env.DATABASE_HOST_OVERRIDE ?? "",
   databasePortOverride: process.env.DATABASE_PORT_OVERRIDE ?? "",
   // OCI Object Storage (S3-compatible API) - used to replace Manus Forge storage
