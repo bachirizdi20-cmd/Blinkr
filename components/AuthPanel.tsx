@@ -51,6 +51,7 @@ function friendlyAuthError(error: unknown, stage?: GoogleFailureStage) {
   if (code === googleStatusCodes.DEVELOPER_ERROR) return "إعداد Google Android غير متطابق. تأكد من package name وبصمة SHA-1 ثم أعد تنزيل google-services.json.";
   if (code === googleStatusCodes.PLAY_SERVICES_NOT_AVAILABLE) return "خدمات Google Play غير متاحة أو قديمة على هذا الجهاز.";
   if (code === googleStatusCodes.SIGN_IN_CANCELLED) return "أُغلقت نافذة اختيار حساب Google قبل إكمال تسجيل الدخول.";
+  if (stage === "session" && code === "auth/invalid-credential") return "تم اختيار حساب Google، لكن Firebase رفض بيانات الاعتماد. حدّث التطبيق وحاول اختيار الحساب مرة أخرى.";
   if (code === "auth/invalid-email") return "صيغة البريد الإلكتروني غير صحيحة.";
   if (code === "auth/weak-password") return "كلمة المرور ضعيفة؛ اختر كلمة مرور أقوى من 8 أحرف.";
   if (normalized.includes("too many") || normalized.includes("too-many-requests")) return "محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.";
@@ -502,7 +503,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
 
       {mode === "login" ? <Pressable onPress={() => changeMode("forgot")} disabled={busy} style={styles.switch}><Text style={styles.switchText}>نسيت كلمة المرور؟</Text></Pressable> : null}
       {isForgot ? <Pressable onPress={() => changeMode("login")} disabled={busy} style={styles.switch}><Text style={styles.switchText}>العودة إلى تسجيل الدخول</Text></Pressable> : null}
-      <Pressable onPress={() => changeMode(isRegister ? "login" : "register")} disabled={busy} style={styles.switch}>
+      <Pressable onPress={() => changeMode(isRegister ? "login" : "register")} disabled={busy} style={[styles.switch, styles.modeSwitch]}>
         <Text style={styles.switchText}>{isRegister ? "لديك حساب بالفعل؟ سجّل الدخول" : "مستخدم جديد؟ أنشئ حسابًا"}</Text>
       </Pressable>
       {!isForgot ? <Text style={styles.passwordHint}>كلمة المرور يجب أن تحتوي على 8 أحرف على الأقل.</Text> : null}
@@ -529,13 +530,14 @@ const styles = {
   googleRedirectFallbackText: { color: colors.accent, fontSize: fontSizes.sm, fontWeight: "800" as const, writingDirection: "rtl" as const },
   noticeBox: { flexDirection: "row-reverse" as const, alignItems: "flex-start" as const, gap: 9, backgroundColor: "rgba(51, 214, 166, 0.10)", borderWidth: 1, borderColor: "rgba(51, 214, 166, 0.34)", borderRadius: radius.md, padding: spacing.md, marginTop: spacing.lg },
   noticeText: { flex: 1, color: colors.text, fontSize: fontSizes.sm, lineHeight: 22, textAlign: "right" as const, writingDirection: "rtl" as const },
-  primary: { marginTop: spacing.xl, backgroundColor: colors.accent, borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: 15, alignItems: "center" as const, justifyContent: "center" as const, minHeight: 56 },
-  primaryText: { color: "#06120F", fontSize: fontSizes.md, fontWeight: "900" as const, lineHeight: 22, writingDirection: "rtl" as const },
-  switch: { alignItems: "center" as const, justifyContent: "center" as const, minHeight: 42, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  primary: { width: "100%" as const, alignSelf: "center" as const, marginTop: spacing.xl, backgroundColor: colors.accent, borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: 15, alignItems: "center" as const, justifyContent: "center" as const, minHeight: 58, borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" },
+  primaryText: { color: "#06120F", fontSize: fontSizes.md, fontWeight: "900" as const, lineHeight: 22, textAlign: "center" as const, writingDirection: "rtl" as const },
+  switch: { width: "100%" as const, alignSelf: "center" as const, alignItems: "center" as const, justifyContent: "center" as const, minHeight: 42, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  modeSwitch: { minHeight: 50, marginTop: spacing.sm, borderWidth: 1, borderColor: "rgba(51, 214, 166, 0.55)", borderRadius: radius.md, backgroundColor: "rgba(51, 214, 166, 0.08)" },
   switchText: { color: colors.accent, fontSize: fontSizes.sm, fontWeight: "700" as const, textAlign: "center" as const, writingDirection: "rtl" as const },
   passwordHint: { color: colors.textDim, fontSize: 12, lineHeight: 18, textAlign: "center" as const, marginTop: spacing.xs, writingDirection: "rtl" as const },
   socialButtons: { width: "100%" as const, marginTop: spacing.xs },
-  socialButton: { width: "100%" as const, flexDirection: "row-reverse" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 10, minHeight: 56, paddingHorizontal: spacing.lg, borderWidth: 1, borderColor: "#D2D7DE", borderRadius: radius.md, backgroundColor: "#FFFFFF" },
+  socialButton: { width: "100%" as const, alignSelf: "center" as const, flexDirection: "row-reverse" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 10, minHeight: 58, paddingHorizontal: spacing.lg, borderWidth: 1, borderColor: "#D2D7DE", borderRadius: radius.md, backgroundColor: "#FFFFFF" },
   socialButtonText: { color: "#1F2933", fontSize: fontSizes.md, fontWeight: "800" as const, lineHeight: 22, textAlign: "center" as const, writingDirection: "rtl" as const },
   socialDivider: { flexDirection: "row" as const, alignItems: "center" as const, gap: spacing.sm, marginTop: spacing.lg, marginBottom: spacing.xs },
   socialDividerLine: { flex: 1, height: 1, backgroundColor: colors.borderLight },
