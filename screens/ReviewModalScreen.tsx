@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
@@ -43,7 +42,7 @@ export default function ReviewModalScreen() {
   const [rating, setRating] = useState(existing?.rating ?? 0);
   const [review, setReview] = useState(existing?.review ?? '');
   const [date, setDate] = useState(existing?.watchedDate ?? new Date().toISOString().slice(0, 10));
-  const [spoiler, setSpoiler] = useState(existing?.spoiler ?? false);
+  const spoiler = false;
   const [saving, setSaving] = useState(false);
   const [edited, setEdited] = useState(false);
   const listCount = lib.lists.filter((list) => lib.isItemInList(list.id, mediaType, mediaId)).length;
@@ -56,7 +55,6 @@ export default function ReviewModalScreen() {
     if (!saved || existing || edited) return;
     setRating(Number(saved.rating) || 0);
     setReview(saved.review ?? '');
-    setSpoiler(Boolean(saved.spoiler));
     if (saved.watchedDate) setDate(new Date(saved.watchedDate).toISOString().slice(0, 10));
   }, [savedReviewQuery.data, existing, edited]);
 
@@ -134,12 +132,11 @@ export default function ReviewModalScreen() {
             <Pressable onPress={() => navigation.goBack()} style={styles.closeButton} hitSlop={8} accessibilityLabel="إغلاق">
               <Ionicons name="close" size={28} color={colors.text} />
             </Pressable>
-            <Text style={styles.topTitle}>مراجعة جديدة</Text>
+            <Text style={styles.topTitle}>{mediaLabel}</Text>
             <View style={styles.typeBadge}><Ionicons name={mediaType === 'book' ? 'book-outline' : 'film-outline'} size={14} color={colors.accent} /><Text style={styles.typeText}>{mediaLabel}</Text></View>
           </View>
 
           <Text style={styles.heading}>{isEditing ? 'عدّل رأيك' : 'شارك رأيك'}</Text>
-          <Text style={styles.subtitle}>مراجعتك ستكون ظاهرة للجميع في Blinkr.</Text>
 
           <View style={styles.mediaCard}>
             {imageUri ? <Image source={{ uri: imageUri }} style={styles.mediaCover} contentFit="cover" /> : <View style={[styles.mediaCover, styles.coverFallback]}><Ionicons name={mediaType === 'book' ? 'book-outline' : 'film-outline'} size={30} color={colors.textFaint} /></View>}
@@ -152,24 +149,13 @@ export default function ReviewModalScreen() {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>تقييمك من 10</Text>
-            <View style={styles.ratingRow}>
-              {Array.from({ length: 10 }, (_, index) => {
-                const value = index + 1;
-                return <Pressable key={value} onPress={() => { setRating(value); setEdited(true); }} hitSlop={4} accessibilityLabel={`تقييم ${value} من 10`}><Ionicons name={value <= rating ? 'star' : 'star-outline'} size={27} color={value <= rating ? colors.gold : colors.textFaint} /></Pressable>;
-              })}
-            </View>
+            <View style={styles.ratingControl}><Pressable style={styles.stepButton} onPress={() => { setRating(Math.max(0, rating - 0.5)); setEdited(true); }}><Text style={styles.stepText}>−</Text></Pressable><View style={styles.ratingValue}><Text style={styles.ratingNumber}>{String(rating).replace('.', ',')}/10</Text><Ionicons name="star" size={22} color={colors.accent} /></View><Pressable style={styles.stepButton} onPress={() => { setRating(Math.min(10, rating + 0.5)); setEdited(true); }}><Text style={styles.stepText}>+</Text></Pressable></View>
             {rating > 0 ? <Pressable onPress={() => { setRating(0); setEdited(true); }} style={styles.clearRating}><Text style={styles.clearRatingText}>إزالة التقييم</Text></Pressable> : null}
           </View>
 
           <View style={styles.section}>
             <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>مراجعتك</Text><Text style={styles.counter}>{review.length}/1000</Text></View>
             <TextInput style={styles.reviewInput} value={review} onChangeText={(value) => { setReview(value.slice(0, 1000)); setEdited(true); }} placeholder="ما رأيك في هذا العنوان؟" placeholderTextColor={colors.textFaint} multiline textAlignVertical="top" />
-            <View style={styles.spoilerRow}><View style={styles.spoilerCopy}><Ionicons name="warning-outline" size={18} color={spoiler ? colors.accent2 : colors.textFaint} /><View><Text style={styles.spoilerTitle}>تحتوي على حرق للأحداث</Text><Text style={styles.spoilerHint}>سنخفي نص المراجعة حتى يختار القارئ إظهارها.</Text></View></View><Switch value={spoiler} onValueChange={(value) => { setSpoiler(value); setEdited(true); }} trackColor={{ false: colors.surfaceHigh, true: colors.accent }} thumbColor={colors.text} /></View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{mediaType === 'book' ? 'تاريخ القراءة' : 'تاريخ المشاهدة'}</Text>
-            <TextInput style={styles.dateInput} value={date} onChangeText={(value) => { setDate(value); setEdited(true); }} placeholder="YYYY-MM-DD" placeholderTextColor={colors.textFaint} keyboardType="numbers-and-punctuation" returnKeyType="done" />
           </View>
 
           <View style={styles.section}>
@@ -179,8 +165,6 @@ export default function ReviewModalScreen() {
               <Ionicons name="chevron-forward" size={19} color={colors.textDim} />
             </Pressable>
           </View>
-
-          <View style={styles.publicNote}><Ionicons name="globe-outline" size={19} color={colors.accent} /><Text style={styles.publicText}>النشر عام دائمًا؛ يمكن للجميع اكتشاف هذه المراجعة وعرضها.</Text></View>
 
           <Pressable onPress={handleSave} disabled={saving} style={({ pressed }) => [styles.postButton, pressed && styles.postPressed, saving && styles.disabled]}>
             {saving ? <ActivityIndicator color={colors.bg} /> : <Ionicons name="send" size={18} color={colors.bg} />}
@@ -215,7 +199,7 @@ const styles = StyleSheet.create({
   section: { marginTop: spacing.lg, paddingHorizontal: spacing.lg },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sectionTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '900', textAlign: 'right' },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 1, marginTop: spacing.md },
+  ratingRow: { marginTop: spacing.md }, ratingControl: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, stepButton: { width: 48, height: 42, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border }, stepText: { color: colors.accent, fontSize: 28, fontWeight: '700' }, ratingValue: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm }, ratingNumber: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '900' },
   clearRating: { alignSelf: 'flex-start', marginTop: spacing.xs, paddingVertical: 4 },
   clearRatingText: { color: colors.textFaint, fontSize: fontSizes.xs },
   counter: { color: colors.textDim, fontSize: fontSizes.xs },

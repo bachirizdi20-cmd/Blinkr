@@ -34,9 +34,10 @@ export default function SearchScreen() {
   const route = useRoute<SearchRoute>();
   const mediaOnly = Boolean(route.params?.mediaOnly);
   const booksTrending = Boolean(route.params?.booksTrending);
+  const comicsTrending = Boolean(route.params?.comicsTrending);
   const { user: authUser } = useAuth();
   const [query, setQuery] = useState('');
-  const [tab, setTab] = useState<Tab>(booksTrending ? 'books' : mediaOnly ? 'movies' : 'all');
+  const [tab, setTab] = useState<Tab>(booksTrending ? 'books' : comicsTrending ? 'comics' : mediaOnly ? 'movies' : 'all');
   const [mediaResults, setMediaResults] = useState<NormalizedItem[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
@@ -60,12 +61,13 @@ export default function SearchScreen() {
   const reviewsQuery = trpc.social.searchReviews.useQuery({ query: debouncedQuery }, { enabled: Boolean(authUser) && shouldSearch && !mediaOnly, retry: 1 });
   const booksQuery = trpc.books.search.useQuery(
     { query: debouncedQuery, page: bookPage, limit: 20 },
-    { enabled: shouldSearch && !mediaOnly && !booksTrending && (tab === 'all' || tab === 'books'), retry: 1 },
+    { enabled: shouldSearch && !mediaOnly && !booksTrending && !comicsTrending && (tab === 'all' || tab === 'books'), retry: 1 },
   );
   const trendingBooksQuery = trpc.books.trending.useQuery({ limit: 100 }, { enabled: booksTrending, retry: 1 });
-  const comicsQuery = trpc.comics.search.useQuery({ query: debouncedQuery, page: comicPage, limit: 20 }, { enabled: shouldSearch && !mediaOnly && (tab === 'all' || tab === 'comics'), retry: 1 });
+  const trendingComicsQuery = trpc.comics.trending.useQuery({ limit: 20 }, { enabled: comicsTrending, retry: 1 });
+  const comicsQuery = trpc.comics.search.useQuery({ query: debouncedQuery, page: comicPage, limit: 20 }, { enabled: shouldSearch && !mediaOnly && !comicsTrending && (tab === 'all' || tab === 'comics'), retry: 1 });
   const recentStorageKey = authUser ? `@blinkr/recent-searches/${authUser.id}` : null;
-  const visibleTabs = booksTrending ? tabs.filter((item) => item.key === 'books') : mediaOnly ? tabs.filter((item) => item.key === 'movies' || item.key === 'tv') : tabs;
+  const visibleTabs = booksTrending ? tabs.filter((item) => item.key === 'books') : comicsTrending ? tabs.filter((item) => item.key === 'comics') : mediaOnly ? tabs.filter((item) => item.key === 'movies' || item.key === 'tv') : tabs;
 
   useEffect(() => {
     let active = true;
@@ -91,11 +93,11 @@ export default function SearchScreen() {
   const updateQuery = (value: string) => { setQuery(value); setBookPage(1); setComicPage(1); setBookResults([]); setComicResults([]); };
 
   useEffect(() => {
-    setTab(booksTrending ? 'books' : mediaOnly ? 'movies' : 'all');
+    setTab(booksTrending ? 'books' : comicsTrending ? 'comics' : mediaOnly ? 'movies' : 'all');
     setQuery('');
     setDebouncedQuery('');
     setSearchFocused(false);
-  }, [mediaOnly]);
+  }, [mediaOnly, booksTrending, comicsTrending]);
 
   useEffect(() => {
     if (!shouldSearch) return;
@@ -140,25 +142,26 @@ export default function SearchScreen() {
   const people = peopleQuery.data ?? [];
   const reviews = reviewsQuery.data ?? [];
   const books = booksTrending ? ((trendingBooksQuery.data ?? []) as BookSummary[]).filter((book) => Boolean(book.coverUrl)) : bookResults.filter((book) => Boolean(book.coverUrl));
-  const comics = comicResults;
-  const isLoading = booksTrending ? trendingBooksQuery.isLoading : tab === 'all'
+  const comics = comicsTrending ? ((trendingComicsQuery.data ?? []) as ComicSummary[]).filter((comic) => Boolean(comic.coverUrl)) : comicResults;
+  const isLoading = booksTrending ? trendingBooksQuery.isLoading : comicsTrending ? trendingComicsQuery.isLoading : tab === 'all'
     ? mediaLoading || (booksQuery.isLoading && books.length === 0) || comicsQuery.isLoading || (Boolean(authUser) && (peopleQuery.isLoading || reviewsQuery.isLoading))
     : tab === 'people' ? peopleQuery.isLoading
       : tab === 'reviews' ? reviewsQuery.isLoading
         : tab === 'books' ? booksQuery.isLoading && books.length === 0
           : tab === 'comics' ? comicsQuery.isLoading
           : mediaLoading;
-  const hasError = booksTrending ? trendingBooksQuery.error : tab === 'people' ? peopleQuery.error
+  const hasError = booksTrending ? trendingBooksQuery.error : comicsTrending ? trendingComicsQuery.error : tab === 'people' ? peopleQuery.error
     : tab === 'reviews' ? reviewsQuery.error
       : tab === 'books' ? booksQuery.error
         : tab === 'comics' ? comicsQuery.error
         : tab === 'movies' || tab === 'tv' ? mediaError
           : null;
-  const allHasError = Boolean(mediaError || booksQuery.error || trendingBooksQuery.error || comicsQuery.error || (authUser && (peopleQuery.error || reviewsQuery.error)));
+  const allHasError = Boolean(mediaError || booksQuery.error || trendingBooksQuery.error || trendingComicsQuery.error || comicsQuery.error || (authUser && (peopleQuery.error || reviewsQuery.error)));
   const hasAnySearchResults = media.length > 0 || people.length > 0 || reviews.length > 0 || books.length > 0 || comics.length > 0;
   const fatalSearchError = tab === 'all' ? allHasError && !hasAnySearchResults : Boolean(hasError) && (tab !== 'books' || books.length === 0) && (tab !== 'comics' || comics.length === 0);
   const retrySearch = () => {
     if (booksTrending) { void trendingBooksQuery.refetch(); return; }
+    if (comicsTrending) { void trendingComicsQuery.refetch(); return; }
     if (tab === 'people') { void peopleQuery.refetch(); return; }
     if (tab === 'reviews') { void reviewsQuery.refetch(); return; }
     if (tab === 'books') { void booksQuery.refetch(); return; }
@@ -179,8 +182,8 @@ export default function SearchScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <Text style={styles.header}>{booksTrending ? 'الكتب الرائجة عالميًا' : mediaOnly ? 'الأفلام والمسلسلات' : 'بحث'}</Text>
-      {!booksTrending ? <View style={styles.searchBar}><Ionicons name="search" size={19} color={colors.textFaint} /><TextInput style={styles.input} placeholder={mediaOnly ? 'ابحث عن فيلم أو مسلسل…' : 'ابحث عن أشخاص أو مراجعات أو أفلام أو مسلسلات أو كتب…'} placeholderTextColor={colors.textFaint} value={query} onChangeText={updateQuery} onFocus={() => setSearchFocused(true)} onSubmitEditing={() => { commitSearch(query); setTab(mediaOnly ? 'movies' : 'all'); }} returnKeyType="search" autoCorrect={false} selectionColor={colors.accent} cursorColor={colors.accent} />{query ? <Pressable onPress={() => updateQuery('')} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textFaint} /></Pressable> : null}</View> : null}
+      <Text style={styles.header}>{booksTrending ? 'الكتب الرائجة عالميًا' : comicsTrending ? 'الكوميك الرائجة' : mediaOnly ? 'الأفلام والمسلسلات' : 'بحث'}</Text>
+      {!booksTrending && !comicsTrending ? <View style={styles.searchBar}><Ionicons name="search" size={19} color={colors.textFaint} /><TextInput style={styles.input} placeholder={mediaOnly ? 'ابحث عن فيلم أو مسلسل…' : 'ابحث عن أشخاص أو مراجعات أو أفلام أو مسلسلات أو كتب…'} placeholderTextColor={colors.textFaint} value={query} onChangeText={updateQuery} onFocus={() => setSearchFocused(true)} onSubmitEditing={() => { commitSearch(query); setTab(mediaOnly ? 'movies' : 'all'); }} returnKeyType="search" autoCorrect={false} selectionColor={colors.accent} cursorColor={colors.accent} />{query ? <Pressable onPress={() => updateQuery('')} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textFaint} /></Pressable> : null}</View> : null}
       {searchFocused && !trimmed && recentSearches.length > 0 ? <View style={styles.recentPanel}><View style={styles.recentHeader}><Text style={styles.recentTitle}>عمليات البحث الأخيرة</Text><Pressable onPress={clearRecentSearches}><Text style={styles.clearRecent}>مسح الكل</Text></Pressable></View>{recentSearches.map((item) => <View key={item} style={styles.recentRow}><Pressable style={styles.recentSelect} onPress={() => { updateQuery(item); setTab(mediaOnly ? 'movies' : 'all'); commitSearch(item); }}><Ionicons name="time-outline" size={16} color={colors.textFaint} /><Text style={styles.recentText} numberOfLines={1}>{item}</Text></Pressable><Pressable onPress={() => removeRecentSearch(item)} hitSlop={8} accessibilityLabel={`حذف ${item} من عمليات البحث الأخيرة`}><Ionicons name="close" size={16} color={colors.textFaint} /></Pressable></View>)}</View> : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
         {visibleTabs.map((item) => <Pressable key={item.key} onPress={() => setTab(item.key)} style={[styles.tab, tab === item.key && styles.tabActive]}><Text style={[styles.tabText, tab === item.key && styles.tabTextActive]}>{item.label}</Text></Pressable>)}
@@ -191,7 +194,7 @@ export default function SearchScreen() {
           {(tab === 'all' || tab === 'people') && people.length > 0 ? <Section title="الأشخاص" action={() => setTab('people')}><View>{people.slice(0, tab === 'people' ? 50 : 5).map((person: any) => <Pressable key={person.id} style={styles.personRow} onPress={() => navigation.navigate('UserProfile', { userId: String(person.id) })}><UserAvatar name={person.name || person.username} color={colors.accent} size={42} /><View style={styles.resultCopy}><Text style={styles.resultTitle}>{person.name || person.username}</Text><Text style={styles.resultMeta}>@{person.username}</Text>{person.bio ? <Text style={styles.resultSub} numberOfLines={1}>{person.bio}</Text> : null}</View><Ionicons name="chevron-forward" size={18} color={colors.textFaint} /></Pressable>)}</View></Section> : null}
           {(tab === 'all' || tab === 'movies' || tab === 'tv') && media.length > 0 ? <Section title={tab === 'all' ? 'الأفلام والمسلسلات' : tab === 'movies' ? 'الأفلام' : 'المسلسلات'} action={() => setTab(tab === 'tv' ? 'tv' : 'movies')}><View style={styles.mediaGrid}>{media.slice(0, tab === 'all' ? 6 : 30).map((item) => <PosterCard key={`${item.mediaType}-${item.id}`} item={item} width={108} onPress={() => navigation.navigate('Detail', { mediaType: item.mediaType, id: item.id })} />)}</View></Section> : null}
           {(tab === 'all' || tab === 'books') && books.length > 0 ? <Section title={booksTrending ? 'الكتب الرائجة عالميًا' : 'الكتب'} action={() => setTab('books')}><View style={styles.mediaGrid}>{(tab === 'all' ? books.slice(0, 6) : books).map((book) => <BookCard key={book.workId} book={book} width={108} onPress={() => navigation.navigate('BookDetail', { workId: book.workId, book })} />)}</View></Section> : null}
-          {(tab === 'all' || tab === 'comics') && comics.length > 0 ? <Section title="الكوميك" action={() => setTab('comics')}><View style={styles.mediaGrid}>{comics.slice(0, tab === 'all' ? 6 : 20).map((comic) => <ComicCard key={comic.id} comic={comic} width={108} onPress={() => navigation.navigate('ComicDetail', { id: comic.id, comic })} />)}</View></Section> : null}
+          {(tab === 'all' || tab === 'comics') && comics.length > 0 ? <Section title={comicsTrending ? 'الكوميك الرائجة' : 'الكوميك'} action={() => setTab('comics')}><View style={styles.mediaGrid}>{comics.slice(0, tab === 'all' ? 6 : 20).map((comic) => <ComicCard key={comic.id} comic={comic} width={108} onPress={() => navigation.navigate('ComicDetail', { id: comic.id, comic })} />)}</View></Section> : null}
           {tab === 'books' && booksQuery.data && bookPage < booksQuery.data.totalPages ? <Pressable disabled={booksQuery.isFetching} style={styles.loadMore} onPress={() => setBookPage((page) => page + 1)}>{booksQuery.isFetching ? <ActivityIndicator color={colors.accent} /> : <Text style={styles.loadMoreText}>عرض المزيد من الكتب</Text>}</Pressable> : null}
           {tab === 'comics' && comicsQuery.data && comicPage < comicsQuery.data.totalPages ? <Pressable disabled={comicsQuery.isFetching} style={styles.loadMore} onPress={() => setComicPage((page) => page + 1)}>{comicsQuery.isFetching ? <ActivityIndicator color={colors.accent} /> : <Text style={styles.loadMoreText}>عرض المزيد من الكوميك</Text>}</Pressable> : null}
           {tab === 'books' && booksQuery.isFetching && !booksQuery.data && books.length > 0 ? <ActivityIndicator color={colors.accent} /> : null}
