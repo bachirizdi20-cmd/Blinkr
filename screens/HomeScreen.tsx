@@ -39,6 +39,7 @@ import { colors, fontSizes, spacing, radius } from '../lib/theme';
 import { resolveMediaUrl } from '../lib/media-url';
 import { BookSummary } from '../types/books';
 import { ComicSummary } from '../types/comics';
+import { PlatformAlert as Alert } from '../lib/platform-alert';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type Category = 'all' | 'movie' | 'tv' | 'anime';
@@ -305,7 +306,7 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.bookSection}>
-          <View style={styles.bookSectionHeader}><View><Text style={styles.bookSectionTitle}>الكوميك الرائجة</Text><Text style={styles.bookSectionSubtitle}>من Comic Vine</Text></View><Pressable onPress={() => navigation.navigate('Search')}><Text style={styles.bookSectionMore}>بحث</Text></Pressable></View>
+          <View style={styles.bookSectionHeader}><View><Text style={styles.bookSectionTitle}>الكوميك الرائجة</Text><Text style={styles.bookSectionSubtitle}>من Comic Vine</Text></View><Pressable onPress={() => navigation.navigate('Search', { comicsTrending: true })}><Text style={styles.bookSectionMore}>See All</Text></Pressable></View>
           {comicTrendingQuery.isLoading ? <View style={styles.bookLoading}><Text style={styles.bookLoadingText}>جارٍ تحميل الكوميك…</Text></View> : comicTrendingQuery.isError ? <Pressable onPress={() => comicTrendingQuery.refetch()} style={styles.bookError}><Text style={styles.bookErrorText}>تعذر تحميل الكوميك — اضغط لإعادة المحاولة.</Text></Pressable> : <FlatList data={((comicTrendingQuery.data ?? []) as ComicSummary[]).filter((comic) => Boolean(comic.coverUrl))} horizontal showsHorizontalScrollIndicator={false} keyExtractor={(comic) => `comic-${comic.id}`} contentContainerStyle={styles.bookList} ListEmptyComponent={<View style={styles.bookLoading}><Text style={styles.bookLoadingText}>لا توجد كوميك بأغلفة متاحة حاليًا.</Text></View>} renderItem={({ item }) => <ComicCard comic={item} width={112} onPress={() => navigation.navigate('ComicDetail', { id: item.id, comic: item })} />} />}
         </View>
 
@@ -400,6 +401,7 @@ function FeedReviewCard({
   const addCommentMutation = trpc.social.addComment.useMutation({
     onSuccess: () => { setCommentText(''); commentsQuery.refetch(); onChanged(); },
   });
+  const reportMutation = trpc.social.report.useMutation({ onSuccess: () => Alert.alert('تم إرسال البلاغ', 'شكرًا، سيراجع فريق Blinkr البلاغ.') });
 
   const submitComment = () => {
     if (!commentText.trim()) return;
@@ -408,6 +410,10 @@ function FeedReviewCard({
 
   const poster = catalogPosterUrl(review.mediaType, review.posterPath, 'w342');
   const createdAtMs = new Date(review.createdAt).getTime();
+  const openReviewMenu = () => Alert.alert('خيارات المراجعة', 'اختر إجراءً', [
+    { text: 'إبلاغ', onPress: () => reportMutation.mutate({ targetType: 'review', targetId: review.id, reason: 'other' }) },
+    { text: 'إلغاء', style: 'cancel' },
+  ]);
 
   return (
     <Animated.View
@@ -425,13 +431,14 @@ function FeedReviewCard({
         </View>
         <View style={styles.socialAuthorBlock}>
           <Text style={styles.socialAuthor}>{displayName ?? username ?? 'مستخدم'}</Text>
-          <Text style={styles.socialHandle}>@{username ?? 'مستخدم'} · {formatSocialTime(createdAtMs)}</Text>
+          <Text style={styles.socialHandle}>{formatSocialTime(createdAtMs)}</Text>
         </View>
         <View style={styles.socialRating}><Ionicons name="star" size={13} color={colors.gold} /><Text style={styles.socialRatingText}>{review.rating}/10</Text></View>
+        <Pressable onPress={openReviewMenu} accessibilityLabel="خيارات المراجعة"><Ionicons name="ellipsis-vertical" size={20} color={colors.textDim} /></Pressable>
       </View>
       <Pressable style={styles.socialMediaRow} onPress={() => onOpenDetail({ mediaType: review.mediaType, mediaId: review.mediaId, title: review.title, posterPath: review.posterPath })}>
         {poster ? <Image source={{ uri: poster }} style={styles.socialPoster} contentFit="cover" /> : <View style={[styles.socialPoster, styles.socialPosterFallback]}><Ionicons name={review.mediaType === 'book' ? 'book-outline' : 'film-outline'} size={20} color={colors.textFaint} /></View>}
-        <View style={styles.socialMediaInfo}><Text style={styles.socialMediaTitle} numberOfLines={2}>{review.title}</Text><Text style={styles.socialMediaHint}>اضغط لفتح التفاصيل</Text></View>
+        <View style={styles.socialMediaInfo}><Text style={styles.socialMediaTitle} numberOfLines={2}>{review.title}</Text></View>
       </Pressable>
       <Text style={styles.socialReviewText}>{review.review}</Text>
       <View style={styles.socialActions}>

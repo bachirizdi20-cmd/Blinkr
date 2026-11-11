@@ -14,10 +14,11 @@ export type ContentStackParamList = {
   BookDetail: { workId: number; book?: Partial<BookSummary> };
   AuthorBooks: { authorName: string; excludeWorkId: number };
   ComicDetail: { id: number; comic?: Partial<ComicSummary> };
+  ComicCreator: { creatorName: string; excludeId?: number };
   Season: { tvId: number; seasonNumber: number; tvName: string };
   Person: { personId: number; name: string };
   CategoryList: { title: string; feed: FeedDescriptor };
-  Search: { mediaOnly?: boolean; booksTrending?: boolean } | undefined;
+  Search: { mediaOnly?: boolean; booksTrending?: boolean; comicsTrending?: boolean } | undefined;
   Lists: undefined;
   ListDetail: { listId: string };
   Diary: undefined;

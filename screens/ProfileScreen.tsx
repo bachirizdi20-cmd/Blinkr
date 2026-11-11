@@ -32,6 +32,7 @@ export default function ProfileScreen() {
   const navigation = useNavigation<Nav>();
   const { user, loading: authLoading, error: authError, logout, refresh } = useAuth();
   const deleteMutation = trpc.account.delete.useMutation();
+  const deleteReviewMutation = trpc.reviews.delete.useMutation();
   const requestVerification = trpc.auth.requestVerification.useMutation();
   const librarySyncMutation = trpc.account.sync.useMutation();
   const accountQuery = trpc.account.me.useQuery(undefined, { enabled: !!user, retry: false });
@@ -225,7 +226,7 @@ export default function ProfileScreen() {
                       <Text style={styles.publishedReviewDate}>{formatProfileDate(review.updatedAt)}</Text>
                       <Text style={styles.publishedReviewBody} numberOfLines={3}>{review.review || 'قيّمت هذا العنوان دون إضافة تعليق مكتوب.'}</Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
+                    <Pressable onPress={() => Alert.alert('خيارات المراجعة', 'اختر إجراءً', [{ text: 'تعديل', onPress: () => navigation.navigate('ReviewModal', { mediaType, mediaId: review.mediaId, ...(review.mediaSource === 'hardcover' ? { mediaSource: 'hardcover' as const } : {}), title: review.title, posterPath: review.posterPath }) }, { text: 'حذف', style: 'destructive', onPress: () => Alert.alert('حذف المراجعة؟', 'سيتم حذفها نهائيًا.', [{ text: 'إلغاء', style: 'cancel' }, { text: 'حذف', style: 'destructive', onPress: async () => { await deleteReviewMutation.mutateAsync({ mediaType, mediaId: review.mediaId, ...(review.mediaSource === 'hardcover' ? { mediaSource: 'hardcover' as const } : {}) }); await remoteReviewsQuery.refetch(); } }]) }, { text: 'إلغاء', style: 'cancel' }])} hitSlop={8} accessibilityLabel="خيارات المراجعة"><Ionicons name="ellipsis-vertical" size={20} color={colors.textDim} /></Pressable>
                   </Pressable>
                 );
               })}
