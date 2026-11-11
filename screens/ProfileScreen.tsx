@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Share, View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -148,6 +149,13 @@ export default function ProfileScreen() {
     ]), 150);
   };
 
+  const copyProfileLink = async () => {
+    const username = accountQuery.data?.data?.username || lib.profile.username || String(user?.id ?? 'me');
+    await Clipboard.setStringAsync(`https://bachirizdi20-cmd.github.io/Blinkr/?profile=${encodeURIComponent(username)}`);
+    setMenuVisible(false);
+    Alert.alert('تم نسخ الرابط', 'يمكنك الآن مشاركة رابط حسابك.');
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.topNav}>
@@ -253,6 +261,7 @@ export default function ProfileScreen() {
             <MenuItem icon="settings-outline" label="الإعدادات" onPress={() => { setMenuVisible(false); navigation.navigate('Settings'); }} />
             <MenuItem icon="person-outline" label="تعديل الملف الشخصي" onPress={() => { setMenuVisible(false); navigation.navigate('EditProfile'); }} />
             <MenuItem icon="notifications-outline" label="الإشعارات" onPress={() => { setMenuVisible(false); navigation.navigate('Notifications'); }} />
+            <MenuItem icon="copy-outline" label="نسخ رابط الحساب" onPress={() => void copyProfileLink()} />
             <View style={styles.menuDivider} />
             <MenuItem icon="log-out-outline" label="تسجيل الخروج" onPress={confirmLogout} danger />
             <MenuItem icon="trash-outline" label={deleteMutation.isPending ? 'جارٍ حذف الحساب…' : 'حذف الحساب'} onPress={handleDeleteAccount} danger disabled={deleteMutation.isPending} />

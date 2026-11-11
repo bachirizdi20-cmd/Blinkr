@@ -14,6 +14,7 @@ import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import ApiErrorState from '../components/ApiErrorState';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
 import BookCard from '../components/BookCard';
+import DetailActionBar from '../components/DetailActionBar';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type RouteT = RouteProp<ContentStackParamList, 'BookDetail'>;
@@ -134,14 +135,17 @@ export default function BookDetailScreen() {
           </View>
         </View>
 
-        <View style={styles.actions}>
-          <Pressable disabled={statusBusy} style={[styles.action, isRead && styles.actionSelected, statusBusy && styles.actionDisabled]} onPress={handleReadToggle}><Ionicons name={isRead ? 'checkmark-circle' : 'checkmark-circle-outline'} size={21} color={isRead ? colors.accent : colors.text} /><Text style={[styles.actionText, isRead && styles.actionTextSelected]}>{isRead ? 'تمت قراءته' : 'قرأت هذا الكتاب'}</Text></Pressable>
-          <Pressable disabled={statusBusy} style={[styles.action, isReading && styles.actionSelected, statusBusy && styles.actionDisabled]} onPress={handleReadingToggle}><Ionicons name={isReading ? 'book' : 'book-outline'} size={21} color={isReading ? colors.accent2 : colors.text} /><Text style={[styles.actionText, isReading && styles.actionTextSelected]}>{isReading ? 'أقرأه الآن' : 'أبدأ قراءته'}</Text></Pressable>
-          <Pressable disabled={statusBusy} style={[styles.action, inWatchlist && styles.actionSelected, statusBusy && styles.actionDisabled]} onPress={handleWatchlistToggle}><Ionicons name={inWatchlist ? 'bookmark' : 'bookmark-outline'} size={21} color={inWatchlist ? colors.accent3 : colors.text} /><Text style={[styles.actionText, inWatchlist && styles.actionTextSelected]}>{inWatchlist ? 'ضمن قائمة القراءة' : 'أريد قراءته'}</Text></Pressable>
-        </View>
-
-        <Pressable onPress={openReview} style={styles.reviewButton}><Ionicons name="create-outline" size={19} color={colors.bg} /><Text style={styles.reviewButtonText}>اكتب مراجعة للكتاب</Text></Pressable>
-        <Pressable onPress={() => navigation.navigate('AddToList', { mediaType: 'book', mediaId: workId, title: book.title, posterPath: book.coverUrl })} style={styles.addList}><Ionicons name="list-outline" size={18} color={colors.accent} /><Text style={styles.addListText}>أضف إلى قائمة</Text><Ionicons name="chevron-forward" size={17} color={colors.textFaint} /></Pressable>
+        <DetailActionBar
+          completed={isRead}
+          inList={inWatchlist}
+          completionLabel="تمت قراءته"
+          listLabel="قائمة القراءة"
+          onReview={openReview}
+          onToggleList={() => void handleWatchlistToggle()}
+          onToggleCompleted={() => void handleReadToggle()}
+          rating={rating}
+          onRatingChange={(value) => lib.setQuickRating(mediaRef, value)}
+        />
 
         <View style={styles.section}><Text style={styles.sectionTitle}>عن الكتاب</Text><Text style={styles.description}>{book.description || 'لا يتوفر وصف لهذا الكتاب بعد.'}</Text></View>
         {book.subjects.length ? <View style={styles.section}><Text style={styles.sectionTitle}>التصنيفات</Text><View style={styles.subjects}>{book.subjects.slice(0, 8).map((subject) => <View key={subject} style={styles.subject}><Text style={styles.subjectText}>{subject}</Text></View>)}</View></View> : null}

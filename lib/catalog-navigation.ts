@@ -6,7 +6,7 @@ import { posterUrl } from "./tmdb";
 import { bookCoverUrl } from "./book-utils";
 
 export function normalizeReviewMediaType(value: unknown): ReviewMediaType {
-  return value === "book" ? "book" : value === "tv" ? "tv" : "movie";
+  return value === "book" ? "book" : value === "comic" ? "comic" : value === "tv" ? "tv" : "movie";
 }
 
 export function catalogPosterUrl(mediaType: ReviewMediaType, posterPath: string | null | undefined, size: "w200" | "w342" | "w500" = "w342"): string | null {
@@ -30,6 +30,10 @@ export function openCatalogItem(
   navigation: NativeStackNavigationProp<ContentStackParamList>,
   item: CatalogItemLink,
 ) {
+  if (item.mediaType === "comic") {
+    navigation.navigate("ComicDetail", { id: item.mediaId });
+    return;
+  }
   if (item.mediaType === "book") {
     const fallback: Partial<BookSummary> | undefined = item.book || item.title || item.posterPath || item.date ? {
       workId: item.mediaId,
