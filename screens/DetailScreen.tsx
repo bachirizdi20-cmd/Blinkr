@@ -18,6 +18,7 @@ import CastRow from '../components/CastRow';
 import SectionRow from '../components/SectionRow';
 import GenreChips from '../components/GenreChips';
 import RatingStars from '../components/RatingStars';
+import DetailActionBar from '../components/DetailActionBar';
 import LoadingView from '../components/LoadingView';
 import EmptyState from '../components/EmptyState';
 import ApiErrorState from '../components/ApiErrorState';
@@ -223,67 +224,17 @@ export default function DetailScreen() {
 
           {!!detail.tagline && <Text style={styles.tagline}>"{detail.tagline}"</Text>}
 
-          <View style={styles.actionsCard}>
-            <View style={styles.ratingSection}>
-              <Text style={styles.ratingLabel}>تقييمك</Text>
-              <RatingStars rating={userRating} size={26} interactive onChange={handleRate} />
-            </View>
-            <View style={styles.actionsRow}>
-              <Pressable style={styles.actionBtn} onPress={handleToggleWatched}>
-                <Ionicons name={watched ? 'checkmark-circle' : 'checkmark-circle-outline'} size={24} color={watched ? colors.accent : colors.text} />
-                <Text style={[styles.actionLabel, watched && { color: colors.accent }]}>تمت مشاهدته</Text>
-              </Pressable>
-              <Pressable style={styles.actionBtn} onPress={handleSetWatching}>
-                <Ionicons name={watching ? 'play-circle' : 'play-circle-outline'} size={24} color={watching ? colors.accent2 : colors.text} />
-                <Text style={[styles.actionLabel, watching && { color: colors.accent2 }]}>أشاهده الآن</Text>
-              </Pressable>
-              <Pressable style={styles.actionBtn} onPress={handleToggleWatchlist}>
-                <Ionicons name={inWatchlist ? 'bookmark' : 'bookmark-outline'} size={24} color={inWatchlist ? colors.accent3 : colors.text} />
-                <Text style={[styles.actionLabel, inWatchlist && { color: colors.accent3 }]}>قائمة المشاهدة</Text>
-              </Pressable>
-              <Pressable style={styles.actionBtn} onPress={() => mediaRef && lib.toggleLike(mediaRef)}>
-                <Ionicons name={liked ? 'heart' : 'heart-outline'} size={24} color={liked ? colors.danger : colors.text} />
-                <Text style={[styles.actionLabel, liked && { color: colors.danger }]}>أعجبني</Text>
-              </Pressable>
-              <Pressable
-                style={styles.actionBtn}
-                onPress={() =>
-                  navigation.navigate('ReviewModal', {
-                    mediaType,
-                    mediaId: id,
-                    title: detail.title,
-                    posterPath: detail.posterPath,
-                    genreIds: detail.genreIds,
-                  })
-                }
-              >
-                <Ionicons name="create-outline" size={24} color={colors.text} />
-                <Text style={styles.actionLabel}>تسجيل أو مراجعة</Text>
-              </Pressable>
-              <Pressable
-                style={styles.actionBtn}
-                onPress={() =>
-                  navigation.navigate('AddToList', {
-                    mediaType,
-                    mediaId: id,
-                    title: detail.title,
-                    posterPath: detail.posterPath,
-                    genreIds: detail.genreIds,
-                  })
-                }
-              >
-                <Ionicons name="list-outline" size={24} color={colors.text} />
-                <Text style={styles.actionLabel}>أضف إلى قائمة</Text>
-              </Pressable>
-              <Pressable
-                style={styles.actionBtn}
-                onPress={() => navigation.navigate('People', { shareMedia: { mediaType, mediaId: id, title: detail.title, posterPath: detail.posterPath, rating: detail.voteAverage ?? 0, overview: detail.overview ?? null } })}
-              >
-                <Ionicons name="paper-plane-outline" size={24} color={colors.text} />
-                <Text style={styles.actionLabel}>مشاركة العنوان</Text>
-              </Pressable>
-            </View>
-          </View>
+          <DetailActionBar
+            completed={watched}
+            inList={inWatchlist}
+            completionLabel="تمت مشاهدته"
+            listLabel="قائمة المشاهدة"
+            onReview={() => navigation.navigate('ReviewModal', { mediaType, mediaId: id, title: detail.title, posterPath: detail.posterPath, genreIds: detail.genreIds })}
+            onToggleList={handleToggleWatchlist}
+            onToggleCompleted={handleToggleWatched}
+            rating={userRating}
+            onRatingChange={handleRate}
+          />
 
           {trailer && (
             <Pressable

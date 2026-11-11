@@ -466,12 +466,12 @@ function publicMediaItems(value: unknown, limit: number) {
   return value.filter((item): item is Record<string, unknown> => {
     if (!item || typeof item !== "object") return false;
     const media = item as Record<string, unknown>;
-    return (media.mediaType === "movie" || media.mediaType === "tv" || media.mediaType === "book")
+    return (media.mediaType === "movie" || media.mediaType === "tv" || media.mediaType === "book" || media.mediaType === "comic")
       && Number.isSafeInteger(Number(media.mediaId))
       && Number(media.mediaId) > 0
       && typeof media.title === "string";
   }).slice(0, limit).map((item) => ({
-    mediaType: item.mediaType as "movie" | "tv" | "book",
+    mediaType: item.mediaType as "movie" | "tv" | "book" | "comic",
     mediaId: Number(item.mediaId),
     title: String(item.title).slice(0, 255),
     posterPath: typeof item.posterPath === "string" ? item.posterPath.slice(0, 255) : null,
