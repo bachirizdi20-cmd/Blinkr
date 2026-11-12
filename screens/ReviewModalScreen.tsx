@@ -45,7 +45,6 @@ export default function ReviewModalScreen() {
   const spoiler = false;
   const [saving, setSaving] = useState(false);
   const [edited, setEdited] = useState(false);
-  const listCount = lib.lists.filter((list) => lib.isItemInList(list.id, mediaType, mediaId)).length;
   const mediaLabel = mediaType === 'book' ? 'كتاب' : mediaType === 'tv' ? 'مسلسل' : 'فيلم';
   const imageUri = catalogPosterUrl(mediaType, posterPath, 'w342');
   const isEditing = Boolean(existing || savedReviewQuery.data);
@@ -132,8 +131,8 @@ export default function ReviewModalScreen() {
             <Pressable onPress={() => navigation.goBack()} style={styles.closeButton} hitSlop={8} accessibilityLabel="إغلاق">
               <Ionicons name="close" size={28} color={colors.text} />
             </Pressable>
-            <Text style={styles.topTitle}>{mediaLabel}</Text>
-            <View style={styles.typeBadge}><Ionicons name={mediaType === 'book' ? 'book-outline' : 'film-outline'} size={14} color={colors.accent} /><Text style={styles.typeText}>{mediaLabel}</Text></View>
+            <Text style={styles.topTitle}>{isEditing ? 'تعديل المراجعة' : 'مراجعة جديدة'}</Text>
+            <View style={styles.topBarSpacer} />
           </View>
 
           <Text style={styles.heading}>{isEditing ? 'عدّل رأيك' : 'شارك رأيك'}</Text>
@@ -143,27 +142,22 @@ export default function ReviewModalScreen() {
             <View style={styles.mediaCopy}>
               <Text style={styles.mediaTitle} numberOfLines={3}>{title}</Text>
               <Text style={styles.mediaMeta}>{mediaLabel}</Text>
-              <View style={styles.mediaRating}><Ionicons name="star" size={17} color={colors.gold} /><Text style={styles.mediaRatingText}>{rating > 0 ? `${rating}/10` : 'لم تقيّمه بعد'}</Text></View>
+              <View style={styles.mediaRating}><Ionicons name="star" size={17} color={colors.accent} /><Text style={styles.mediaRatingText}>{rating > 0 ? `${String(rating).replace('.', ',')}/10` : '—/10'}</Text></View>
             </View>
           </View>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>تقييمك من 10</Text>
-            <View style={styles.ratingControl}><Pressable style={styles.stepButton} onPress={() => { setRating(Math.max(0, rating - 0.5)); setEdited(true); }}><Text style={styles.stepText}>−</Text></Pressable><View style={styles.ratingValue}><Text style={styles.ratingNumber}>{String(rating).replace('.', ',')}/10</Text><Ionicons name="star" size={22} color={colors.accent} /></View><Pressable style={styles.stepButton} onPress={() => { setRating(Math.min(10, rating + 0.5)); setEdited(true); }}><Text style={styles.stepText}>+</Text></Pressable></View>
-            {rating > 0 ? <Pressable onPress={() => { setRating(0); setEdited(true); }} style={styles.clearRating}><Text style={styles.clearRatingText}>إزالة التقييم</Text></Pressable> : null}
+            <View style={styles.ratingStars} accessibilityLabel={`التقييم ${String(rating).replace('.', ',')} من 10`}>
+              {Array.from({ length: 10 }, (_, index) => { const value = index + 1; const filled = rating >= value; const half = !filled && rating >= value - 0.5; return <Pressable key={value} onPress={() => { setRating(value); setEdited(true); }} hitSlop={4} accessibilityLabel={`تقييم ${value} من 10`}><Ionicons name={filled ? 'star' : half ? 'star-half' : 'star-outline'} size={27} color={filled || half ? colors.accent : colors.textFaint} /></Pressable>; })}
+            </View>
+            <View style={styles.ratingSummary}><Text style={styles.ratingNumber}>{rating > 0 ? `${String(rating).replace('.', ',')}/10` : 'اختر تقييمك'}</Text>{rating > 0 ? <Pressable onPress={() => { setRating(0); setEdited(true); }}><Text style={styles.clearRatingText}>إزالة التقييم</Text></Pressable> : null}</View>
           </View>
 
           <View style={styles.section}>
             <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>مراجعتك</Text><Text style={styles.counter}>{review.length}/1000</Text></View>
-            <TextInput style={styles.reviewInput} value={review} onChangeText={(value) => { setReview(value.slice(0, 1000)); setEdited(true); }} placeholder="ما رأيك في هذا العنوان؟" placeholderTextColor={colors.textFaint} multiline textAlignVertical="top" />
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>القوائم</Text><Text style={styles.counter}>{listCount} قائمة</Text></View>
-            <Pressable style={styles.listRow} onPress={() => navigation.navigate('AddToList', { mediaType, mediaId, title, posterPath: posterPath ?? null, genreIds })}>
-              <View style={styles.listActionCopy}><Ionicons name="list-outline" size={20} color={colors.accent} /><Text style={styles.listText}>{listCount ? 'إدارة القوائم التي أضفت هذا العنوان إليها' : 'إضافة العنوان إلى قائمة'}</Text></View>
-              <Ionicons name="chevron-forward" size={19} color={colors.textDim} />
-            </Pressable>
+            <TextInput style={styles.reviewInput} value={review} onChangeText={(value) => { setReview(value.slice(0, 1000)); setEdited(true); }} placeholder="اكتب مراجعتك..." placeholderTextColor={colors.textFaint} multiline textAlignVertical="top" />
+            {!review ? <Text style={styles.reviewHint}>شارك أفكارك وانطباعاتك حول هذا العمل...</Text> : null}
           </View>
 
           <Pressable onPress={handleSave} disabled={saving} style={({ pressed }) => [styles.postButton, pressed && styles.postPressed, saving && styles.disabled]}>
@@ -184,8 +178,7 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
   closeButton: { width: 40, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
   topTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800' },
-  typeBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 62, justifyContent: 'flex-end' },
-  typeText: { color: colors.accent, fontSize: fontSizes.xs, fontWeight: '800' },
+  topBarSpacer: { width: 40, height: 40 },
   heading: { color: colors.text, fontSize: 30, lineHeight: 38, fontWeight: '900', marginTop: spacing.lg, paddingHorizontal: spacing.lg, textAlign: 'right' },
   subtitle: { color: colors.textDim, fontSize: fontSizes.sm, lineHeight: 21, marginTop: 3, paddingHorizontal: spacing.lg, textAlign: 'right' },
   mediaCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginHorizontal: spacing.lg, marginTop: spacing.lg, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
@@ -199,22 +192,21 @@ const styles = StyleSheet.create({
   section: { marginTop: spacing.lg, paddingHorizontal: spacing.lg },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sectionTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '900', textAlign: 'right' },
-  ratingRow: { marginTop: spacing.md }, ratingControl: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, stepButton: { width: 48, height: 42, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border }, stepText: { color: colors.accent, fontSize: 28, fontWeight: '700' }, ratingValue: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm }, ratingNumber: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '900' },
-  clearRating: { alignSelf: 'flex-start', marginTop: spacing.xs, paddingVertical: 4 },
+  ratingStars: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.md, paddingVertical: spacing.md, paddingHorizontal: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  ratingSummary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.sm },
+  ratingNumber: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '900' },
   clearRatingText: { color: colors.textFaint, fontSize: fontSizes.xs },
   counter: { color: colors.textDim, fontSize: fontSizes.xs },
-  reviewInput: { minHeight: 130, marginTop: spacing.sm, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, color: colors.text, fontSize: fontSizes.md, lineHeight: 23, textAlign: 'right' },
+  reviewInput: { minHeight: 150, marginTop: spacing.sm, padding: spacing.md, paddingTop: spacing.md, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, color: colors.text, fontSize: fontSizes.md, lineHeight: 23, textAlign: 'right' },
+  reviewHint: { marginTop: -44, marginRight: spacing.md, marginLeft: spacing.md, color: colors.textFaint, fontSize: fontSizes.sm, lineHeight: 22, textAlign: 'right', pointerEvents: 'none' },
   spoilerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginTop: spacing.md, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   spoilerCopy: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   spoilerTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '800', textAlign: 'right' },
   spoilerHint: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: 3, textAlign: 'right' },
   dateInput: { minHeight: 46, marginTop: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, color: colors.text, fontSize: fontSizes.md, textAlign: 'right' },
-  listRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 54, marginTop: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
-  listActionCopy: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  listText: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '700', textAlign: 'right' },
   publicNote: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginHorizontal: spacing.lg, marginTop: spacing.lg, padding: spacing.md, backgroundColor: 'rgba(31, 215, 171, 0.08)', borderRadius: radius.md, borderWidth: 1, borderColor: 'rgba(31, 215, 171, 0.2)' },
   publicText: { flex: 1, color: colors.textDim, fontSize: fontSizes.xs, lineHeight: 18, textAlign: 'right' },
-  postButton: { minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, marginHorizontal: spacing.lg, marginTop: spacing.xl, paddingHorizontal: spacing.md, backgroundColor: colors.accent, borderRadius: radius.md },
+  postButton: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, marginHorizontal: spacing.lg, marginTop: spacing.xl, paddingHorizontal: spacing.md, backgroundColor: colors.accent, borderRadius: radius.lg },
   postPressed: { opacity: 0.8, transform: [{ scale: 0.99 }] },
   disabled: { opacity: 0.6 },
   postText: { color: colors.bg, fontSize: fontSizes.md, fontWeight: '900' },
