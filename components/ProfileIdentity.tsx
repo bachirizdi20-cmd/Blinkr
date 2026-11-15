@@ -27,8 +27,10 @@ export function ProfileIdentity({
   );
 }
 
-export function ProfileBio({ bio, fallback }: { bio?: string | null; fallback: string }) {
-  return <Text style={styles.bio}>{bio?.trim() || fallback}</Text>;
+export function ProfileBio({ bio }: { bio?: string | null; fallback?: string }) {
+  const value = bio?.trim();
+  if (!value) return null;
+  return <Text style={styles.bio}>{value}</Text>;
 }
 
 const styles = StyleSheet.create({
