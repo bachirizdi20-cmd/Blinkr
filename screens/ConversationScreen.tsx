@@ -149,7 +149,7 @@ export default function ConversationScreen() {
       actions.push({ text: 'تعديل', onPress: () => { setReplyTarget(null); setEditingMessage(item); setText(item.text); } });
       actions.push({ text: 'حذف', style: 'destructive', onPress: () => Alert.alert('حذف الرسالة؟', 'سيتم حذفها نهائيًا من المحادثة.', [{ text: 'إلغاء', style: 'cancel' }, { text: 'حذف', style: 'destructive', onPress: () => deleteMessageMutation.mutate({ messageId: Number(item.id) }) }]) });
     }
-    actions.push({ text: 'إلغاء', style: 'cancel' });
+    if (item.sender !== 'me' || !item.text) actions.push({ text: 'إلغاء', style: 'cancel' });
     Alert.alert('خيارات الرسالة', undefined, actions);
   };
 
@@ -558,7 +558,7 @@ const styles = StyleSheet.create({
   sheetHandle: { width: 42, height: 4, borderRadius: 2, backgroundColor: colors.textFaint, alignSelf: 'center', marginBottom: spacing.md },
   sheetTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '900', marginBottom: spacing.lg },
   attachmentGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: spacing.lg },
-  attachmentItem: { width: '23%', alignItems: 'center', gap: spacing.xs },
+  attachmentItem: { width: '46%', alignItems: 'center', gap: spacing.xs },
   attachmentIcon: { width: 52, height: 52, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   attachmentLabel: { color: colors.textDim, fontSize: 10, lineHeight: 13, textAlign: 'center' },
   gifLabel: { color: '#C9A2FF', fontSize: 13, fontWeight: '900' },
