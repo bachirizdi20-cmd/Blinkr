@@ -45,7 +45,6 @@ export default function CreateScreen() {
   const [debouncedQuery, setDebouncedQuery] = useState(trimmed);
   const bookMode = category === 'book';
   const comicMode = category === 'comic';
-  const comicMode = category === 'comic';
   const searching = debouncedQuery.length >= 2;
   const bookSearchReady = searching && trimmed === debouncedQuery;
   const path = searching ? '/search/multi' : '/trending/all/week';
@@ -121,6 +120,8 @@ export default function CreateScreen() {
   const loadMore = () => {
     if (bookMode) {
       if (!bookQuery.isFetching && booksHasMore) setBookPage((value) => value + 1);
+    } else if (comicMode) {
+      if (!comicQuery.isFetching && comicsHasMore) setComicPage((value) => value + 1);
     } else if (!tmdbQuery.isFetching && tmdbHasMore) {
       setPage((value) => value + 1);
     }
@@ -138,7 +139,7 @@ export default function CreateScreen() {
       {!searchOpen ? <View style={styles.editor}>
         {selectedItem && selection ? <Pressable style={styles.selectedCard} onPress={() => setSearchOpen(true)}>
           <Image source={{ uri: selection.posterPath ? (selection.mediaType === 'book' || selection.mediaType === 'comic' ? selection.posterPath : `https://image.tmdb.org/t/p/w342${selection.posterPath}`) : undefined }} style={styles.selectedPoster} resizeMode="cover" />
-          <View style={styles.selectedCopy}><Text style={styles.selectedLabel}>العنوان المختار</Text><Text style={styles.selectedTitle} numberOfLines={2}>{selection.title}</Text><View style={styles.selectedActions}><Pressable onPress={() => setSearchOpen(true)}><Text style={styles.changeText}>تغيير العنوان</Text></Pressable><Pressable onPress={() => setSelectedItem(null)}><Text style={styles.removeText}>إزالة</Text></Pressable></View></View>
+          <View style={styles.selectedCopy}><Text style={styles.selectedLabel}>{selection.mediaType === 'book' ? 'كتاب' : selection.mediaType === 'comic' ? 'كوميك' : selection.mediaType === 'tv' ? 'مسلسل' : 'فيلم'}</Text><Text style={styles.selectedTitle} numberOfLines={2}>{selection.title}</Text><View style={styles.selectedActions}><Pressable onPress={() => setSearchOpen(true)}><Text style={styles.changeText}>تغيير العنوان</Text></Pressable><Pressable onPress={() => setSelectedItem(null)}><Text style={styles.removeText}>إزالة</Text></Pressable></View></View>
         </Pressable> : <Pressable style={styles.addCard} onPress={() => setSearchOpen(true)} accessibilityRole="button" accessibilityLabel="اختيار عنوان للمراجعة"><View style={styles.addIcon}><Ionicons name="add" size={34} color={colors.accent} /></View><Text style={styles.addTitle}>اختر محتوى لمراجعتك</Text><Text style={styles.addHint}>اضغط لإضافة عنوان وبدء مراجعتك</Text></Pressable>}
         <View style={styles.editorSection}><Text style={styles.editorLabel}>تقييمك من 10</Text><View style={styles.ratingControls}><Pressable style={styles.ratingStep} onPress={() => setRating((value) => Math.min(10, Math.round((value + 0.5) * 2) / 2))}><Text style={styles.ratingStepText}>+</Text></Pressable><View style={styles.ratingCenter}><Text style={styles.ratingValue}>{rating.toFixed(1).replace('.0','')}/10</Text><Ionicons name="star" size={20} color={colors.accent} /></View><Pressable style={styles.ratingStep} onPress={() => setRating((value) => Math.max(0, Math.round((value - 0.5) * 2) / 2))}><Text style={styles.ratingStepText}>−</Text></Pressable></View></View>
         <View style={styles.editorSection}><View style={styles.reviewHeader}><Text style={styles.editorLabel}>مراجعتك</Text><Text style={styles.counter}>{review.length}/1000</Text></View><TextInput style={styles.reviewInput} value={review} onChangeText={(value) => setReview(value.slice(0, 1000))} placeholder="اكتب مراجعتك..." placeholderTextColor={colors.textFaint} multiline textAlignVertical="top" /><Text style={styles.reviewHint}>شارك أفكارك وانطباعاتك حول هذا العمل...</Text></View>
@@ -153,9 +154,9 @@ export default function CreateScreen() {
       </View>
       {(bookMode || comicMode) && !searching ? (
         <EmptyState icon={bookMode ? 'book-outline' : 'albums-outline'} title={bookMode ? 'ابحث عن كتاب' : 'ابحث عن كوميك'} message={bookMode ? 'اكتب اسم كتاب أو مؤلف للعثور على بياناته وغلافه من Hardcover.' : 'اكتب اسم كوميك أو مؤلف للعثور على الأعمال المتاحة.'} />
-      ) : loading && (bookMode ? books.length === 0 : items.length === 0) ? (
+      ) : loading && (bookMode ? books.length === 0 : comicMode ? comics.length === 0 : items.length === 0) ? (
         <View style={styles.loading}><ActivityIndicator color={colors.accent} size="large" /><Text style={styles.loadingText}>{bookMode ? 'جارٍ البحث عن الكتب…' : comicMode ? 'جارٍ البحث عن الكوميكس…' : searching ? 'جارٍ البحث عن العناوين…' : 'جارٍ تحميل العناوين الرائجة…'}</Text></View>
-      ) : failed && (bookMode ? books.length === 0 : items.length === 0) ? (
+      ) : failed && (bookMode ? books.length === 0 : comicMode ? comics.length === 0 : items.length === 0) ? (
         <GeneralErrorState title={bookMode ? 'تعذر البحث عن الكتب' : comicMode ? 'تعذر البحث عن الكوميكس' : 'تعذر تحميل العناوين'} message="تحقق من اتصال الإنترنت ثم أعد المحاولة." onRetry={refetch} />
       ) : bookMode ? (
         <FlatList data={books} numColumns={3} keyExtractor={(book) => String(book.workId)} contentContainerStyle={styles.grid} columnWrapperStyle={styles.gridRow} keyboardShouldPersistTaps="handled" onEndReached={loadMore} onEndReachedThreshold={0.65} ListEmptyComponent={!bookQuery.isFetching ? <EmptyState icon="search-outline" title="لم نعثر على كتب" message="جرّب عنوانًا أو اسم مؤلف مختلفًا." /> : null} renderItem={({ item }) => <BookCard book={item} width={CARD_WIDTH} onPress={() => { setSelectedItem(item); setSearchOpen(false); }} />} />
