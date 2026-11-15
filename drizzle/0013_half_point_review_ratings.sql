@@ -1,0 +1,1 @@
+ALTER TABLE `reviews` MODIFY COLUMN `rating` FLOAT NOT NULL;
