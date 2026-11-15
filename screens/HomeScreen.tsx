@@ -51,7 +51,6 @@ interface SectionData {
   data: NormalizedItem[];
   loading: boolean;
   seeAll: () => void;
-  categories: Category[];
 }
 
 export default function HomeScreen() {
@@ -135,7 +134,6 @@ export default function HomeScreen() {
         title: 'الأفلام الرائجة',
         data: moviePopular,
         loading,
-        categories: ['all', 'movie'],
         seeAll: () => navigation.navigate('CategoryList', { title: 'الأفلام الرائجة', feed: { kind: 'movieList', list: 'popular' } }),
       },
       {
@@ -143,7 +141,6 @@ export default function HomeScreen() {
         title: 'المسلسلات الرائجة',
         data: tvPopular,
         loading,
-        categories: ['all', 'tv'],
         seeAll: () => navigation.navigate('CategoryList', { title: 'المسلسلات الرائجة', feed: { kind: 'tvList', list: 'popular' } }),
       },
       {
@@ -151,7 +148,6 @@ export default function HomeScreen() {
         title: 'مسلسلات الأنمي الرائجة',
         data: animeTv,
         loading,
-        categories: ['all', 'anime'],
         seeAll: () => navigation.navigate('CategoryList', { title: 'مسلسلات الأنمي الرائجة', feed: { kind: 'anime', media: 'tv' } }),
       },
       {
@@ -159,7 +155,6 @@ export default function HomeScreen() {
         title: 'في دور العرض',
         data: movieNowPlaying,
         loading,
-        categories: ['all', 'movie'],
         seeAll: () => navigation.navigate('CategoryList', { title: 'في دور العرض', feed: { kind: 'movieList', list: 'now_playing' } }),
       },
       {
@@ -167,7 +162,6 @@ export default function HomeScreen() {
         title: 'أفلام أنمي',
         data: animeMovie,
         loading,
-        categories: ['anime'],
         seeAll: () => navigation.navigate('CategoryList', { title: 'أفلام أنمي', feed: { kind: 'anime', media: 'movie' } }),
       },
       {
@@ -175,7 +169,6 @@ export default function HomeScreen() {
         title: 'الأفلام الأعلى تقييمًا',
         data: movieTop,
         loading,
-        categories: ['all', 'movie'],
         seeAll: () => navigation.navigate('CategoryList', { title: 'الأفلام الأعلى تقييمًا', feed: { kind: 'movieList', list: 'top_rated' } }),
       },
       {
@@ -183,7 +176,6 @@ export default function HomeScreen() {
         title: 'المسلسلات الأعلى تقييمًا',
         data: tvTop,
         loading,
-        categories: ['tv'],
         seeAll: () => navigation.navigate('CategoryList', { title: 'المسلسلات الأعلى تقييمًا', feed: { kind: 'tvList', list: 'top_rated' } }),
       },
       {
@@ -191,7 +183,6 @@ export default function HomeScreen() {
         title: 'يُعرض اليوم',
         data: tvAiring,
         loading,
-        categories: ['tv'],
         seeAll: () => navigation.navigate('CategoryList', { title: 'يُعرض اليوم', feed: { kind: 'tvList', list: 'airing_today' } }),
       },
       {
@@ -199,7 +190,6 @@ export default function HomeScreen() {
         title: 'أفلام قادمة',
         data: movieUpcoming,
         loading,
-        categories: ['all', 'movie'],
         seeAll: () => navigation.navigate('CategoryList', { title: 'أفلام قادمة', feed: { kind: 'movieList', list: 'upcoming' } }),
       },
     ],
