@@ -928,6 +928,10 @@ export async function createChatMessage(input: Omit<InsertChatMessage, "id" | "c
   if (!db) throw new Error("Database not available");
   const allowed = await userCanAccessConversation(input.senderId, input.conversationId);
   if (!allowed) throw new Error("Conversation access denied");
+  if (input.replyToId) {
+    const target = await db.select({ id: chatMessages.id }).from(chatMessages).where(and(eq(chatMessages.id, input.replyToId), eq(chatMessages.conversationId, input.conversationId), isNull(chatMessages.deletedAt))).limit(1);
+    if (!target[0]) throw new Error("Reply target is unavailable");
+  }
   await db.insert(chatMessages).values(input);
   await db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, input.conversationId));
   const message = await db.select().from(chatMessages).where(and(eq(chatMessages.conversationId, input.conversationId), eq(chatMessages.senderId, input.senderId))).orderBy(desc(chatMessages.createdAt)).limit(1);
