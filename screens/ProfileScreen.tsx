@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
+import { ActivityIndicator, View, Text, StyleSheet, ScrollView, Pressable, Modal, RefreshControl } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -165,6 +165,7 @@ export default function ProfileScreen() {
         <Pressable onPress={() => setMenuVisible(true)} style={styles.topNavButton} accessibilityLabel="فتح قائمة الحساب"><Ionicons name="menu" size={25} color={colors.text} /></Pressable>
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.profileScrollContent}>
+        refreshControl={<RefreshControl refreshing={accountQuery.isRefetching || remoteReviewsQuery.isRefetching || remoteStatusesQuery.isRefetching} onRefresh={() => { void Promise.all([accountQuery.refetch(), remoteReviewsQuery.refetch(), remoteStatusesQuery.refetch()]); }} tintColor={colors.accent} />}
         <View style={styles.commonProfileContent}>
         <ProfileIdentity
           name={displayName}
