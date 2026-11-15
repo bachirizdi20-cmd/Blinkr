@@ -219,7 +219,7 @@ export default function ProfileScreen() {
                 const poster = catalogPosterUrl(mediaType, review.posterPath, 'w200');
                 return (
                   <View key={review.id} style={styles.publishedReviewCard}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+                    <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md }}>
                       <Pressable style={{ flex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md }} onPress={() => openCatalogItem(navigation, { mediaType, mediaId: review.mediaId, title: review.title, posterPath: review.posterPath })}>
                         {poster ? <Image source={{ uri: poster }} style={styles.publishedReviewPoster} contentFit="cover" /> : <View style={[styles.publishedReviewPoster, styles.publishedPosterFallback]}><Ionicons name={mediaType === 'book' ? 'book-outline' : 'film-outline'} size={22} color={colors.textFaint} /></View>}
                         <View style={styles.publishedReviewInfo}>
