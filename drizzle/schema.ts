@@ -109,10 +109,14 @@ export const reviewComments = mysqlTable("review_comments", {
   id: int("id").autoincrement().primaryKey(),
   reviewId: int("reviewId").notNull(),
   userId: int("userId").notNull(),
+  parentCommentId: int("parentCommentId"),
   text: text("text").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (table) => ({
+  reviewIdx: index("review_comments_review_id_idx").on(table.reviewId),
+  parentIdx: index("review_comments_parent_id_idx").on(table.parentCommentId),
+}));
 
 export const notifications = mysqlTable("notifications", {
   id: int("id").autoincrement().primaryKey(),

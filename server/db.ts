@@ -554,10 +554,9 @@ export async function listSocialFeed(userId: number) {
   const db = await getDb();
   if (!db) return [];
   const followingIds = await listFollowingIds(userId);
-  if (!followingIds.length) return [];
   const blocked = await db.select({ userId: blocks.userId, blockedUserId: blocks.blockedUserId }).from(blocks).where(or(eq(blocks.userId, userId), eq(blocks.blockedUserId, userId)));
   const blockedIds = blocked.map((row) => row.userId === userId ? row.blockedUserId : row.userId);
-  const allowedIds = followingIds.filter((id) => !blockedIds.includes(id));
+  const allowedIds = Array.from(new Set([userId, ...followingIds])).filter((id) => !blockedIds.includes(id));
   if (!allowedIds.length) return [];
   const rows = await db.select({ review: reviews, username: userData.username, displayName: users.name, avatarUrl: userData.avatarUrl }).from(reviews).innerJoin(users, eq(users.id, reviews.userId)).leftJoin(userData, eq(userData.userId, reviews.userId)).where(inArray(reviews.userId, allowedIds)).orderBy(desc(reviews.updatedAt)).limit(50);
   if (!rows.length) return [];
@@ -599,14 +598,37 @@ export async function toggleReviewLike(userId: number, reviewId: number) {
   return { liked: true } as const;
 }
 
-export async function addReviewComment(userId: number, reviewId: number, text: string) {
+export async function addReviewComment(userId: number, reviewId: number, text: string, parentCommentId?: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const review = (await db.select().from(reviews).where(eq(reviews.id, reviewId)).limit(1))[0];
   if (!review) throw new Error("Review not found");
   if (!(await canViewReview(db, userId, review))) throw new Error("Review unavailable");
-  await db.insert(reviewComments).values({ reviewId, userId, text });
+  if (parentCommentId) {
+    const parent = (await db.select().from(reviewComments).where(and(eq(reviewComments.id, parentCommentId), eq(reviewComments.reviewId, reviewId))).limit(1))[0];
+    if (!parent || parent.parentCommentId) throw new Error("Reply target is unavailable");
+  }
+  await db.insert(reviewComments).values({ reviewId, userId, parentCommentId: parentCommentId ?? null, text });
   if (review.userId !== userId) await db.insert(notifications).values({ userId: review.userId, actorId: userId, kind: "comment", reviewId });
+  return { success: true } as const;
+}
+
+export async function updateReviewComment(userId: number, commentId: number, text: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const comment = (await db.select().from(reviewComments).where(and(eq(reviewComments.id, commentId), eq(reviewComments.userId, userId))).limit(1))[0];
+  if (!comment) throw new Error("Comment not found or not owned by this user");
+  await db.update(reviewComments).set({ text: text.trim() }).where(eq(reviewComments.id, commentId));
+  return { success: true } as const;
+}
+
+export async function deleteReviewComment(userId: number, commentId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const comment = (await db.select().from(reviewComments).where(and(eq(reviewComments.id, commentId), eq(reviewComments.userId, userId))).limit(1))[0];
+  if (!comment) throw new Error("Comment not found or not owned by this user");
+  await db.delete(reviewComments).where(eq(reviewComments.parentCommentId, commentId));
+  await db.delete(reviewComments).where(eq(reviewComments.id, commentId));
   return { success: true } as const;
 }
 
@@ -615,7 +637,17 @@ export async function listReviewComments(viewerId: number, reviewId: number) {
   if (!db) return [];
   const review = (await db.select().from(reviews).where(eq(reviews.id, reviewId)).limit(1))[0];
   if (!review || !(await canViewReview(db, viewerId, review))) return [];
-  return db.select({ comment: reviewComments, name: users.name, username: userData.username }).from(reviewComments).innerJoin(users, eq(users.id, reviewComments.userId)).leftJoin(userData, eq(userData.userId, reviewComments.userId)).where(eq(reviewComments.reviewId, reviewId)).orderBy(desc(reviewComments.createdAt)).limit(100);
+  return db.select({
+    comment: reviewComments,
+    name: users.name,
+    username: userData.username,
+    avatarUrl: userData.avatarUrl,
+  }).from(reviewComments)
+    .innerJoin(users, eq(users.id, reviewComments.userId))
+    .leftJoin(userData, eq(userData.userId, reviewComments.userId))
+    .where(eq(reviewComments.reviewId, reviewId))
+    .orderBy(desc(reviewComments.createdAt))
+    .limit(100);
 }
 
 export async function listNotifications(userId: number) {
