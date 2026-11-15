@@ -923,7 +923,7 @@ export async function listConversations(userId: number) {
   return result;
 }
 
-export async function createChatMessage(input: Omit<InsertChatMessage, "id" | "createdAt">, recipientId: number) {
+export async function createChatMessage(input: Omit<InsertChatMessage, "id" | "createdAt">, _recipientId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const allowed = await userCanAccessConversation(input.senderId, input.conversationId);
