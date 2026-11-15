@@ -256,7 +256,7 @@ export default function HomeScreen() {
         <View style={styles.bookSection}>
           <View style={styles.bookSectionHeader}>
             <View><Text style={styles.bookSectionTitle}>الكتب الرائجة عالميًا</Text><Text style={styles.bookSectionSubtitle}>{(hardcoverTrendingQuery.data ?? []).length.toLocaleString('ar')} كتاب</Text></View>
-            <Pressable onPress={() => navigation.navigate('Search', { booksTrending: true })} accessibilityRole="button"><Text style={styles.bookSectionMore}>الكل</Text></Pressable>
+            <Pressable onPress={() => navigation.navigate('Search', { booksTrending: true })} accessibilityRole="button"><Text style={styles.bookSectionMore}>See All</Text></Pressable>
           </View>
           {hardcoverTrendingQuery.isLoading ? <View style={styles.bookLoading}><Text style={styles.bookLoadingText}>جارٍ تحميل الكتب…</Text></View> : hardcoverTrendingQuery.isError ? <Pressable onPress={() => hardcoverTrendingQuery.refetch()} style={styles.bookError}><Text style={styles.bookErrorText}>تعذر تحميل كتب Hardcover — اضغط لإعادة المحاولة.</Text></Pressable> : <FlatList
             data={((hardcoverTrendingQuery.data ?? []) as BookSummary[]).filter((book) => Boolean(book.coverUrl))}
