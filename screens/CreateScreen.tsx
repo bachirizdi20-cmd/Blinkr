@@ -94,6 +94,7 @@ export default function CreateScreen() {
     setSelectedItem(item);
     setSearchOpen(false);
   };
+  const utils = trpc.useUtils();
   const saveReviewMutation = trpc.reviews.save.useMutation();
   const selection = selectedItem ? ('workId' in selectedItem
     ? { mediaType: 'book' as const, mediaId: selectedItem.workId, title: selectedItem.title, posterPath: selectedItem.coverUrl, genreIds: [] as number[], mediaSource: 'hardcover' as const }
@@ -109,6 +110,7 @@ export default function CreateScreen() {
     try {
       await saveReviewMutation.mutateAsync({ mediaType: selection.mediaType, mediaId: selection.mediaId, ...(selection.mediaSource ? { mediaSource: selection.mediaSource } : {}), title: selection.title, posterPath: selection.posterPath, rating, review: trimmedReview, spoiler: false, watchedDate: new Date().toISOString() });
       lib.addDiaryEntry({ mediaType: selection.mediaType, mediaId: selection.mediaId, title: selection.title, posterPath: selection.posterPath, genreIds: selection.genreIds, watchedDate: new Date().toISOString().slice(0, 10), rating, review: trimmedReview, rewatch: false, spoiler: false });
+      void utils.social.feed.invalidate();
       Alert.alert('تم نشر المراجعة', 'ظهرت مراجعتك بنجاح.');
       setSelectedItem(null); setSearchOpen(false); setQuery(''); setRating(0); setReview('');
     } catch (error) { Alert.alert('تعذر نشر المراجعة', error instanceof Error ? error.message : 'تحقق من الاتصال ثم حاول مرة أخرى.'); } finally { setSaving(false); }
