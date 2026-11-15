@@ -127,7 +127,7 @@ export default function ChatsScreen() {
                       <UserAvatar name={item.displayName} color={item.avatarColor} size={56} ring />
                       <Text numberOfLines={1} style={styles.followerName}>{item.displayName}</Text>
                       <View style={styles.followBackBadge}>
-                        <Text style={styles.followBackText} >متابعة بالمثل</Text>
+                        <Text style={styles.followBackText}>متابعة بالمثل</Text>
                       </View>
                     </Pressable>
                   )}
