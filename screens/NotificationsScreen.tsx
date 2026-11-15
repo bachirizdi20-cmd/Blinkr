@@ -76,14 +76,14 @@ export default function NotificationsScreen() {
   const markOneRead = trpc.social.markNotificationRead.useMutation({ onSuccess: () => query.refetch() });
   const followingQuery = trpc.social.following.useQuery(undefined, { enabled: Boolean(user) });
   const followBackMutation = trpc.social.toggleFollow.useMutation({ onSuccess: () => followingQuery.refetch() });
-  const unreadCount = query.data?.filter((item) => !item.readAt).length ?? 0;
+  const unreadCount = query.data?.filter((item) => item.kind !== 'message' && !item.readAt).length ?? 0;
   const previousCount = useRef<number | null>(null);
   const [newNotificationId, setNewNotificationId] = useState<number | null>(null);
   const arrivalProgress = useRef(new Animated.Value(1)).current;
   const bellProgress = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    const currentCount = query.data?.length ?? 0;
+    const currentCount = query.data?.filter((item) => item.kind !== 'message').length ?? 0;
     if (previousCount.current !== null && currentCount > previousCount.current && query.data?.[0]) {
       setNewNotificationId(query.data[0].id);
       arrivalProgress.setValue(0);
