@@ -31,6 +31,7 @@ export default function BookDetailScreen() {
   const myReviewQuery = trpc.reviews.getMine.useQuery({ mediaType: 'book', mediaId: workId, mediaSource }, { enabled: Boolean(user), retry: false });
   const setStatusMutation = trpc.library.setStatus.useMutation();
   const removeStatusMutation = trpc.library.removeStatus.useMutation();
+  const saveReviewMutation = trpc.reviews.save.useMutation();
 
   const detailCompatible = isBookDetailCompatible(fallback, detailQuery.data);
   const book = useMemo(() => mergeBookDetails(workId, fallback, detailCompatible ? detailQuery.data : null), [workId, fallback, detailQuery.data, detailCompatible]);
@@ -144,7 +145,7 @@ export default function BookDetailScreen() {
           onToggleList={() => void handleWatchlistToggle()}
           onToggleCompleted={() => void handleReadToggle()}
           rating={rating}
-          onRatingChange={(value) => lib.setQuickRating(mediaRef, value)}
+          onRatingChange={(value) => { lib.setQuickRating(mediaRef, value); if (user) void saveReviewMutation.mutateAsync({ mediaType: 'book', mediaId: workId, mediaSource, title: book.title, posterPath: book.coverUrl, rating: value, review: myReviewQuery.data?.review ?? '', spoiler: false, watchedDate: myReviewQuery.data?.watchedDate ? new Date(myReviewQuery.data.watchedDate).toISOString() : new Date().toISOString() }).then(() => myReviewQuery.refetch()).catch((error) => Alert.alert('تعذر حفظ التقييم', error instanceof Error ? error.message : 'حاول مرة أخرى.')); }}
         />
 
         <View style={styles.section}><Text style={styles.sectionTitle}>عن الكتاب</Text><Text style={styles.description}>{book.description || 'لا يتوفر وصف لهذا الكتاب بعد.'}</Text></View>
