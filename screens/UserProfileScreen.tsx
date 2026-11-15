@@ -206,8 +206,6 @@ function RemoteUserProfile({
           )}
         </View>
 
-        <ProfileBio bio={profile.bio} fallback="لم يضف هذا المستخدم نبذة شخصية بعد." />
-
         <View style={styles.favoritesSection}>
           <View style={styles.favoritesHeader}><Text style={styles.sectionTitle}>المفضلات</Text></View>
           {publicLibraryQuery.isLoading ? <View style={styles.reviewLoading}><ActivityIndicator color={colors.accent} /><Text style={styles.loadingText}>جارٍ تحميل المفضلات…</Text></View> : publicLibraryQuery.isError ? (
