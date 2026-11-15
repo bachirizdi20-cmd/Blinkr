@@ -218,16 +218,20 @@ export default function ProfileScreen() {
                 const mediaType = normalizeReviewMediaType(review.mediaType);
                 const poster = catalogPosterUrl(mediaType, review.posterPath, 'w200');
                 return (
-                  <Pressable key={review.id} style={styles.publishedReviewCard} onPress={() => openCatalogItem(navigation, { mediaType, mediaId: review.mediaId, title: review.title, posterPath: review.posterPath })}>
-                    {poster ? <Image source={{ uri: poster }} style={styles.publishedReviewPoster} contentFit="cover" /> : <View style={[styles.publishedReviewPoster, styles.publishedPosterFallback]}><Ionicons name={mediaType === 'book' ? 'book-outline' : 'film-outline'} size={22} color={colors.textFaint} /></View>}
-                    <View style={styles.publishedReviewInfo}>
-                      <Text style={styles.publishedReviewTitle} numberOfLines={2}>{review.title}</Text>
-                      {review.rating != null ? <View style={styles.publishedRating}><Ionicons name="star" size={12} color={colors.gold} /><Text style={styles.publishedRatingText}>{review.rating}/10</Text></View> : null}
-                      <Text style={styles.publishedReviewDate}>{formatProfileDate(review.updatedAt)}</Text>
-                      <Text style={styles.publishedReviewBody} numberOfLines={3}>{review.review || 'قيّمت هذا العنوان دون إضافة تعليق مكتوب.'}</Text>
+                  <View key={review.id} style={styles.publishedReviewCard}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+                      <Pressable style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md }} onPress={() => openCatalogItem(navigation, { mediaType, mediaId: review.mediaId, title: review.title, posterPath: review.posterPath })}>
+                        {poster ? <Image source={{ uri: poster }} style={styles.publishedReviewPoster} contentFit="cover" /> : <View style={[styles.publishedReviewPoster, styles.publishedPosterFallback]}><Ionicons name={mediaType === 'book' ? 'book-outline' : 'film-outline'} size={22} color={colors.textFaint} /></View>}
+                        <View style={styles.publishedReviewInfo}>
+                          <Text style={styles.publishedReviewTitle} numberOfLines={2}>{review.title}</Text>
+                          {review.rating != null ? <View style={styles.publishedRating}><Ionicons name="star" size={12} color={colors.gold} /><Text style={styles.publishedRatingText}>{review.rating}/10</Text></View> : null}
+                          <Text style={styles.publishedReviewDate}>{formatProfileDate(review.updatedAt)}</Text>
+                        </View>
+                      </Pressable>
+                      <Pressable onPress={() => Alert.alert('خيارات المراجعة', 'اختر إجراءً', [{ text: 'تعديل', onPress: () => navigation.navigate('ReviewModal', { mediaType, mediaId: review.mediaId, ...(review.mediaSource === 'hardcover' ? { mediaSource: 'hardcover' as const } : {}), title: review.title, posterPath: review.posterPath }) }, { text: 'حذف', style: 'destructive', onPress: () => Alert.alert('حذف المراجعة؟', 'سيتم حذفها نهائيًا.', [{ text: 'إلغاء', style: 'cancel' }, { text: 'حذف', style: 'destructive', onPress: async () => { await deleteReviewMutation.mutateAsync({ mediaType, mediaId: review.mediaId, ...(review.mediaSource === 'hardcover' ? { mediaSource: 'hardcover' as const } : {}) }); await remoteReviewsQuery.refetch(); } }]) }, { text: 'إلغاء', style: 'cancel' }])} hitSlop={8} accessibilityLabel="خيارات المراجعة"><Ionicons name="ellipsis-vertical" size={20} color={colors.textDim} /></Pressable>
                     </View>
-                    <Pressable onPress={() => Alert.alert('خيارات المراجعة', 'اختر إجراءً', [{ text: 'تعديل', onPress: () => navigation.navigate('ReviewModal', { mediaType, mediaId: review.mediaId, ...(review.mediaSource === 'hardcover' ? { mediaSource: 'hardcover' as const } : {}), title: review.title, posterPath: review.posterPath }) }, { text: 'حذف', style: 'destructive', onPress: () => Alert.alert('حذف المراجعة؟', 'سيتم حذفها نهائيًا.', [{ text: 'إلغاء', style: 'cancel' }, { text: 'حذف', style: 'destructive', onPress: async () => { await deleteReviewMutation.mutateAsync({ mediaType, mediaId: review.mediaId, ...(review.mediaSource === 'hardcover' ? { mediaSource: 'hardcover' as const } : {}) }); await remoteReviewsQuery.refetch(); } }]) }, { text: 'إلغاء', style: 'cancel' }])} hitSlop={8} accessibilityLabel="خيارات المراجعة"><Ionicons name="ellipsis-vertical" size={20} color={colors.textDim} /></Pressable>
-                  </Pressable>
+                    <Text style={styles.publishedReviewBody} numberOfLines={5}>{review.review || 'قيّمت هذا العنوان دون إضافة تعليق مكتوب.'}</Text>
+                  </View>
                 );
               })}
             </View>
