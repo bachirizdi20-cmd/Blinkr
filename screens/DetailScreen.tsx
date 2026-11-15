@@ -89,7 +89,7 @@ export default function DetailScreen() {
   const liked = lib.isLiked(mediaType, id);
   const watched = lib.isWatched(mediaType, id) || myStatusQuery.data?.status === 'watched';
   const watching = myStatusQuery.data?.status === 'watching';
-  const userRating = lib.getLatestRating(mediaType, id) || myReviewQuery.data?.rating || 0;
+  const userRating = lib.getLatestRating(mediaType, id) ?? myReviewQuery.data?.rating ?? 0;
   const diaryEntries = lib.getDiaryForMedia(mediaType, id);
 
   const mediaRef = useMemo(
