@@ -187,11 +187,10 @@ export default function ProfileScreen() {
             />
           )}
         />
+        <ProfileBio bio={displayedBio} />
         <View style={styles.identityActions}>
           <Pressable style={({ pressed }) => [styles.identityAction, styles.identityPrimary, pressed && styles.pressed]} onPress={() => navigation.navigate('EditProfile')}><Ionicons name="create-outline" size={15} color={colors.accent} /><Text style={styles.identityPrimaryText}>تعديل الملف</Text></Pressable>
-          <Pressable style={({ pressed }) => [styles.identityAction, styles.identitySecondary, pressed && styles.pressed]} onPress={() => Share.share({ message: `تابع ${displayName} على Blinkr.` })} accessibilityLabel="مشاركة الملف"><Ionicons name="share-outline" size={17} color={colors.text} /><Text style={styles.identitySecondaryText}>مشاركة الرابط</Text></Pressable>
         </View>
-        <ProfileBio bio={displayedBio} fallback="أضف نبذة قصيرة عن ذوقك في الأفلام والكتب." />
 
         <View style={styles.section}>
           <View style={styles.referenceSectionHeader}><Text style={styles.referenceSectionTitle}>المفضلات</Text></View>
