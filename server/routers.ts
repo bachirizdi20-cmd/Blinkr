@@ -259,7 +259,7 @@ export const appRouter = router({
       mediaSource: z.literal("hardcover").optional(),
       title: z.string().trim().min(1).max(255),
       posterPath: z.string().max(255).nullable().optional(),
-      rating: z.number().int().min(0).max(10),
+      rating: z.number().min(0).max(10).multipleOf(0.5),
       review: z.string().trim().max(5000),
       spoiler: z.boolean().default(false),
       watchedDate: z.string().datetime().nullable().optional(),
