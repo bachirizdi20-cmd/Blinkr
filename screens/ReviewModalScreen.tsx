@@ -29,6 +29,7 @@ export default function ReviewModalScreen() {
   const route = useRoute<RouteT>();
   const { mediaType, mediaId, mediaSource, title, posterPath, genreIds, entryId } = route.params;
   const { user } = useAuth();
+  const utils = trpc.useUtils();
   const lib = useLibrary();
   const existing = entryId
     ? lib.diary.find((entry) => entry.id === entryId)
@@ -96,6 +97,7 @@ export default function ReviewModalScreen() {
       };
       if (existing) lib.updateDiaryEntry(existing.id, payload);
       else lib.addDiaryEntry(payload);
+      void utils.social.feed.invalidate();
       navigation.goBack();
     } catch (error) {
       Alert.alert('تعذر حفظ المراجعة', error instanceof Error ? error.message : 'تحقق من الاتصال ثم حاول مرة أخرى.');
