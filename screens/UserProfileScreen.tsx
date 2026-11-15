@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -164,6 +164,7 @@ function RemoteUserProfile({
       ) : null}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        refreshControl={<RefreshControl refreshing={profileQuery.isRefetching || reviewsQuery.isRefetching || publicLibraryQuery.isRefetching || mediaStatusesQuery.isRefetching} onRefresh={() => { void Promise.all([profileQuery.refetch(), reviewsQuery.refetch(), publicLibraryQuery.refetch(), mediaStatusesQuery.refetch()]); }} tintColor={colors.accent} />}
         <ProfileIdentity
           name={displayName}
           avatar={<UserAvatar name={displayName} color={colors.accent} size={64} imageUrl={profile.avatarUrl ?? undefined} />}
