@@ -179,6 +179,7 @@ function RemoteUserProfile({
             />
           )}
         />
+        <ProfileBio bio={profile.bio} />
         <View style={styles.profileActions}>
           {profile.isSelf ? <Text style={styles.selfLabel}>هذا ملفك الشخصي</Text> : (
             <>
