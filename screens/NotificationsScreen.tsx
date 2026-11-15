@@ -104,8 +104,7 @@ export default function NotificationsScreen() {
   const handleNotificationPress = (item: NotificationItem) => {
     if (!item.readAt) markOneRead.mutate({ notificationId: item.id });
     if (item.kind === 'follow' && item.actorId) navigation.navigate('UserProfile', { userId: `remote-${item.actorId}` });
-    else if (item.reviewMediaType === 'book' && item.reviewMediaId) openCatalogItem(navigation, { mediaType: 'book', mediaId: item.reviewMediaId, title: item.reviewTitle ?? undefined, posterPath: item.reviewPosterPath });
-    else if ((item.reviewMediaType === 'movie' || item.reviewMediaType === 'tv') && item.reviewMediaId) navigation.navigate('Detail', { mediaType: item.reviewMediaType, id: item.reviewMediaId });
+    else if (item.reviewMediaType && item.reviewMediaId) openCatalogItem(navigation, { mediaType: item.reviewMediaType, mediaId: item.reviewMediaId, title: item.reviewTitle ?? undefined, posterPath: item.reviewPosterPath });
   };
 
   const handleFollowBack = (actorId: number | null) => {
