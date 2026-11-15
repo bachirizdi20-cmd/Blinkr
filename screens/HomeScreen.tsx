@@ -32,7 +32,6 @@ import {
 } from '../lib/tmdb';
 import { NormalizedItem, ReviewMediaType } from '../types/tmdb';
 import { catalogPosterUrl, openCatalogItem } from '../lib/catalog-navigation';
-import { useMetadata } from '../context/MetadataContext';
 import { useAuth } from '../hooks/use-auth';
 import { trpc } from '../lib/trpc';
 import { colors, fontSizes, spacing, radius } from '../lib/theme';
