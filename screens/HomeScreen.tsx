@@ -118,6 +118,8 @@ export default function HomeScreen() {
     setRefreshing(true);
     load();
     void hardcoverTrendingQuery.refetch();
+    void comicTrendingQuery.refetch();
+    if (user) void notificationsQuery.refetch();
   };
 
   const openDetail = (item: NormalizedItem) => {
