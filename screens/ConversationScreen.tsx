@@ -63,6 +63,8 @@ export default function ConversationScreen() {
   const remoteProfileQuery = trpc.social.profile.useQuery({ userId: numericOtherUserId }, { enabled: Boolean(authUser && isRemoteConversation), retry: 1 });
   const messagesQuery = trpc.social.messages.useQuery({ otherUserId: numericOtherUserId }, { enabled: Boolean(authUser && isRemoteConversation), retry: 1, refetchInterval: 3000 });
   const sendMessageMutation = trpc.social.sendMessage.useMutation({ onSuccess: () => messagesQuery.refetch() });
+  const updateMessageMutation = trpc.social.updateMessage.useMutation({ onSuccess: () => messagesQuery.refetch() });
+  const deleteMessageMutation = trpc.social.deleteMessage.useMutation({ onSuccess: () => messagesQuery.refetch() });
   const sendImageMutation = trpc.social.sendImage.useMutation({ onSuccess: () => messagesQuery.refetch() });
   const sendAttachmentMutation = trpc.social.sendAttachment.useMutation({ onSuccess: () => messagesQuery.refetch() });
   const deleteConversationMutation = trpc.social.deleteConversation.useMutation({ onSuccess: () => navigation.goBack() });
@@ -98,6 +100,8 @@ export default function ConversationScreen() {
   const user = remoteUser;
   const isTyping = false;
   const [text, setText] = useState('');
+  const [replyTarget, setReplyTarget] = useState<any>(null);
+  const [editingMessage, setEditingMessage] = useState<any>(null);
   const [pendingImage, setPendingImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [failedAudio, setFailedAudio] = useState<AudioDraft | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
@@ -131,12 +135,22 @@ export default function ConversationScreen() {
   }
 
   const handleSend = async () => {
-    if (!text.trim() || sendMessageMutation.isPending) return;
+    if (!text.trim() || sendMessageMutation.isPending || updateMessageMutation.isPending) return;
     try {
       if (!authUser || !isRemoteConversation) return;
-      await sendMessageMutation.mutateAsync({ otherUserId: numericOtherUserId, text: text.trim() });
-      setText('');
-    } catch { Alert.alert('تعذر إرسال الرسالة', 'حاول مرة أخرى.'); }
+      if (editingMessage) await updateMessageMutation.mutateAsync({ messageId: Number(editingMessage.id), text: text.trim() });
+      else await sendMessageMutation.mutateAsync({ otherUserId: numericOtherUserId, text: text.trim(), ...(replyTarget ? { replyToId: Number(replyTarget.id) } : {}) });
+      setText(''); setReplyTarget(null); setEditingMessage(null);
+    } catch { Alert.alert(editingMessage ? 'تعذر تعديل الرسالة' : 'تعذر إرسال الرسالة', 'حاول مرة أخرى.'); }
+  };
+  const handleMessageLongPress = (item: any) => {
+    const actions: any[] = [{ text: 'رد', onPress: () => { setEditingMessage(null); setReplyTarget(item); } }];
+    if (item.sender === 'me' && item.text) {
+      actions.push({ text: 'تعديل', onPress: () => { setReplyTarget(null); setEditingMessage(item); setText(item.text); } });
+      actions.push({ text: 'حذف', style: 'destructive', onPress: () => Alert.alert('حذف الرسالة؟', 'سيتم حذفها نهائيًا من المحادثة.', [{ text: 'إلغاء', style: 'cancel' }, { text: 'حذف', style: 'destructive', onPress: () => deleteMessageMutation.mutate({ messageId: Number(item.id) }) }]) });
+    }
+    actions.push({ text: 'إلغاء', style: 'cancel' });
+    Alert.alert('خيارات الرسالة', undefined, actions);
   };
 
   const handlePickImage = async (fromCamera: boolean) => {
@@ -340,13 +354,14 @@ export default function ConversationScreen() {
               const mine = item.sender === 'me';
               return (
                 <View style={[styles.bubbleRow, mine ? styles.bubbleRowMine : styles.bubbleRowTheirs]}>
-                  <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+                  <Pressable onLongPress={() => handleMessageLongPress(item)} delayLongPress={350} style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+                    {item.replyToId ? <View style={styles.replyQuote}><Text style={styles.replyQuoteTitle}>رد على رسالة</Text><Text style={styles.replyQuoteText} numberOfLines={2}>{remoteMessages.find((message: any) => Number(message.id) === Number(item.replyToId))?.text ?? 'رسالة غير متاحة'}</Text></View> : null}
                     {!!(item as any).sharedMediaId && <Pressable style={styles.mediaCard} onPress={() => openCatalogItem(navigation, { mediaType: normalizeReviewMediaType((item as any).sharedMediaType), mediaId: Number((item as any).sharedMediaId), title: (item as any).sharedTitle, posterPath: (item as any).sharedPosterPath })}><Image source={{ uri: catalogPosterUrl(normalizeReviewMediaType((item as any).sharedMediaType), (item as any).sharedPosterPath, 'w342') ?? undefined }} style={styles.cardPoster} resizeMode="cover" /><View style={styles.cardCopy}><Text style={styles.cardLabel}>{(item as any).sharedMediaType === 'book' ? 'كتاب' : 'عنوان من TMDB'}</Text><Text style={styles.cardTitle} numberOfLines={2}>{(item as any).sharedTitle}</Text><Text style={styles.cardRating}>★ {(((item as any).sharedRating ?? 0) / 10).toFixed(1)}</Text></View></Pressable>}
                     {!!(item as any).mediaUrl && (item as any).mediaType === 'audio' ? <Pressable style={styles.audioMessage} onPress={() => handlePlayAudio((item as any).mediaUrl)}><Ionicons name="play" size={18} color={mine ? '#04120C' : colors.accent} /><View style={styles.audioWave}><View style={styles.audioLine} /><View style={[styles.audioLine, styles.audioLineLong]} /><View style={styles.audioLine} /></View><Text style={[styles.audioLabel, mine && styles.bubbleTextMine]}>رسالة صوتية</Text></Pressable> : null}
                     {!!(item as any).mediaUrl && (item as any).mediaType === 'gif' && resolveMediaUrl((item as any).mediaUrl) ? <Image source={{ uri: resolveMediaUrl((item as any).mediaUrl) }} style={styles.messageGif} resizeMode="cover" /> : null}
                     {!!(item as any).mediaUrl && (item as any).mediaType !== 'audio' && (item as any).mediaType !== 'gif' && resolveMediaUrl((item as any).mediaUrl) ? <Image source={{ uri: resolveMediaUrl((item as any).mediaUrl) }} style={styles.messageImage} resizeMode="cover" /> : null}
                     {!!item.text && <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.text}</Text>}
-                  </View>
+                  </Pressable>
                   <Text style={[styles.bubbleTime, mine ? styles.bubbleTimeMine : styles.bubbleTimeTheirs]}>
                     {formatMessageTime(item.createdAt)}{mine ? `  ${((item as any).readAt ? '✓✓' : '✓')}` : ''}
                   </Text>
@@ -367,8 +382,9 @@ export default function ConversationScreen() {
 
         {attachmentError ? <View style={styles.attachmentError}><Ionicons name="warning-outline" size={16} color="#FF8A4C" /><Text style={styles.attachmentErrorText}>{attachmentError}</Text><Pressable onPress={() => failedAudio ? handleRetryAudio() : pendingImage ? handleSendImage() : failedGif ? handleSelectGiphy(failedGif) : undefined} disabled={sendImageMutation.isPending || sendAttachmentMutation.isPending}><Text style={styles.retryAction}>إعادة المحاولة</Text></Pressable></View> : null}
         {pendingImage ? <View style={styles.previewBar}><Image source={{ uri: pendingImage.uri }} style={styles.previewImage} /><View style={styles.previewCopy}><Text style={styles.previewTitle}>جاهزة للإرسال</Text><Text style={styles.previewMeta}>{pendingImage.width} × {pendingImage.height}</Text></View><Pressable onPress={() => { setPendingImage(null); setAttachmentError(null); }} style={styles.previewCancel}><Ionicons name="close" size={19} color={colors.textDim} /></Pressable><Pressable onPress={handleSendImage} style={styles.previewSend} disabled={sendImageMutation.isPending}><Ionicons name="send" size={16} color="#04120C" /></Pressable></View> : null}
+        {(replyTarget || editingMessage) ? <View style={styles.replyComposer}><View style={{ flex: 1 }}><Text style={styles.replyComposerTitle}>{editingMessage ? 'تعديل الرسالة' : 'الرد على رسالة'}</Text><Text style={styles.replyComposerText} numberOfLines={1}>{editingMessage?.text ?? replyTarget?.text ?? 'رسالة'}</Text></View><Pressable onPress={() => { setReplyTarget(null); setEditingMessage(null); setText(''); }}><Ionicons name="close-circle" size={20} color={colors.textDim} /></Pressable></View> : null}
         <View style={styles.inputBar}>
-          <Pressable style={({ pressed }) => [styles.attachBtn, pressed && styles.iconBtnPressed]} onPress={() => setAttachmentOpen(true)} accessibilityLabel="فتح قائمة المرفقات">
+          <Pressable style={({ pressed }) => [styles.attachBtn, pressed && styles.iconBtnPressed]} onPress={() => setAttachmentOpen(true)} accessibilityLabel="مشاركة محتوى أو GIF">
             <Ionicons name="add" size={24} color={colors.textDim} />
           </Pressable>
           <TextInput
@@ -386,11 +402,9 @@ export default function ConversationScreen() {
           <Pressable style={({ pressed }) => [styles.emojiBtn, pressed && styles.iconBtnPressed]} onPress={() => setText((current) => `${current}${current ? ' ' : ''}😊`)} accessibilityLabel="إضافة رمز تعبيري">
             <Ionicons name="happy-outline" size={20} color={colors.textDim} />
           </Pressable>
-          {text.trim() ? <Pressable style={({ pressed }) => [styles.sendBtn, pressed && styles.sendBtnPressed]} onPress={handleSend} accessibilityLabel="إرسال الرسالة">
-            <Ionicons name="arrow-up" size={19} color="#04120C" />
-          </Pressable> : <Pressable style={({ pressed }) => [styles.voiceBtn, pressed && styles.sendBtnPressed]} onPress={handleRecordToggle} accessibilityLabel={recorderState.isRecording ? 'إيقاف التسجيل' : 'رسالة صوتية'}>
-            <Ionicons name="mic" size={19} color={colors.bg} />
-          </Pressable>}
+          {text.trim() ? <Pressable style={({ pressed }) => [styles.sendBtn, pressed && styles.sendBtnPressed]} onPress={handleSend} accessibilityLabel={editingMessage ? 'حفظ تعديل الرسالة' : 'إرسال الرسالة'} disabled={sendMessageMutation.isPending || updateMessageMutation.isPending}>
+            <Ionicons name={editingMessage ? 'checkmark' : 'arrow-up'} size={19} color="#04120C" />
+          </Pressable> : null}
         </View>
       </KeyboardAvoidingView>
       <Modal visible={cardPickerOpen} animationType="slide" transparent onRequestClose={() => setCardPickerOpen(false)}>
@@ -416,9 +430,9 @@ export default function ConversationScreen() {
             <Text style={styles.sheetTitle}>شارك شيئًا</Text>
             <View style={styles.attachmentGrid}>
               <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); setCardPickerOpen(true); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(53, 211, 153, 0.16)' }]}><Ionicons name="film" size={22} color={colors.accent} /></View><Text style={styles.attachmentLabel}>مشاركة فيلم</Text></Pressable>
-              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); Alert.alert('إرسال صورة', 'اختر مصدر الصورة', [{ text: 'الكاميرا', onPress: () => handlePickImage(true) }, { text: 'مكتبة الصور', onPress: () => handlePickImage(false) }, { text: 'إلغاء', style: 'cancel' }]); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(91, 178, 255, 0.16)' }]}><Ionicons name="image" size={22} color="#62B2FF" /></View><Text style={styles.attachmentLabel}>إرسال صورة</Text></Pressable>
+
               <Pressable style={styles.attachmentItem} onPress={openGifPicker}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(146, 91, 255, 0.18)' }]}><Text style={styles.gifLabel}>GIF</Text></View><Text style={styles.attachmentLabel}>العثور على GIF</Text></Pressable>
-              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); handleRecordToggle(); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(255, 126, 58, 0.16)' }]}><Ionicons name="mic" size={22} color="#FF8A4C" /></View><Text style={styles.attachmentLabel}>{recorderState.isRecording ? 'إيقاف التسجيل' : 'رسالة صوتية'}</Text></Pressable>
+
             </View>
           </View>
         </View>
@@ -460,6 +474,12 @@ const styles = StyleSheet.create({
   bubbleTimeTheirs: { color: colors.textFaint },
   typingBubble: { paddingVertical: spacing.sm },
   typingDots: { color: colors.textDim, fontSize: fontSizes.lg, letterSpacing: 1 },
+  replyComposer: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginHorizontal: spacing.md, padding: spacing.sm, borderTopLeftRadius: radius.md, borderTopRightRadius: radius.md, backgroundColor: colors.surfaceHigh, borderLeftWidth: 3, borderLeftColor: colors.accent },
+  replyComposerTitle: { color: colors.accent, fontSize: 11, fontWeight: '900', textAlign: 'right' },
+  replyComposerText: { color: colors.textDim, fontSize: 11, marginTop: 2, textAlign: 'right' },
+  replyQuote: { borderRightWidth: 3, borderRightColor: colors.accent, paddingRight: 8, marginBottom: 6, backgroundColor: 'rgba(0,0,0,0.08)', borderRadius: 5, paddingVertical: 5 },
+  replyQuoteTitle: { color: colors.accent, fontSize: 10, fontWeight: '900', textAlign: 'right' },
+  replyQuoteText: { color: colors.textDim, fontSize: 11, marginTop: 2, textAlign: 'right' },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
