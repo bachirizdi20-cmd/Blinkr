@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import BookCard from '../components/BookCard';
@@ -136,18 +136,18 @@ export default function CreateScreen() {
         <View><Text style={styles.eyebrow}>إنشاء مراجعة</Text><Text style={styles.title}>شارك رأيك</Text></View>
         <View style={styles.headerButton}><Ionicons name="create-outline" size={20} color={colors.accent} /></View>
       </View>
-      {!searchOpen ? <View style={styles.editor}>
+      {!searchOpen ? <ScrollView contentContainerStyle={styles.editor} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {selectedItem && selection ? <View style={styles.selectedCard}>
-          <Pressable style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md }} onPress={() => setSearchOpen(true)}>
+          <Pressable style={{ flex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md }} onPress={() => setSearchOpen(true)}>
             <Image source={{ uri: selection.posterPath ? (selection.mediaType === 'book' || selection.mediaType === 'comic' ? selection.posterPath : `https://image.tmdb.org/t/p/w342${selection.posterPath}`) : undefined }} style={styles.selectedPoster} resizeMode="cover" />
             <View style={styles.selectedCopy}><Text style={styles.selectedLabel}>{category === 'anime' ? 'أنمي' : selection.mediaType === 'book' ? 'كتاب' : selection.mediaType === 'comic' ? 'كوميك' : selection.mediaType === 'tv' ? 'مسلسل' : 'فيلم'}</Text><Text style={styles.selectedTitle} numberOfLines={2}>{selection.title}</Text></View>
           </Pressable>
           <View style={styles.selectedActions}><Pressable onPress={() => setSearchOpen(true)}><Text style={styles.changeText}>تغيير العنوان</Text></Pressable><Pressable onPress={() => setSelectedItem(null)}><Text style={styles.removeText}>إزالة</Text></Pressable></View>
         </View> : <Pressable style={styles.addCard} onPress={() => setSearchOpen(true)} accessibilityRole="button" accessibilityLabel="اختيار عنوان للمراجعة"><View style={styles.addIcon}><Ionicons name="add" size={34} color={colors.accent} /></View><Text style={styles.addTitle}>اختر محتوى لمراجعتك</Text><Text style={styles.addHint}>اضغط لإضافة عنوان وبدء مراجعتك</Text></Pressable>}
         <View style={styles.editorSection}><Text style={styles.editorLabel}>تقييمك من 10</Text><View style={styles.ratingControls}><Pressable style={styles.ratingStep} onPress={() => setRating((value) => Math.min(10, Math.round((value + 0.5) * 2) / 2))}><Text style={styles.ratingStepText}>+</Text></Pressable><View style={styles.ratingCenter}><Text style={styles.ratingValue}>{rating.toFixed(1).replace('.0','')}/10</Text><Ionicons name="star" size={20} color={colors.accent} /></View><Pressable style={styles.ratingStep} onPress={() => setRating((value) => Math.max(0, Math.round((value - 0.5) * 2) / 2))}><Text style={styles.ratingStepText}>−</Text></Pressable></View></View>
-        <View style={styles.editorSection}><View style={styles.reviewHeader}><Text style={styles.editorLabel}>مراجعتك</Text><Text style={styles.counter}>{review.length}/1000</Text></View><TextInput style={styles.reviewInput} value={review} onChangeText={(value) => setReview(value.slice(0, 1000))} placeholder="اكتب مراجعتك..." placeholderTextColor={colors.textFaint} multiline textAlignVertical="top" /><Text style={styles.reviewHint}>شارك أفكارك وانطباعاتك حول هذا العمل...</Text></View>
+        <View style={styles.editorSection}><View style={styles.reviewHeader}><Text style={styles.editorLabel}>مراجعتك</Text><Text style={styles.counter}>{review.length}/1000</Text></View><TextInput style={styles.reviewInput} value={review} onChangeText={(value) => setReview(value.slice(0, 1000))} placeholder="اكتب مراجعتك هنا… ما الذي أعجبك أو لم يعجبك؟" placeholderTextColor={colors.textFaint} multiline textAlignVertical="top" /><Text style={styles.reviewHint}>شارك أفكارك وانطباعاتك حول هذا العمل...</Text></View>
         <Pressable onPress={publishReview} disabled={saving} style={({ pressed }) => [styles.publishButton, pressed && styles.pressed, saving && styles.disabled]}>{saving ? <ActivityIndicator color={colors.bg} /> : <Ionicons name="send" size={18} color={colors.bg} />}<Text style={styles.publishText}>{saving ? 'جارٍ النشر…' : 'نشر المراجعة'}</Text></Pressable>
-      </View> : null}
+      </ScrollView> : null}
       {searchOpen ? <>
       <View style={styles.categoryRow}>{CATEGORIES.map((item) => <Pressable key={item.key} onPress={() => { setCategory(item.key); setQuery(''); }} style={[styles.categoryPill, category === item.key && styles.categoryPillActive]}><Ionicons name={item.icon} size={14} color={category === item.key ? colors.bg : colors.textDim} /><Text style={[styles.categoryText, category === item.key && styles.categoryTextActive]}>{item.label}</Text></Pressable>)}</View>
       <View style={styles.searchBar}>
@@ -190,14 +190,14 @@ const styles = StyleSheet.create({
   eyebrow: { color: colors.accent, fontSize: fontSizes.xs, fontWeight: '900', letterSpacing: 1.1 },
   title: { color: colors.text, fontSize: 28, fontWeight: '900', marginTop: 3 },
   headerButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  categoryRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.xs, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   categoryPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   categoryPillActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   categoryText: { color: colors.textDim, fontSize: 11, fontWeight: '800' },
   categoryTextActive: { color: colors.bg },
-  selectedActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  selectedActions: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md },
   removeText: { color: colors.danger, fontSize: fontSizes.xs, fontWeight: '800' },
-  ratingControls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg },
+  ratingControls: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg },
   ratingStep: { width: 46, height: 42, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.borderLight },
   ratingStepText: { color: colors.accent, fontSize: 28, lineHeight: 30, fontWeight: '800' },
   ratingCenter: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
@@ -205,8 +205,8 @@ const styles = StyleSheet.create({
   addIcon: { width: 66, height: 66, borderRadius: 33, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(51,214,166,0.12)' },
   addTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '900' },
   addHint: { color: colors.textDim, fontSize: fontSizes.xs },
-  editor: { flex: 1 },
-  selectedCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginHorizontal: spacing.lg, marginTop: spacing.lg, padding: spacing.md, borderRadius: radius.xl, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  editor: { flexGrow: 1, paddingBottom: spacing.xl }, 
+  selectedCard: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md, marginHorizontal: spacing.lg, marginTop: spacing.lg, padding: spacing.md, borderRadius: radius.xl, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   selectedPoster: { width: 78, height: 112, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh },
   selectedCopy: { flex: 1, alignItems: 'flex-end', gap: spacing.sm },
   selectedLabel: { color: colors.accent, fontSize: fontSizes.xs, fontWeight: '900' },
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
   ratingValue: { color: colors.accent, fontSize: fontSizes.lg, fontWeight: '900', textAlign: 'center', marginTop: spacing.sm },
   reviewHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   counter: { color: colors.textDim, fontSize: fontSizes.xs },
-  reviewInput: { minHeight: 150, marginTop: spacing.sm, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, color: colors.text, fontSize: fontSizes.md, lineHeight: 23, textAlign: 'right' },
+  reviewInput: { minHeight: 150, writingDirection: 'rtl', marginTop: spacing.sm, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, color: colors.text, fontSize: fontSizes.md, lineHeight: 23, textAlign: 'right' },
   reviewHint: { color: colors.textFaint, fontSize: fontSizes.sm, lineHeight: 22, textAlign: 'right', marginTop: spacing.xs },
   publishButton: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, marginHorizontal: spacing.lg, marginTop: spacing.xl, marginBottom: spacing.xl, paddingHorizontal: spacing.md, backgroundColor: colors.accent, borderRadius: radius.lg },
   publishText: { color: colors.bg, fontSize: fontSizes.md, fontWeight: '900' },
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
   card: { flex: 1, maxWidth: '32%', overflow: 'hidden', backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   poster: { width: '100%', aspectRatio: 0.68, backgroundColor: colors.surfaceHigh },
   cardBody: { padding: spacing.xs },
-  cardTitle: { color: colors.text, fontSize: 11, lineHeight: 14, fontWeight: '800', textAlign: 'right' },
+  cardTitle: { color: colors.text, fontSize: 11, lineHeight: 15, fontWeight: '800', textAlign: 'right' },
   cardMeta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
   cardType: { color: colors.accent, fontSize: 9, fontWeight: '800' },
   cardYear: { color: colors.textFaint, fontSize: 9 },

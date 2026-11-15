@@ -26,7 +26,7 @@ export default function ChatsScreen() {
     () => (remoteUsersQuery.data ?? []).map((item) => ({
       id: `remote-${item.id}`,
       username: item.username ?? `user${item.id}`,
-      displayName: item.name ?? item.username ?? 'Blinkr user',
+      displayName: item.name ?? item.username ?? 'مستخدم Blinkr',
       bio: item.bio ?? '',
       avatarUrl: item.avatarUrl,
       avatarColor: colors.accent,
@@ -57,7 +57,7 @@ export default function ChatsScreen() {
       convo: { unread: item.unreadCount },
       lastMessage: {
         sender: item.lastMessage?.senderId === Number(authUser?.id) ? 'me' : 'them',
-        text: item.lastMessage?.text ?? (item.lastMessage?.mediaType ? `Sent ${item.lastMessage.mediaType}` : ''),
+        text: item.lastMessage?.text ?? (item.lastMessage?.mediaType ? `أرسل ${item.lastMessage.mediaType}` : ''),
         createdAt: item.lastMessage ? new Date(item.lastMessage.createdAt).getTime() : new Date(item.updatedAt).getTime(),
       },
     })),
@@ -84,7 +84,7 @@ export default function ChatsScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Chats</Text>
+        <Text style={styles.title}>المحادثات</Text>
         <Pressable style={styles.peopleBtn} onPress={() => navigation.navigate('People')}>
           <Ionicons name="person-add-outline" size={20} color={colors.text} />
         </Pressable>
@@ -94,7 +94,7 @@ export default function ChatsScreen() {
         <Ionicons name="search" size={16} color={colors.textFaint} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search people"
+          placeholder="ابحث عن الأشخاص"
           placeholderTextColor={colors.textFaint}
           value={query}
           onChangeText={setQuery}
@@ -115,7 +115,7 @@ export default function ChatsScreen() {
           <View>
             {newFollowers.length > 0 && !q && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>New Followers</Text>
+                <Text style={styles.sectionTitle}>متابعون جدد</Text>
                 <FlatList
                   data={newFollowers}
                   horizontal
@@ -127,7 +127,7 @@ export default function ChatsScreen() {
                       <UserAvatar name={item.displayName} color={item.avatarColor} size={56} ring />
                       <Text numberOfLines={1} style={styles.followerName}>{item.displayName}</Text>
                       <View style={styles.followBackBadge}>
-                        <Text style={styles.followBackText}>Follow back</Text>
+                        <Text style={styles.followBackText}>متابعة بالمثل</Text>
                       </View>
                     </Pressable>
                   )}
@@ -137,7 +137,7 @@ export default function ChatsScreen() {
 
             {filteredStartable.length > 0 && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Start a Conversation</Text>
+                <Text style={styles.sectionTitle}>ابدأ محادثة</Text>
                 <FlatList
                   data={filteredStartable}
                   horizontal
@@ -154,21 +154,21 @@ export default function ChatsScreen() {
               </View>
             )}
 
-            {filteredRows.length > 0 && <Text style={[styles.sectionTitle, { marginBottom: spacing.sm }]}>Messages</Text>}
+            {filteredRows.length > 0 && <Text style={[styles.sectionTitle, { marginBottom: spacing.sm }]}>الرسائل</Text>}
           </View>
         }
         ListEmptyComponent={
           newFollowers.length === 0 && filteredStartable.length === 0 ? (
             <EmptyState
               icon="chatbubbles-outline"
-              title="No conversations yet"
-              message="Follow people from the Discover tab to start chatting about what you're watching."
+              title="لا توجد محادثات بعد"
+              message="تابع أشخاصًا من صفحة الاستكشاف لبدء محادثات حول ما تشاهده."
             />
           ) : null
         }
         renderItem={({ item }) => {
           const isTyping = false;
-          const preview = isTyping ? 'typing…' : `${item.lastMessage?.sender === 'me' ? 'You: ' : ''}${item.lastMessage?.text ?? ''}`;
+          const preview = isTyping ? 'يكتب الآن…' : `${item.lastMessage?.sender === 'me' ? 'أنت: ' : ''}${item.lastMessage?.text ?? ''}`;
           return (
             <Pressable style={styles.chatRow} onPress={() => openConversation(item.user)}>
               <UserAvatar name={item.user.displayName} color={item.user.avatarColor} size={52} imageUrl={item.user.avatarUrl ?? undefined} />

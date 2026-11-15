@@ -219,8 +219,8 @@ export default function ProfileScreen() {
                 const poster = catalogPosterUrl(mediaType, review.posterPath, 'w200');
                 return (
                   <View key={review.id} style={styles.publishedReviewCard}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-                      <Pressable style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md }} onPress={() => openCatalogItem(navigation, { mediaType, mediaId: review.mediaId, title: review.title, posterPath: review.posterPath })}>
+                    <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md }}>
+                      <Pressable style={{ flex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md }} onPress={() => openCatalogItem(navigation, { mediaType, mediaId: review.mediaId, title: review.title, posterPath: review.posterPath })}>
                         {poster ? <Image source={{ uri: poster }} style={styles.publishedReviewPoster} contentFit="cover" /> : <View style={[styles.publishedReviewPoster, styles.publishedPosterFallback]}><Ionicons name={mediaType === 'book' ? 'book-outline' : 'film-outline'} size={22} color={colors.textFaint} /></View>}
                         <View style={styles.publishedReviewInfo}>
                           <Text style={styles.publishedReviewTitle} numberOfLines={2}>{review.title}</Text>
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
   verifyButton: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.md, alignSelf: 'flex-start' as const },
   verifyText: { color: colors.accent, fontSize: fontSizes.xs, fontWeight: '800' as const },
   publishedReviewsSection: { marginBottom: spacing.xl, paddingHorizontal: spacing.lg },
-  publishedReviewCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginBottom: spacing.md },
+  publishedReviewCard: { flexDirection: 'column', alignItems: 'stretch', gap: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginBottom: spacing.md },
   publishedReviewPoster: { width: 58, height: 82, borderRadius: radius.sm, backgroundColor: colors.surfaceHigh },
   publishedPosterFallback: { alignItems: 'center', justifyContent: 'center' },
   publishedReviewInfo: { flex: 1, alignItems: 'flex-end', gap: 5 },
@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
   publishedRating: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.surfaceHigh, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 4 },
   publishedRatingText: { color: colors.text, fontSize: fontSizes.xs, fontWeight: '800' },
   publishedReviewDate: { color: colors.textDim, fontSize: 11, lineHeight: 16 },
-  publishedReviewBody: { color: colors.textDim, fontSize: fontSizes.xs, lineHeight: 18, textAlign: 'right', alignSelf: 'stretch' },
+  publishedReviewBody: { color: colors.textDim, fontSize: fontSizes.sm, lineHeight: 21, textAlign: 'right', alignSelf: 'stretch', marginTop: spacing.xs },
   publishedReviewsState: { minHeight: 90, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
   publishedReviewsEmpty: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
   publishedReviewsHint: { color: colors.textDim, fontSize: fontSizes.sm, textAlign: 'center' },

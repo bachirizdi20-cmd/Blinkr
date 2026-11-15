@@ -46,7 +46,7 @@ const styles = StyleSheet.create({
   actionActive: { borderColor: colors.accent, backgroundColor: 'rgba(51,214,166,0.10)' },
   actionLabel: { color: colors.textDim, fontSize: 11, lineHeight: 16, textAlign: 'center', fontWeight: '800', writingDirection: 'rtl' },
   actionLabelActive: { color: colors.accent },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
+  ratingRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
   stepButton: { width: 48, height: 42, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.borderLight },
   stepText: { color: colors.accent, fontSize: 28, lineHeight: 30, fontWeight: '700' },
   ratingValue: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
