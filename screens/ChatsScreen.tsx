@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, TextInput } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, TextInput, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
@@ -110,6 +110,7 @@ export default function ChatsScreen() {
         data={filteredRows}
         keyExtractor={(row) => row.user.id}
         contentContainerStyle={styles.listContent}
+        refreshControl={<RefreshControl refreshing={conversationsQuery.isRefetching || remoteUsersQuery.isRefetching} onRefresh={() => { void Promise.all([conversationsQuery.refetch(), remoteUsersQuery.refetch()]); }} tintColor={colors.accent} />}
         ListHeaderComponent={
           <View>
             {newFollowers.length > 0 && !q && (

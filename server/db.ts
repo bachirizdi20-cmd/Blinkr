@@ -923,22 +923,32 @@ export async function listConversations(userId: number) {
   return result;
 }
 
-export async function createChatMessage(input: Omit<InsertChatMessage, "id" | "createdAt">, recipientId: number) {
+export async function createChatMessage(input: Omit<InsertChatMessage, "id" | "createdAt">, _recipientId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const allowed = await userCanAccessConversation(input.senderId, input.conversationId);
   if (!allowed) throw new Error("Conversation access denied");
+  if (input.replyToId) {
+    const target = await db.select({ id: chatMessages.id }).from(chatMessages).where(and(eq(chatMessages.id, input.replyToId), eq(chatMessages.conversationId, input.conversationId), isNull(chatMessages.deletedAt))).limit(1);
+    if (!target[0]) throw new Error("Reply target is unavailable");
+  }
   await db.insert(chatMessages).values(input);
   await db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, input.conversationId));
   const message = await db.select().from(chatMessages).where(and(eq(chatMessages.conversationId, input.conversationId), eq(chatMessages.senderId, input.senderId))).orderBy(desc(chatMessages.createdAt)).limit(1);
-  await db.insert(notifications).values({ userId: recipientId, actorId: input.senderId, kind: "message", conversationId: input.conversationId });
   return message[0];
+}
+
+export async function updateChatMessage(userId: number, messageId: number, text: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.update(chatMessages).set({ text: text.trim() }).where(and(eq(chatMessages.id, messageId), eq(chatMessages.senderId, userId), isNull(chatMessages.deletedAt), isNull(chatMessages.mediaType)));
+  return { success: true } as const;
 }
 
 export async function deleteChatMessage(userId: number, messageId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(chatMessages).set({ deletedAt: new Date() }).where(and(eq(chatMessages.id, messageId), eq(chatMessages.senderId, userId)));
+  await db.delete(chatMessages).where(and(eq(chatMessages.id, messageId), eq(chatMessages.senderId, userId)));
 }
 
 export async function deleteConversation(userId: number, otherUserId: number) {

@@ -45,7 +45,7 @@ export default function ReviewModalScreen() {
   const spoiler = false;
   const [saving, setSaving] = useState(false);
   const [edited, setEdited] = useState(false);
-  const mediaLabel = mediaType === 'book' ? 'كتاب' : mediaType === 'tv' ? 'مسلسل' : 'فيلم';
+  const mediaLabel = mediaType === 'book' ? 'كتاب' : mediaType === 'comic' ? 'كوميك' : mediaType === 'tv' ? 'مسلسل' : 'فيلم';
   const imageUri = catalogPosterUrl(mediaType, posterPath, 'w342');
   const isEditing = Boolean(existing || savedReviewQuery.data);
 
@@ -131,7 +131,7 @@ export default function ReviewModalScreen() {
             <Pressable onPress={() => navigation.goBack()} style={styles.closeButton} hitSlop={8} accessibilityLabel="إغلاق">
               <Ionicons name="close" size={28} color={colors.text} />
             </Pressable>
-            <Text style={styles.topTitle}>{isEditing ? 'تعديل المراجعة' : 'مراجعة جديدة'}</Text>
+            <Text style={styles.topTitle}>{isEditing ? 'تعديل المراجعة' : ''}</Text>
             <View style={styles.topBarSpacer} />
           </View>
 
@@ -148,10 +148,12 @@ export default function ReviewModalScreen() {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>تقييمك من 10</Text>
-            <View style={styles.ratingStars} accessibilityLabel={`التقييم ${String(rating).replace('.', ',')} من 10`}>
-              {Array.from({ length: 10 }, (_, index) => { const value = index + 1; const filled = rating >= value; const half = !filled && rating >= value - 0.5; return <Pressable key={value} onPress={() => { setRating(value); setEdited(true); }} hitSlop={4} accessibilityLabel={`تقييم ${value} من 10`}><Ionicons name={filled ? 'star' : half ? 'star-half' : 'star-outline'} size={27} color={filled || half ? colors.accent : colors.textFaint} /></Pressable>; })}
+            <View style={styles.ratingControls}>
+              <Pressable style={styles.ratingStep} onPress={() => { setRating((value) => Math.min(10, Math.round((value + 0.5) * 2) / 2)); setEdited(true); }} accessibilityLabel="زيادة التقييم"><Text style={styles.ratingStepText}>+</Text></Pressable>
+              <View style={styles.ratingCenter}><Text style={styles.ratingNumber}>{String(rating).replace('.', ',')}/10</Text><Ionicons name="star" size={20} color={colors.accent} /></View>
+              <Pressable style={styles.ratingStep} onPress={() => { setRating((value) => Math.max(0, Math.round((value - 0.5) * 2) / 2)); setEdited(true); }} accessibilityLabel="إنقاص التقييم"><Text style={styles.ratingStepText}>−</Text></Pressable>
             </View>
-            <View style={styles.ratingSummary}><Text style={styles.ratingNumber}>{rating > 0 ? `${String(rating).replace('.', ',')}/10` : 'اختر تقييمك'}</Text>{rating > 0 ? <Pressable onPress={() => { setRating(0); setEdited(true); }}><Text style={styles.clearRatingText}>إزالة التقييم</Text></Pressable> : null}</View>
+            {rating > 0 ? <Pressable onPress={() => { setRating(0); setEdited(true); }} style={{ alignSelf: 'center', marginTop: spacing.sm }}><Text style={styles.clearRatingText}>إزالة التقييم</Text></Pressable> : null}
           </View>
 
           <View style={styles.section}>
@@ -192,7 +194,10 @@ const styles = StyleSheet.create({
   section: { marginTop: spacing.lg, paddingHorizontal: spacing.lg },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sectionTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '900', textAlign: 'right' },
-  ratingStars: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.md, paddingVertical: spacing.md, paddingHorizontal: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  ratingControls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.md, padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  ratingStep: { width: 46, height: 42, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.borderLight },
+  ratingStepText: { color: colors.accent, fontSize: 28, lineHeight: 30, fontWeight: '800' },
+  ratingCenter: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   ratingSummary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.sm },
   ratingNumber: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '900' },
   clearRatingText: { color: colors.textFaint, fontSize: fontSizes.xs },

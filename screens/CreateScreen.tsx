@@ -3,16 +3,18 @@ import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Pressable, Style
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import BookCard from '../components/BookCard';
+import ComicCard from '../components/ComicCard';
 import EmptyState from '../components/EmptyState';
 import GeneralErrorState from '../components/GeneralErrorState';
 import { trpc } from '../lib/trpc';
 import { isAnimeItem } from '../lib/media-categories';
 import { BookSummary } from '../types/books';
+import { ComicSummary } from '../types/comics';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { useAuth } from '../hooks/use-auth';
 import { useLibrary } from '../context/LibraryContext';
 
-type Category = 'all' | 'movie' | 'tv' | 'anime' | 'book';
+type Category = 'all' | 'movie' | 'tv' | 'anime' | 'book' | 'comic';
 type TmdbItem = { id: number; media_type?: 'movie' | 'tv'; title?: string; name?: string; poster_path?: string | null; posterPath?: string | null; overview?: string; vote_average?: number; voteAverage?: number; first_air_date?: string; release_date?: string; genre_ids?: number[]; original_language?: string };
 const CATEGORIES: { key: Category; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
   { key: 'all', label: 'الكل', icon: 'sparkles-outline' },
@@ -20,6 +22,7 @@ const CATEGORIES: { key: Category; label: string; icon: React.ComponentProps<typ
   { key: 'tv', label: 'مسلسلات', icon: 'tv-outline' },
   { key: 'anime', label: 'أنمي', icon: 'color-wand-outline' },
   { key: 'book', label: 'كتب', icon: 'book-outline' },
+  { key: 'comic', label: 'كوميكس', icon: 'albums-outline' },
 ];
 
 export default function CreateScreen() {
@@ -31,7 +34,9 @@ export default function CreateScreen() {
   const [items, setItems] = useState<TmdbItem[]>([]);
   const [bookPage, setBookPage] = useState(1);
   const [books, setBooks] = useState<BookSummary[]>([]);
-  const [selectedItem, setSelectedItem] = useState<TmdbItem | BookSummary | null>(null);
+  const [comicPage, setComicPage] = useState(1);
+  const [comics, setComics] = useState<ComicSummary[]>([]);
+  const [selectedItem, setSelectedItem] = useState<TmdbItem | BookSummary | ComicSummary | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState('');
@@ -39,6 +44,7 @@ export default function CreateScreen() {
   const trimmed = query.trim();
   const [debouncedQuery, setDebouncedQuery] = useState(trimmed);
   const bookMode = category === 'book';
+  const comicMode = category === 'comic';
   const searching = debouncedQuery.length >= 2;
   const bookSearchReady = searching && trimmed === debouncedQuery;
   const path = searching ? '/search/multi' : '/trending/all/week';
@@ -50,14 +56,18 @@ export default function CreateScreen() {
 
   const tmdbQuery = trpc.tmdb.get.useQuery(
     { path, params: { page, include_adult: false, ...(searching ? { query: debouncedQuery } : {}) } },
-    { retry: 1, enabled: !bookMode },
+    { retry: 1, enabled: !bookMode && !comicMode },
   );
   const bookQuery = trpc.books.search.useQuery(
     { query: debouncedQuery, page: bookPage, limit: 20 },
     { retry: 1, enabled: bookMode && bookSearchReady },
   );
+  const comicQuery = trpc.comics.search.useQuery(
+    { query: debouncedQuery, page: comicPage, limit: 20 },
+    { retry: 1, enabled: comicMode && searching && trimmed === debouncedQuery },
+  );
 
-  useEffect(() => { setPage(1); setItems([]); setBookPage(1); setBooks([]); }, [trimmed]);
+  useEffect(() => { setPage(1); setItems([]); setBookPage(1); setBooks([]); setComicPage(1); setComics([]); }, [trimmed]);
   useEffect(() => {
     const next = ((tmdbQuery.data as any)?.results ?? []).filter((item: TmdbItem) => item.media_type === 'movie' || item.media_type === 'tv' || (!item.media_type && (item.title || item.release_date)));
     setItems((current) => page === 1 ? next : [...current, ...next.filter((item: TmdbItem) => !current.some((existing) => existing.id === item.id && (existing.media_type ?? '') === (item.media_type ?? '')))]);
@@ -67,6 +77,11 @@ export default function CreateScreen() {
     const next = bookQuery.data.results;
     setBooks((current) => bookPage === 1 ? next : [...current, ...next.filter((book) => !current.some((existing) => existing.workId === book.workId))]);
   }, [bookQuery.data, bookPage, bookSearchReady]);
+  useEffect(() => {
+    if (!comicQuery.data || !comicMode) return;
+    const next = comicQuery.data.results ?? [];
+    setComics((current) => comicPage === 1 ? next : [...current, ...next.filter((comic) => !current.some((existing) => existing.id === comic.id))]);
+  }, [comicQuery.data, comicPage, comicMode]);
 
   const results = useMemo(() => items.filter((item) => {
     const type = item.media_type ?? (item.title ? 'movie' : 'tv');
@@ -75,14 +90,18 @@ export default function CreateScreen() {
     return type === category;
   }), [items, category]);
 
-  const openReview = (item: TmdbItem) => {
+  const openReview = (item: TmdbItem | BookSummary | ComicSummary) => {
     setSelectedItem(item);
     setSearchOpen(false);
   };
   const saveReviewMutation = trpc.reviews.save.useMutation();
-  const selection = selectedItem ? ('workId' in selectedItem ? { mediaType: 'book' as const, mediaId: selectedItem.workId, title: selectedItem.title, posterPath: selectedItem.coverUrl, genreIds: [] as number[], mediaSource: 'hardcover' as const } : { mediaType: (selectedItem.media_type ?? (selectedItem.title ? 'movie' : 'tv')) as 'movie' | 'tv', mediaId: selectedItem.id, title: selectedItem.title ?? selectedItem.name ?? 'عنوان بلا اسم', posterPath: selectedItem.posterPath ?? selectedItem.poster_path ?? null, genreIds: selectedItem.genre_ids ?? [], mediaSource: undefined }) : null;
+  const selection = selectedItem ? ('workId' in selectedItem
+    ? { mediaType: 'book' as const, mediaId: selectedItem.workId, title: selectedItem.title, posterPath: selectedItem.coverUrl, genreIds: [] as number[], mediaSource: 'hardcover' as const }
+    : 'coverUrl' in selectedItem
+      ? { mediaType: 'comic' as const, mediaId: selectedItem.id, title: selectedItem.title, posterPath: selectedItem.coverUrl, genreIds: [] as number[], mediaSource: undefined }
+      : { mediaType: (selectedItem.media_type ?? (selectedItem.title ? 'movie' : 'tv')) as 'movie' | 'tv', mediaId: selectedItem.id, title: selectedItem.title ?? selectedItem.name ?? 'عنوان بلا اسم', posterPath: selectedItem.posterPath ?? selectedItem.poster_path ?? null, genreIds: selectedItem.genre_ids ?? [], mediaSource: undefined }) : null;
   const publishReview = async () => {
-    if (!selection) { Alert.alert('اختر عنوانًا أولًا', 'اضغط على البطاقة العلوية واختر فيلمًا أو مسلسلًا أو كتابًا.'); return; }
+    if (!selection) { Alert.alert('اختر عنوانًا أولًا', 'اضغط على البطاقة العلوية واختر فيلمًا أو مسلسلًا أو كتابًا أو كوميك.'); return; }
     if (!user) { Alert.alert('يلزم تسجيل الدخول', 'سجّل الدخول لنشر مراجعتك.'); return; }
     const trimmedReview = review.trim();
     if (rating === 0 && !trimmedReview) { Alert.alert('أضف تقييمًا أو مراجعة', 'اختر تقييمًا أو اكتب رأيك قبل النشر.'); return; }
@@ -97,16 +116,19 @@ export default function CreateScreen() {
   const handleQueryChange = (value: string) => { setQuery(value); setPage(1); setItems([]); setBookPage(1); setBooks([]); };
   const tmdbHasMore = Number((tmdbQuery.data as any)?.total_pages ?? 1) > page;
   const booksHasMore = Number(bookQuery.data?.totalPages ?? 1) > bookPage;
+  const comicsHasMore = Number(comicQuery.data?.totalPages ?? 1) > comicPage;
   const loadMore = () => {
     if (bookMode) {
       if (!bookQuery.isFetching && booksHasMore) setBookPage((value) => value + 1);
+    } else if (comicMode) {
+      if (!comicQuery.isFetching && comicsHasMore) setComicPage((value) => value + 1);
     } else if (!tmdbQuery.isFetching && tmdbHasMore) {
       setPage((value) => value + 1);
     }
   };
-  const loading = bookMode ? bookQuery.isLoading : tmdbQuery.isLoading;
-  const failed = bookMode ? bookQuery.isError : tmdbQuery.isError;
-  const refetch = () => { if (bookMode) void bookQuery.refetch(); else void tmdbQuery.refetch(); };
+  const loading = bookMode ? bookQuery.isLoading : comicMode ? comicQuery.isLoading : tmdbQuery.isLoading;
+  const failed = bookMode ? bookQuery.isError : comicMode ? comicQuery.isError : tmdbQuery.isError;
+  const refetch = () => { if (bookMode) void bookQuery.refetch(); else if (comicMode) void comicQuery.refetch(); else void tmdbQuery.refetch(); };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -115,28 +137,34 @@ export default function CreateScreen() {
         <View style={styles.headerButton}><Ionicons name="create-outline" size={20} color={colors.accent} /></View>
       </View>
       {!searchOpen ? <View style={styles.editor}>
-        {selectedItem && selection ? <Pressable style={styles.selectedCard} onPress={() => setSearchOpen(true)}>
-          <Image source={{ uri: selection.posterPath ? (selection.mediaType === 'book' ? selection.posterPath : `https://image.tmdb.org/t/p/w342${selection.posterPath}`) : undefined }} style={styles.selectedPoster} resizeMode="cover" />
-          <View style={styles.selectedCopy}><Text style={styles.selectedLabel}>العنوان المختار</Text><Text style={styles.selectedTitle} numberOfLines={2}>{selection.title}</Text><Text style={styles.changeText}>اضغط لتغيير العنوان</Text></View>
-        </Pressable> : <Pressable style={styles.addCard} onPress={() => setSearchOpen(true)} accessibilityRole="button" accessibilityLabel="اختيار عنوان للمراجعة"><View style={styles.addIcon}><Ionicons name="add" size={34} color={colors.accent} /></View><Text style={styles.addTitle}>اختر فيلمًا أو مسلسلًا أو كتابًا</Text><Text style={styles.addHint}>اضغط لإضافة عنوان وبدء مراجعتك</Text></Pressable>}
-        <View style={styles.editorSection}><Text style={styles.editorLabel}>تقييمك من 10</Text><View style={styles.ratingStars}>{Array.from({ length: 10 }, (_, index) => { const value = index + 1; return <Pressable key={value} onPress={() => setRating(value)} hitSlop={3} accessibilityLabel={`تقييم ${value} من 10`}><Ionicons name={rating >= value ? 'star' : 'star-outline'} size={25} color={rating >= value ? colors.accent : colors.textFaint} /></Pressable>; })}</View><Text style={styles.ratingValue}>{rating > 0 ? `${rating}/10` : 'اختر تقييمك'}</Text></View>
+        {selectedItem && selection ? <View style={styles.selectedCard}>
+          <Pressable style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md }} onPress={() => setSearchOpen(true)}>
+            <Image source={{ uri: selection.posterPath ? (selection.mediaType === 'book' || selection.mediaType === 'comic' ? selection.posterPath : `https://image.tmdb.org/t/p/w342${selection.posterPath}`) : undefined }} style={styles.selectedPoster} resizeMode="cover" />
+            <View style={styles.selectedCopy}><Text style={styles.selectedLabel}>{category === 'anime' ? 'أنمي' : selection.mediaType === 'book' ? 'كتاب' : selection.mediaType === 'comic' ? 'كوميك' : selection.mediaType === 'tv' ? 'مسلسل' : 'فيلم'}</Text><Text style={styles.selectedTitle} numberOfLines={2}>{selection.title}</Text></View>
+          </Pressable>
+          <View style={styles.selectedActions}><Pressable onPress={() => setSearchOpen(true)}><Text style={styles.changeText}>تغيير العنوان</Text></Pressable><Pressable onPress={() => setSelectedItem(null)}><Text style={styles.removeText}>إزالة</Text></Pressable></View>
+        </View> : <Pressable style={styles.addCard} onPress={() => setSearchOpen(true)} accessibilityRole="button" accessibilityLabel="اختيار عنوان للمراجعة"><View style={styles.addIcon}><Ionicons name="add" size={34} color={colors.accent} /></View><Text style={styles.addTitle}>اختر محتوى لمراجعتك</Text><Text style={styles.addHint}>اضغط لإضافة عنوان وبدء مراجعتك</Text></Pressable>}
+        <View style={styles.editorSection}><Text style={styles.editorLabel}>تقييمك من 10</Text><View style={styles.ratingControls}><Pressable style={styles.ratingStep} onPress={() => setRating((value) => Math.min(10, Math.round((value + 0.5) * 2) / 2))}><Text style={styles.ratingStepText}>+</Text></Pressable><View style={styles.ratingCenter}><Text style={styles.ratingValue}>{rating.toFixed(1).replace('.0','')}/10</Text><Ionicons name="star" size={20} color={colors.accent} /></View><Pressable style={styles.ratingStep} onPress={() => setRating((value) => Math.max(0, Math.round((value - 0.5) * 2) / 2))}><Text style={styles.ratingStepText}>−</Text></Pressable></View></View>
         <View style={styles.editorSection}><View style={styles.reviewHeader}><Text style={styles.editorLabel}>مراجعتك</Text><Text style={styles.counter}>{review.length}/1000</Text></View><TextInput style={styles.reviewInput} value={review} onChangeText={(value) => setReview(value.slice(0, 1000))} placeholder="اكتب مراجعتك..." placeholderTextColor={colors.textFaint} multiline textAlignVertical="top" /><Text style={styles.reviewHint}>شارك أفكارك وانطباعاتك حول هذا العمل...</Text></View>
         <Pressable onPress={publishReview} disabled={saving} style={({ pressed }) => [styles.publishButton, pressed && styles.pressed, saving && styles.disabled]}>{saving ? <ActivityIndicator color={colors.bg} /> : <Ionicons name="send" size={18} color={colors.bg} />}<Text style={styles.publishText}>{saving ? 'جارٍ النشر…' : 'نشر المراجعة'}</Text></Pressable>
       </View> : null}
       {searchOpen ? <>
+      <View style={styles.categoryRow}>{CATEGORIES.map((item) => <Pressable key={item.key} onPress={() => { setCategory(item.key); setQuery(''); }} style={[styles.categoryPill, category === item.key && styles.categoryPillActive]}><Ionicons name={item.icon} size={14} color={category === item.key ? colors.bg : colors.textDim} /><Text style={[styles.categoryText, category === item.key && styles.categoryTextActive]}>{item.label}</Text></Pressable>)}</View>
       <View style={styles.searchBar}>
         <Ionicons name="search" size={18} color={colors.textFaint} />
-        <TextInput style={styles.searchInput} placeholder={bookMode ? 'ابحث عن كتاب أو مؤلف…' : 'ابحث عن فيلم أو مسلسل أو أنمي…'} placeholderTextColor={colors.textFaint} value={query} onChangeText={handleQueryChange} autoCorrect={false} returnKeyType="search" />
+        <TextInput style={styles.searchInput} placeholder={bookMode ? 'ابحث عن كتاب أو مؤلف…' : comicMode ? 'ابحث عن كوميك أو مؤلف…' : 'ابحث عن فيلم أو مسلسل أو أنمي…'} placeholderTextColor={colors.textFaint} value={query} onChangeText={handleQueryChange} autoCorrect={false} returnKeyType="search" />
         {query.length > 0 ? <Pressable onPress={() => handleQueryChange('')} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textFaint} /></Pressable> : null}
       </View>
-      {bookMode && !bookSearchReady ? (
-        <EmptyState icon="book-outline" title="ابحث عن كتاب" message="اكتب اسم كتاب أو مؤلف للعثور على بياناته وغلافه من Hardcover." />
-      ) : loading && (bookMode ? books.length === 0 : items.length === 0) ? (
-        <View style={styles.loading}><ActivityIndicator color={colors.accent} size="large" /><Text style={styles.loadingText}>{bookMode ? 'جارٍ البحث عن الكتب…' : searching ? 'جارٍ البحث عن العناوين…' : 'جارٍ تحميل العناوين الرائجة…'}</Text></View>
-      ) : failed && (bookMode ? books.length === 0 : items.length === 0) ? (
-        <GeneralErrorState title={bookMode ? 'تعذر البحث عن الكتب' : 'تعذر تحميل العناوين'} message="تحقق من اتصال الإنترنت ثم أعد المحاولة." onRetry={refetch} />
+      {(bookMode || comicMode) && !searching ? (
+        <EmptyState icon={bookMode ? 'book-outline' : 'albums-outline'} title={bookMode ? 'ابحث عن كتاب' : 'ابحث عن كوميك'} message={bookMode ? 'اكتب اسم كتاب أو مؤلف للعثور على بياناته وغلافه من Hardcover.' : 'اكتب اسم كوميك أو مؤلف للعثور على الأعمال المتاحة.'} />
+      ) : loading && (bookMode ? books.length === 0 : comicMode ? comics.length === 0 : items.length === 0) ? (
+        <View style={styles.loading}><ActivityIndicator color={colors.accent} size="large" /><Text style={styles.loadingText}>{bookMode ? 'جارٍ البحث عن الكتب…' : comicMode ? 'جارٍ البحث عن الكوميكس…' : searching ? 'جارٍ البحث عن العناوين…' : 'جارٍ تحميل العناوين الرائجة…'}</Text></View>
+      ) : failed && (bookMode ? books.length === 0 : comicMode ? comics.length === 0 : items.length === 0) ? (
+        <GeneralErrorState title={bookMode ? 'تعذر البحث عن الكتب' : comicMode ? 'تعذر البحث عن الكوميكس' : 'تعذر تحميل العناوين'} message="تحقق من اتصال الإنترنت ثم أعد المحاولة." onRetry={refetch} />
       ) : bookMode ? (
         <FlatList data={books} numColumns={3} keyExtractor={(book) => String(book.workId)} contentContainerStyle={styles.grid} columnWrapperStyle={styles.gridRow} keyboardShouldPersistTaps="handled" onEndReached={loadMore} onEndReachedThreshold={0.65} ListEmptyComponent={!bookQuery.isFetching ? <EmptyState icon="search-outline" title="لم نعثر على كتب" message="جرّب عنوانًا أو اسم مؤلف مختلفًا." /> : null} renderItem={({ item }) => <BookCard book={item} width={CARD_WIDTH} onPress={() => { setSelectedItem(item); setSearchOpen(false); }} />} />
+      ) : comicMode ? (
+        <FlatList data={comics} numColumns={3} keyExtractor={(comic) => String(comic.id)} contentContainerStyle={styles.grid} columnWrapperStyle={styles.gridRow} keyboardShouldPersistTaps="handled" onEndReached={loadMore} onEndReachedThreshold={0.65} ListEmptyComponent={!comicQuery.isFetching ? <EmptyState icon="search-outline" title="لم نعثر على كوميكس" message="جرّب عنوانًا أو اسم مؤلف مختلفًا." /> : null} renderItem={({ item }) => <ComicCard comic={item} width={CARD_WIDTH} onPress={() => { setSelectedItem(item); setSearchOpen(false); }} />} />
       ) : (
         <FlatList data={results} numColumns={3} keyExtractor={(item, index) => `${item.media_type ?? (item.title ? 'movie' : 'tv')}-${item.id}-${index}`} contentContainerStyle={styles.grid} columnWrapperStyle={styles.gridRow} keyboardShouldPersistTaps="handled" onEndReached={loadMore} onEndReachedThreshold={0.65} ListEmptyComponent={!tmdbQuery.isFetching ? <EmptyState icon="search-outline" title={searching ? 'لم نعثر على عناوين' : 'لا توجد عناوين متاحة'} message={searching ? 'جرّب عنوانًا أو تصنيفًا آخر.' : 'ستظهر هنا العناوين الرائجة.'} /> : null} ListFooterComponent={tmdbQuery.isFetching && items.length > 0 ? <ActivityIndicator color={colors.accent} style={styles.loader} /> : tmdbQuery.isError && items.length > 0 ? <Pressable style={{ minHeight: 44, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.md, marginTop: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surface }} onPress={() => void tmdbQuery.refetch()} accessibilityRole="button"><Text style={{ color: colors.accent, fontSize: 11, fontWeight: '800', textAlign: 'center' }}>تعذر تحميل المزيد — اضغط لإعادة المحاولة</Text></Pressable> : null} renderItem={({ item }) => <CreateCard item={item} onPress={() => openReview(item)} />} />
       )}
@@ -162,6 +190,17 @@ const styles = StyleSheet.create({
   eyebrow: { color: colors.accent, fontSize: fontSizes.xs, fontWeight: '900', letterSpacing: 1.1 },
   title: { color: colors.text, fontSize: 28, fontWeight: '900', marginTop: 3 },
   headerButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  categoryPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  categoryPillActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  categoryText: { color: colors.textDim, fontSize: 11, fontWeight: '800' },
+  categoryTextActive: { color: colors.bg },
+  selectedActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  removeText: { color: colors.danger, fontSize: fontSizes.xs, fontWeight: '800' },
+  ratingControls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg },
+  ratingStep: { width: 46, height: 42, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.borderLight },
+  ratingStepText: { color: colors.accent, fontSize: 28, lineHeight: 30, fontWeight: '800' },
+  ratingCenter: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   addCard: { marginHorizontal: spacing.lg, marginTop: spacing.lg, minHeight: 220, alignItems: 'center', justifyContent: 'center', borderRadius: radius.xl, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', gap: spacing.sm },
   addIcon: { width: 66, height: 66, borderRadius: 33, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(51,214,166,0.12)' },
   addTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '900' },
@@ -175,7 +214,7 @@ const styles = StyleSheet.create({
   changeText: { color: colors.accent, fontSize: fontSizes.xs, fontWeight: '800' },
   editorSection: { marginTop: spacing.lg, paddingHorizontal: spacing.lg },
   editorLabel: { color: colors.text, fontSize: fontSizes.md, fontWeight: '900', textAlign: 'right' },
-  ratingStars: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.sm, paddingVertical: spacing.md, paddingHorizontal: spacing.sm, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+
   ratingValue: { color: colors.accent, fontSize: fontSizes.lg, fontWeight: '900', textAlign: 'center', marginTop: spacing.sm },
   reviewHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   counter: { color: colors.textDim, fontSize: fontSizes.xs },

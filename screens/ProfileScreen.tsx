@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Share, View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
+import { ActivityIndicator, View, Text, StyleSheet, ScrollView, Pressable, Modal, RefreshControl } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -165,6 +165,7 @@ export default function ProfileScreen() {
         <Pressable onPress={() => setMenuVisible(true)} style={styles.topNavButton} accessibilityLabel="فتح قائمة الحساب"><Ionicons name="menu" size={25} color={colors.text} /></Pressable>
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.profileScrollContent}>
+        refreshControl={<RefreshControl refreshing={accountQuery.isRefetching || remoteReviewsQuery.isRefetching || remoteStatusesQuery.isRefetching} onRefresh={() => { void Promise.all([accountQuery.refetch(), remoteReviewsQuery.refetch(), remoteStatusesQuery.refetch()]); }} tintColor={colors.accent} />}
         <View style={styles.commonProfileContent}>
         <ProfileIdentity
           name={displayName}
@@ -187,11 +188,10 @@ export default function ProfileScreen() {
             />
           )}
         />
+        <ProfileBio bio={displayedBio} />
         <View style={styles.identityActions}>
           <Pressable style={({ pressed }) => [styles.identityAction, styles.identityPrimary, pressed && styles.pressed]} onPress={() => navigation.navigate('EditProfile')}><Ionicons name="create-outline" size={15} color={colors.accent} /><Text style={styles.identityPrimaryText}>تعديل الملف</Text></Pressable>
-          <Pressable style={({ pressed }) => [styles.identityAction, styles.identitySecondary, pressed && styles.pressed]} onPress={() => Share.share({ message: `تابع ${displayName} على Blinkr.` })} accessibilityLabel="مشاركة الملف"><Ionicons name="share-outline" size={17} color={colors.text} /><Text style={styles.identitySecondaryText}>مشاركة الرابط</Text></Pressable>
         </View>
-        <ProfileBio bio={displayedBio} fallback="أضف نبذة قصيرة عن ذوقك في الأفلام والكتب." />
 
         <View style={styles.section}>
           <View style={styles.referenceSectionHeader}><Text style={styles.referenceSectionTitle}>المفضلات</Text></View>
@@ -218,16 +218,20 @@ export default function ProfileScreen() {
                 const mediaType = normalizeReviewMediaType(review.mediaType);
                 const poster = catalogPosterUrl(mediaType, review.posterPath, 'w200');
                 return (
-                  <Pressable key={review.id} style={styles.publishedReviewCard} onPress={() => openCatalogItem(navigation, { mediaType, mediaId: review.mediaId, title: review.title, posterPath: review.posterPath })}>
-                    {poster ? <Image source={{ uri: poster }} style={styles.publishedReviewPoster} contentFit="cover" /> : <View style={[styles.publishedReviewPoster, styles.publishedPosterFallback]}><Ionicons name={mediaType === 'book' ? 'book-outline' : 'film-outline'} size={22} color={colors.textFaint} /></View>}
-                    <View style={styles.publishedReviewInfo}>
-                      <Text style={styles.publishedReviewTitle} numberOfLines={2}>{review.title}</Text>
-                      {review.rating != null ? <View style={styles.publishedRating}><Ionicons name="star" size={12} color={colors.gold} /><Text style={styles.publishedRatingText}>{review.rating}/10</Text></View> : null}
-                      <Text style={styles.publishedReviewDate}>{formatProfileDate(review.updatedAt)}</Text>
-                      <Text style={styles.publishedReviewBody} numberOfLines={3}>{review.review || 'قيّمت هذا العنوان دون إضافة تعليق مكتوب.'}</Text>
+                  <View key={review.id} style={styles.publishedReviewCard}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+                      <Pressable style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md }} onPress={() => openCatalogItem(navigation, { mediaType, mediaId: review.mediaId, title: review.title, posterPath: review.posterPath })}>
+                        {poster ? <Image source={{ uri: poster }} style={styles.publishedReviewPoster} contentFit="cover" /> : <View style={[styles.publishedReviewPoster, styles.publishedPosterFallback]}><Ionicons name={mediaType === 'book' ? 'book-outline' : 'film-outline'} size={22} color={colors.textFaint} /></View>}
+                        <View style={styles.publishedReviewInfo}>
+                          <Text style={styles.publishedReviewTitle} numberOfLines={2}>{review.title}</Text>
+                          {review.rating != null ? <View style={styles.publishedRating}><Ionicons name="star" size={12} color={colors.gold} /><Text style={styles.publishedRatingText}>{review.rating}/10</Text></View> : null}
+                          <Text style={styles.publishedReviewDate}>{formatProfileDate(review.updatedAt)}</Text>
+                        </View>
+                      </Pressable>
+                      <Pressable onPress={() => Alert.alert('خيارات المراجعة', 'اختر إجراءً', [{ text: 'تعديل', onPress: () => navigation.navigate('ReviewModal', { mediaType, mediaId: review.mediaId, ...(review.mediaSource === 'hardcover' ? { mediaSource: 'hardcover' as const } : {}), title: review.title, posterPath: review.posterPath }) }, { text: 'حذف', style: 'destructive', onPress: () => Alert.alert('حذف المراجعة؟', 'سيتم حذفها نهائيًا.', [{ text: 'إلغاء', style: 'cancel' }, { text: 'حذف', style: 'destructive', onPress: async () => { await deleteReviewMutation.mutateAsync({ mediaType, mediaId: review.mediaId, ...(review.mediaSource === 'hardcover' ? { mediaSource: 'hardcover' as const } : {}) }); await remoteReviewsQuery.refetch(); } }]) }, { text: 'إلغاء', style: 'cancel' }])} hitSlop={8} accessibilityLabel="خيارات المراجعة"><Ionicons name="ellipsis-vertical" size={20} color={colors.textDim} /></Pressable>
                     </View>
-                    <Pressable onPress={() => Alert.alert('خيارات المراجعة', 'اختر إجراءً', [{ text: 'تعديل', onPress: () => navigation.navigate('ReviewModal', { mediaType, mediaId: review.mediaId, ...(review.mediaSource === 'hardcover' ? { mediaSource: 'hardcover' as const } : {}), title: review.title, posterPath: review.posterPath }) }, { text: 'حذف', style: 'destructive', onPress: () => Alert.alert('حذف المراجعة؟', 'سيتم حذفها نهائيًا.', [{ text: 'إلغاء', style: 'cancel' }, { text: 'حذف', style: 'destructive', onPress: async () => { await deleteReviewMutation.mutateAsync({ mediaType, mediaId: review.mediaId, ...(review.mediaSource === 'hardcover' ? { mediaSource: 'hardcover' as const } : {}) }); await remoteReviewsQuery.refetch(); } }]) }, { text: 'إلغاء', style: 'cancel' }])} hitSlop={8} accessibilityLabel="خيارات المراجعة"><Ionicons name="ellipsis-vertical" size={20} color={colors.textDim} /></Pressable>
-                  </Pressable>
+                    <Text style={styles.publishedReviewBody} numberOfLines={5}>{review.review || 'قيّمت هذا العنوان دون إضافة تعليق مكتوب.'}</Text>
+                  </View>
                 );
               })}
             </View>

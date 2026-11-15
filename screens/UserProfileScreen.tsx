@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -111,6 +111,15 @@ function RemoteUserProfile({
     diary: mergeProfileMediaItems(rawPublicLibrary.diary, mediaStatuses, ['watched']),
   }), [rawPublicLibrary, mediaStatuses]);
 
+  const reportReview = (reviewId: number) => {
+    Alert.alert('الإبلاغ عن المراجعة', 'اختر سبب الإبلاغ.', [
+      { text: 'محتوى مزعج', onPress: () => reportMutation.mutate({ targetType: 'review', targetId: reviewId, reason: 'spam' }) },
+      { text: 'مضايقة أو إساءة', onPress: () => reportMutation.mutate({ targetType: 'review', targetId: reviewId, reason: 'harassment' }) },
+      { text: 'سبب آخر', onPress: () => reportMutation.mutate({ targetType: 'review', targetId: reviewId, reason: 'other' }) },
+      { text: 'إلغاء', style: 'cancel' },
+    ]);
+  };
+
   const confirmBlock = () => {
     setMenuOpen(false);
     Alert.alert('حظر هذا المستخدم؟', 'لن تتمكنا من متابعة بعضكما أو مراسلة بعضكما، ولن ترى محتوى هذا المستخدم.', [
@@ -164,6 +173,7 @@ function RemoteUserProfile({
       ) : null}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        refreshControl={<RefreshControl refreshing={profileQuery.isRefetching || reviewsQuery.isRefetching || publicLibraryQuery.isRefetching || mediaStatusesQuery.isRefetching} onRefresh={() => { void Promise.all([profileQuery.refetch(), reviewsQuery.refetch(), publicLibraryQuery.refetch(), mediaStatusesQuery.refetch()]); }} tintColor={colors.accent} />}
         <ProfileIdentity
           name={displayName}
           avatar={<UserAvatar name={displayName} color={colors.accent} size={64} imageUrl={profile.avatarUrl ?? undefined} />}
@@ -179,6 +189,7 @@ function RemoteUserProfile({
             />
           )}
         />
+        <ProfileBio bio={profile.bio} />
         <View style={styles.profileActions}>
           {profile.isSelf ? <Text style={styles.selfLabel}>هذا ملفك الشخصي</Text> : (
             <>
@@ -204,8 +215,6 @@ function RemoteUserProfile({
             </>
           )}
         </View>
-
-        <ProfileBio bio={profile.bio} fallback="لم يضف هذا المستخدم نبذة شخصية بعد." />
 
         <View style={styles.favoritesSection}>
           <View style={styles.favoritesHeader}><Text style={styles.sectionTitle}>المفضلات</Text></View>
@@ -241,6 +250,7 @@ function RemoteUserProfile({
                         <View style={styles.reviewInfo}><Text style={styles.reviewTitle} numberOfLines={2}>{review.title}</Text><View style={styles.ratingPill}><Ionicons name="star" size={13} color={colors.gold} /><Text style={styles.ratingText}>{review.rating}/10</Text></View>{reviewDate ? <Text style={styles.reviewDate}>{reviewDate}</Text> : null}</View>
                         <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
                       </Pressable>
+                      <Pressable onPress={() => reportReview(review.id)} hitSlop={8} accessibilityRole="button" accessibilityLabel="الإبلاغ عن المراجعة"><Ionicons name="ellipsis-vertical" size={19} color={colors.textDim} /></Pressable>
                       {review.spoiler && !spoilerVisible ? (
                         <Pressable style={styles.spoilerNotice} onPress={() => setRevealedSpoilers((current) => ({ ...current, [review.id]: true }))}><Ionicons name="warning-outline" size={15} color={colors.gold} /><Text style={styles.spoilerText}>تحتوي المراجعة على حرق — اضغط لإظهارها</Text></Pressable>
                       ) : review.review ? <Text style={styles.reviewBody} numberOfLines={5}>{review.review}</Text> : <Text style={styles.reviewBodyMuted}>قيّم هذا العنوان دون إضافة تعليق مكتوب.</Text>}

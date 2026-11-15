@@ -259,7 +259,7 @@ export const appRouter = router({
       mediaSource: z.literal("hardcover").optional(),
       title: z.string().trim().min(1).max(255),
       posterPath: z.string().max(255).nullable().optional(),
-      rating: z.number().int().min(0).max(10),
+      rating: z.number().min(0).max(10).multipleOf(0.5),
       review: z.string().trim().max(5000),
       spoiler: z.boolean().default(false),
       watchedDate: z.string().datetime().nullable().optional(),
@@ -318,6 +318,7 @@ export const appRouter = router({
       if (!conversation) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Conversation unavailable' });
       return db.createChatMessage({ conversationId: conversation.id, senderId: ctx.user.id, text: input.text, replyToId: input.replyToId ?? null }, input.otherUserId);
     }),
+    updateMessage: protectedProcedure.input(z.object({ messageId: z.number().int().positive(), text: z.string().trim().min(1).max(4000) })).mutation(({ ctx, input }) => db.updateChatMessage(ctx.user.id, input.messageId, input.text)),
     deleteMessage: protectedProcedure.input(z.object({ messageId: z.number().int().positive() })).mutation(({ ctx, input }) => db.deleteChatMessage(ctx.user.id, input.messageId)),
     deleteConversation: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive() })).mutation(({ ctx, input }) => db.deleteConversation(ctx.user.id, input.otherUserId)),
     shareMedia: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive(), mediaType: z.enum(['movie', 'tv', 'book', 'comic']), mediaId: z.number().int().positive(), mediaSource: z.literal("hardcover").optional(), title: z.string().trim().min(1).max(255), posterPath: z.string().max(255).nullable().optional(), rating: z.number().min(0).max(10), overview: z.string().max(1200).nullable().optional() })).mutation(async ({ ctx, input }) => {

@@ -27,9 +27,9 @@ export default function DetailActionBar({ completed, inList, completionLabel, li
         <Action icon={completed ? 'checkmark-circle' : 'checkmark-circle-outline'} label={completionLabel} active={completed} onPress={onToggleCompleted} />
       </View>
       <View style={styles.ratingRow}>
-        <Pressable style={styles.stepButton} onPress={() => stepRating(-0.5)} accessibilityRole="button" accessibilityLabel="إنقاص التقييم"><Text style={styles.stepText}>−</Text></Pressable>
-        <View style={styles.ratingValue}><Text style={styles.ratingText}>{ratingLabel}/10</Text><Ionicons name="star" size={20} color={colors.accent} /></View>
         <Pressable style={styles.stepButton} onPress={() => stepRating(0.5)} accessibilityRole="button" accessibilityLabel="زيادة التقييم"><Text style={styles.stepText}>+</Text></Pressable>
+        <View style={styles.ratingValue}><Text style={styles.ratingText}>{ratingLabel}/10</Text><Ionicons name="star" size={20} color={colors.accent} /></View>
+        <Pressable style={styles.stepButton} onPress={() => stepRating(-0.5)} accessibilityRole="button" accessibilityLabel="إنقاص التقييم"><Text style={styles.stepText}>−</Text></Pressable>
       </View>
     </View>
   );
