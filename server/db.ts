@@ -554,10 +554,9 @@ export async function listSocialFeed(userId: number) {
   const db = await getDb();
   if (!db) return [];
   const followingIds = await listFollowingIds(userId);
-  if (!followingIds.length) return [];
   const blocked = await db.select({ userId: blocks.userId, blockedUserId: blocks.blockedUserId }).from(blocks).where(or(eq(blocks.userId, userId), eq(blocks.blockedUserId, userId)));
   const blockedIds = blocked.map((row) => row.userId === userId ? row.blockedUserId : row.userId);
-  const allowedIds = followingIds.filter((id) => !blockedIds.includes(id));
+  const allowedIds = Array.from(new Set([userId, ...followingIds])).filter((id) => !blockedIds.includes(id));
   if (!allowedIds.length) return [];
   const rows = await db.select({ review: reviews, username: userData.username, displayName: users.name, avatarUrl: userData.avatarUrl }).from(reviews).innerJoin(users, eq(users.id, reviews.userId)).leftJoin(userData, eq(userData.userId, reviews.userId)).where(inArray(reviews.userId, allowedIds)).orderBy(desc(reviews.updatedAt)).limit(50);
   if (!rows.length) return [];
