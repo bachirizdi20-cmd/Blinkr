@@ -1,4 +1,4 @@
-import { boolean, customType, index, int, longtext, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { boolean, customType, float, index, int, longtext, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 const mediumblob = customType<{ data: Buffer; driverData: Buffer }>({
   dataType: () => "mediumblob",
@@ -152,7 +152,7 @@ export const reviews = mysqlTable("reviews", {
   mediaSource: varchar("mediaSource", { length: 32 }),
   title: varchar("title", { length: 255 }).notNull(),
   posterPath: varchar("posterPath", { length: 255 }),
-  rating: int("rating").notNull(),
+  rating: float("rating").notNull(),
   review: longtext("review").notNull(),
   spoiler: boolean("spoiler").notNull().default(false),
   watchedDate: timestamp("watchedDate"),
