@@ -58,6 +58,7 @@ export default function DetailScreen() {
   const { user } = useAuth();
   const setStatusMutation = trpc.library.setStatus.useMutation();
   const removeStatusMutation = trpc.library.removeStatus.useMutation();
+  const saveReviewMutation = trpc.reviews.save.useMutation();
   const myReviewQuery = trpc.reviews.getMine.useQuery({ mediaType, mediaId: id }, { enabled: !!user, retry: false });
   const myStatusQuery = trpc.library.getStatus.useQuery({ mediaType, mediaId: id }, { enabled: !!user, retry: false });
 
@@ -129,9 +130,16 @@ export default function DetailScreen() {
       ? formatRuntime(detail.runtimeMinutes)
       : `${detail.numberOfSeasons.toLocaleString('ar')} موسم`;
 
-  const handleRate = (rating: number) => {
+  const handleRate = async (rating: number) => {
     if (!mediaRef) return;
     lib.setQuickRating(mediaRef, rating);
+    if (!user) return;
+    try {
+      await saveReviewMutation.mutateAsync({ mediaType, mediaId: id, title: detail.title, posterPath: detail.posterPath, rating, review: myReviewQuery.data?.review ?? '', spoiler: false, watchedDate: myReviewQuery.data?.watchedDate ? new Date(myReviewQuery.data.watchedDate).toISOString() : new Date().toISOString() });
+      await myReviewQuery.refetch();
+    } catch (error) {
+      Alert.alert('تعذر حفظ التقييم', error instanceof Error ? error.message : 'حاول مرة أخرى.');
+    }
   };
 
   const handleToggleWatched = async () => {
