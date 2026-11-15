@@ -60,7 +60,7 @@ export default function HomeScreen() {
   const notificationsQuery = trpc.social.notifications.useQuery(undefined, { enabled: Boolean(user) });
   const hardcoverTrendingQuery = trpc.books.trending.useQuery({ limit: 100 }, { retry: 1 });
   const comicTrendingQuery = trpc.comics.trending.useQuery({ limit: 20 }, { retry: 1 });
-  const unreadNotifications = (notificationsQuery.data ?? []).filter((item) => !item.readAt).length;
+  const unreadNotifications = (notificationsQuery.data ?? []).filter((item) => item.kind !== 'message' && !item.readAt).length;
   const [refreshing, setRefreshing] = useState(false);
   const [trending, setTrending] = useState<NormalizedItem[]>([]);
   const [moviePopular, setMoviePopular] = useState<NormalizedItem[]>([]);
