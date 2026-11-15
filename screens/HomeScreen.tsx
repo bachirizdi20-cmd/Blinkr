@@ -630,8 +630,6 @@ const styles = StyleSheet.create({
   replyingBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: 6, backgroundColor: colors.surfaceHigh, borderRadius: radius.sm },
   replyingText: { color: colors.textDim, fontSize: 11 },
   commentSendDisabled: { opacity: 0.45 },
-  commentAuthor: { color: colors.text, fontSize: 11, fontWeight: '800' },
-  commentBody: { color: colors.textDim, flex: 1, fontSize: 11, lineHeight: 16 },
   commentComposer: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
   commentInput: { flex: 1, minHeight: 38, color: colors.text, backgroundColor: colors.bg, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, fontSize: fontSizes.sm },
   commentSend: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
