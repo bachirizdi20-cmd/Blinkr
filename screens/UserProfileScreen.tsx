@@ -111,6 +111,15 @@ function RemoteUserProfile({
     diary: mergeProfileMediaItems(rawPublicLibrary.diary, mediaStatuses, ['watched']),
   }), [rawPublicLibrary, mediaStatuses]);
 
+  const reportReview = (reviewId: number) => {
+    Alert.alert('الإبلاغ عن المراجعة', 'اختر سبب الإبلاغ.', [
+      { text: 'محتوى مزعج', onPress: () => reportMutation.mutate({ targetType: 'review', targetId: reviewId, reason: 'spam' }) },
+      { text: 'مضايقة أو إساءة', onPress: () => reportMutation.mutate({ targetType: 'review', targetId: reviewId, reason: 'harassment' }) },
+      { text: 'سبب آخر', onPress: () => reportMutation.mutate({ targetType: 'review', targetId: reviewId, reason: 'other' }) },
+      { text: 'إلغاء', style: 'cancel' },
+    ]);
+  };
+
   const confirmBlock = () => {
     setMenuOpen(false);
     Alert.alert('حظر هذا المستخدم؟', 'لن تتمكنا من متابعة بعضكما أو مراسلة بعضكما، ولن ترى محتوى هذا المستخدم.', [
@@ -241,6 +250,7 @@ function RemoteUserProfile({
                         <View style={styles.reviewInfo}><Text style={styles.reviewTitle} numberOfLines={2}>{review.title}</Text><View style={styles.ratingPill}><Ionicons name="star" size={13} color={colors.gold} /><Text style={styles.ratingText}>{review.rating}/10</Text></View>{reviewDate ? <Text style={styles.reviewDate}>{reviewDate}</Text> : null}</View>
                         <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
                       </Pressable>
+                      <Pressable onPress={() => reportReview(review.id)} hitSlop={8} accessibilityRole="button" accessibilityLabel="الإبلاغ عن المراجعة"><Ionicons name="ellipsis-vertical" size={19} color={colors.textDim} /></Pressable>
                       {review.spoiler && !spoilerVisible ? (
                         <Pressable style={styles.spoilerNotice} onPress={() => setRevealedSpoilers((current) => ({ ...current, [review.id]: true }))}><Ionicons name="warning-outline" size={15} color={colors.gold} /><Text style={styles.spoilerText}>تحتوي المراجعة على حرق — اضغط لإظهارها</Text></Pressable>
                       ) : review.review ? <Text style={styles.reviewBody} numberOfLines={5}>{review.review}</Text> : <Text style={styles.reviewBodyMuted}>قيّم هذا العنوان دون إضافة تعليق مكتوب.</Text>}
