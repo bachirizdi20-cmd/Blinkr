@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -128,6 +129,17 @@ function RemoteUserProfile({
     ]);
   };
 
+  const copyProfileLink = async () => {
+    try {
+      const username = profileQuery.data?.username || String(userId);
+      await Clipboard.setStringAsync(`https://bachirizdi20-cmd.github.io/Blinkr/?profile=${encodeURIComponent(username)}`);
+      setMenuOpen(false);
+      Alert.alert('تم نسخ الرابط', 'يمكنك الآن مشاركة رابط الحساب.');
+    } catch {
+      Alert.alert('تعذر نسخ الرابط', 'حاول مرة أخرى.');
+    }
+  };
+
   const confirmReport = () => {
     setMenuOpen(false);
     Alert.alert('الإبلاغ عن المستخدم', 'اختر سبب الإبلاغ:', [
@@ -166,14 +178,14 @@ function RemoteUserProfile({
         <View style={styles.menuOverlay}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setMenuOpen(false)} accessibilityLabel="إغلاق القائمة" />
           <View style={styles.menuCard}>
+            <Pressable style={styles.menuItem} onPress={() => void copyProfileLink()}><Ionicons name="copy-outline" size={17} color={colors.text} /><Text style={styles.menuText}>نسخ رابط الحساب</Text></Pressable>
             <Pressable style={styles.menuItem} onPress={confirmReport}><Ionicons name="flag-outline" size={17} color={colors.text} /><Text style={styles.menuText}>الإبلاغ عن المستخدم</Text></Pressable>
             <Pressable style={styles.menuItem} onPress={confirmBlock}><Ionicons name="ban-outline" size={17} color={colors.danger} /><Text style={[styles.menuText, styles.dangerText]}>حظر المستخدم</Text></Pressable>
           </View>
         </View>
       ) : null}
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        refreshControl={<RefreshControl refreshing={profileQuery.isRefetching || reviewsQuery.isRefetching || publicLibraryQuery.isRefetching || mediaStatusesQuery.isRefetching} onRefresh={() => { void Promise.all([profileQuery.refetch(), reviewsQuery.refetch(), publicLibraryQuery.refetch(), mediaStatusesQuery.refetch()]); }} tintColor={colors.accent} />}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={profileQuery.isRefetching || reviewsQuery.isRefetching || publicLibraryQuery.isRefetching || mediaStatusesQuery.isRefetching} onRefresh={() => { void Promise.all([profileQuery.refetch(), reviewsQuery.refetch(), publicLibraryQuery.refetch(), mediaStatusesQuery.refetch()]); }} tintColor={colors.accent} />}>
         <ProfileIdentity
           name={displayName}
           avatar={<UserAvatar name={displayName} color={colors.accent} size={64} imageUrl={profile.avatarUrl ?? undefined} />}
@@ -203,10 +215,6 @@ function RemoteUserProfile({
                 <Text style={[styles.actionText, profile.isFollowing ? styles.secondaryButtonText : styles.primaryButtonText]}>
                   {profile.isFollowing ? 'تتابعه' : 'متابعة'}
                 </Text>
-              </Pressable>
-              <Pressable style={[styles.actionButton, styles.secondaryButton]} onPress={() => void Share.share({ message: `تابع ${displayName} على Blinkr.` })} accessibilityRole="button" accessibilityLabel="مشاركة رابط الملف">
-                <Ionicons name="share-outline" size={16} color={colors.text} />
-                <Text style={[styles.actionText, styles.secondaryButtonText]}>مشاركة</Text>
               </Pressable>
               <Pressable style={[styles.actionButton, styles.secondaryButton]} onPress={onMessage} accessibilityRole="button">
                 <Ionicons name="chatbubble-outline" size={16} color={colors.text} />

@@ -164,8 +164,7 @@ export default function ProfileScreen() {
         <Text style={styles.topNavTitle}>الملف الشخصي</Text>
         <Pressable onPress={() => setMenuVisible(true)} style={styles.topNavButton} accessibilityLabel="فتح قائمة الحساب"><Ionicons name="menu" size={25} color={colors.text} /></Pressable>
       </View>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.profileScrollContent}>
-        refreshControl={<RefreshControl refreshing={accountQuery.isRefetching || remoteReviewsQuery.isRefetching || remoteStatusesQuery.isRefetching} onRefresh={() => { void Promise.all([accountQuery.refetch(), remoteReviewsQuery.refetch(), remoteStatusesQuery.refetch()]); }} tintColor={colors.accent} />}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.profileScrollContent} refreshControl={<RefreshControl refreshing={accountQuery.isRefetching || remoteReviewsQuery.isRefetching || remoteStatusesQuery.isRefetching} onRefresh={() => { void Promise.all([accountQuery.refetch(), remoteReviewsQuery.refetch(), remoteStatusesQuery.refetch()]); }} tintColor={colors.accent} />}>
         <View style={styles.commonProfileContent}>
         <ProfileIdentity
           name={displayName}
