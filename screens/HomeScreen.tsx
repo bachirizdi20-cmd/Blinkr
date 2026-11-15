@@ -42,7 +42,6 @@ import { ComicSummary } from '../types/comics';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
-type Category = 'all' | 'movie' | 'tv' | 'anime';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -59,12 +58,10 @@ interface SectionData {
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const { user } = useAuth();
-  const { movieGenres } = useMetadata();
   const notificationsQuery = trpc.social.notifications.useQuery(undefined, { enabled: Boolean(user) });
   const hardcoverTrendingQuery = trpc.books.trending.useQuery({ limit: 100 }, { retry: 1 });
   const comicTrendingQuery = trpc.comics.trending.useQuery({ limit: 12 }, { retry: 1 });
   const unreadNotifications = (notificationsQuery.data ?? []).filter((item) => !item.readAt).length;
-  const [category, setCategory] = useState<Category>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [trending, setTrending] = useState<NormalizedItem[]>([]);
   const [moviePopular, setMoviePopular] = useState<NormalizedItem[]>([]);
@@ -208,9 +205,8 @@ export default function HomeScreen() {
     [moviePopular, tvPopular, animeTv, movieNowPlaying, animeMovie, movieTop, tvTop, tvAiring, movieUpcoming, loading]
   );
 
-  const visibleSections = sections.filter((s) => s.categories.includes(category));
+  const visibleSections = sections;
 
-  const genreChips = movieGenres.slice(0, 10);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -256,42 +252,9 @@ export default function HomeScreen() {
           </Pressable>
         )}
 
-        <View style={styles.categoryRow}>
-          {(['all', 'movie', 'tv', 'anime'] as Category[]).map((c) => (
-            <Pressable
-              key={c}
-              onPress={() => setCategory(c)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: category === c }}
-              accessibilityLabel={c === 'all' ? 'All categories' : c === 'movie' ? 'Movies' : c === 'tv' ? 'TV' : 'Anime'}
-              style={[styles.categoryPill, category === c && styles.categoryPillActive]}
-            >
-              <Text style={[styles.categoryText, category === c && styles.categoryTextActive]}>
-                {c === 'all' ? 'الكل' : c === 'movie' ? 'الأفلام' : c === 'tv' ? 'المسلسلات' : 'الأنمي'}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        {category === 'all' && genreChips.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.genreScroll} contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}>
-            {genreChips.map((g) => (
-              <Pressable
-                key={g.id}
-                style={styles.genreChip}
-                onPress={() => navigation.navigate('CategoryList', { title: g.name, feed: { kind: 'genre', media: 'movie', genreId: g.id } })}
-              >
-                <Text style={styles.genreChipText}>{g.name}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        )}
-
-        <SocialReviewFeed onOpenDetail={(review) => openCatalogItem(navigation, review)} enabled={Boolean(user)} />
-
         <View style={styles.bookSection}>
           <View style={styles.bookSectionHeader}>
-            <View><Text style={styles.bookSectionTitle}>الكتب الرائجة عالميًا</Text><Text style={styles.bookSectionSubtitle}>أشهر الكتب الرائجة حول العالم</Text></View>
+            <View><Text style={styles.bookSectionTitle}>الكتب الرائجة عالميًا</Text><Text style={styles.bookSectionSubtitle}>{(hardcoverTrendingQuery.data ?? []).length.toLocaleString('ar')} كتاب</Text></View>
             <Pressable onPress={() => navigation.navigate('Search', { booksTrending: true })} accessibilityRole="button"><Text style={styles.bookSectionMore}>الكل</Text></Pressable>
           </View>
           {hardcoverTrendingQuery.isLoading ? <View style={styles.bookLoading}><Text style={styles.bookLoadingText}>جارٍ تحميل الكتب…</Text></View> : hardcoverTrendingQuery.isError ? <Pressable onPress={() => hardcoverTrendingQuery.refetch()} style={styles.bookError}><Text style={styles.bookErrorText}>تعذر تحميل كتب Hardcover — اضغط لإعادة المحاولة.</Text></Pressable> : <FlatList
@@ -306,7 +269,7 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.bookSection}>
-          <View style={styles.bookSectionHeader}><View><Text style={styles.bookSectionTitle}>الكوميك الرائجة</Text><Text style={styles.bookSectionSubtitle}>من Comic Vine</Text></View><Pressable onPress={() => navigation.navigate('Search', { comicsTrending: true })}><Text style={styles.bookSectionMore}>See All</Text></Pressable></View>
+          <View style={styles.bookSectionHeader}><View><Text style={styles.bookSectionTitle}>الكوميك الرائجة</Text><Text style={styles.bookSectionSubtitle}>{(comicTrendingQuery.data ?? []).length.toLocaleString('ar')} كوميك</Text></View><Pressable onPress={() => navigation.navigate('Search', { comicsTrending: true })}><Text style={styles.bookSectionMore}>See All</Text></Pressable></View>
           {comicTrendingQuery.isLoading ? <View style={styles.bookLoading}><Text style={styles.bookLoadingText}>جارٍ تحميل الكوميك…</Text></View> : comicTrendingQuery.isError ? <Pressable onPress={() => comicTrendingQuery.refetch()} style={styles.bookError}><Text style={styles.bookErrorText}>تعذر تحميل الكوميك — اضغط لإعادة المحاولة.</Text></Pressable> : <FlatList data={((comicTrendingQuery.data ?? []) as ComicSummary[]).filter((comic) => Boolean(comic.coverUrl))} horizontal showsHorizontalScrollIndicator={false} keyExtractor={(comic) => `comic-${comic.id}`} contentContainerStyle={styles.bookList} ListEmptyComponent={<View style={styles.bookLoading}><Text style={styles.bookLoadingText}>لا توجد كوميك بأغلفة متاحة حاليًا.</Text></View>} renderItem={({ item }) => <ComicCard comic={item} width={112} onPress={() => navigation.navigate('ComicDetail', { id: item.id, comic: item })} />} />}
         </View>
 
