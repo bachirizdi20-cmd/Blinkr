@@ -216,7 +216,7 @@ function RemoteUserProfile({
                   {profile.isFollowing ? 'تتابعه' : 'متابعة'}
                 </Text>
               </Pressable>
-                            <Pressable style={[styles.actionButton, styles.secondaryButton]} onPress={onMessage} accessibilityRole="button">
+              <Pressable style={[styles.actionButton, styles.secondaryButton]} onPress={onMessage} accessibilityRole="button">
                 <Ionicons name="chatbubble-outline" size={16} color={colors.text} />
                 <Text style={[styles.actionText, styles.secondaryButtonText]}>الدردشة</Text>
               </Pressable>
