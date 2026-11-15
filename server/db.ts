@@ -934,10 +934,17 @@ export async function createChatMessage(input: Omit<InsertChatMessage, "id" | "c
   return message[0];
 }
 
+export async function updateChatMessage(userId: number, messageId: number, text: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.update(chatMessages).set({ text: text.trim() }).where(and(eq(chatMessages.id, messageId), eq(chatMessages.senderId, userId), isNull(chatMessages.deletedAt), isNull(chatMessages.mediaType)));
+  return { success: true } as const;
+}
+
 export async function deleteChatMessage(userId: number, messageId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(chatMessages).set({ deletedAt: new Date() }).where(and(eq(chatMessages.id, messageId), eq(chatMessages.senderId, userId)));
+  await db.delete(chatMessages).where(and(eq(chatMessages.id, messageId), eq(chatMessages.senderId, userId)));
 }
 
 export async function deleteConversation(userId: number, otherUserId: number) {
