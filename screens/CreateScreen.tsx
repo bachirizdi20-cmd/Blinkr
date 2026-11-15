@@ -138,7 +138,7 @@ export default function CreateScreen() {
       </View>
       {!searchOpen ? <ScrollView contentContainerStyle={styles.editor} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {selectedItem && selection ? <View style={styles.selectedCard}>
-          <Pressable style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md }} onPress={() => setSearchOpen(true)}>
+          <Pressable style={{ flex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md }} onPress={() => setSearchOpen(true)}>
             <Image source={{ uri: selection.posterPath ? (selection.mediaType === 'book' || selection.mediaType === 'comic' ? selection.posterPath : `https://image.tmdb.org/t/p/w342${selection.posterPath}`) : undefined }} style={styles.selectedPoster} resizeMode="cover" />
             <View style={styles.selectedCopy}><Text style={styles.selectedLabel}>{category === 'anime' ? 'أنمي' : selection.mediaType === 'book' ? 'كتاب' : selection.mediaType === 'comic' ? 'كوميك' : selection.mediaType === 'tv' ? 'مسلسل' : 'فيلم'}</Text><Text style={styles.selectedTitle} numberOfLines={2}>{selection.title}</Text></View>
           </Pressable>
