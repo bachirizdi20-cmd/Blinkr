@@ -19,6 +19,231 @@ import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import SectionRow from '../components/SectionRow';
+import SectionHeader from '../components/SectionHeader';
+import ComicCard from '../components/ComicCard';
+import BookCard from '../components/BookCard';
+import ApiErrorState from '../components/ApiErrorState';
+import { ContentStackParamList } from '../navigation/types';
+import {
+  fetchTrendingAll,
+  fetchMovieList,
+  fetchTVList,
+  fetchAnime,
+  backdropUrl,
+} from '../lib/tmdb';
+import { NormalizedItem, ReviewMediaType } from '../types/tmdb';
+import { catalogPosterUrl, openCatalogItem } from '../lib/catalog-navigation';
+import { useAuth } from '../hooks/use-auth';
+import { trpc } from '../lib/trpc';
+import { colors, fontSizes, spacing, radius } from '../lib/theme';
+import { resolveMediaUrl } from '../lib/media-url';
+import { ComicSummary } from '../types/comics';
+import { BookSummary } from '../types/books';
+import { PlatformAlert as Alert } from '../lib/platform-alert';
+
+type Nav = NativeStackNavigationProp<ContentStackParamList>;
+
+const { width: SCREEN_W } = Dimensions.get('window');
+
+interface SectionData {
+  key: string;
+  title: string;
+  subtitle?: string;
+  data: NormalizedItem[];
+  loading: boolean;
+  seeAll: () => void;
+}
+
+export default function HomeScreen() {
+  const navigation = useNavigation<Nav>();
+  const { user } = useAuth();
+  const comicTrendingQuery = trpc.comics.trending.useQuery({ limit: 20 }, { retry: 1, staleTime: 10 * 60 * 1000 });
+  const bookTrendingQuery = trpc.books.trending.useQuery({ limit: 20 }, { retry: 1, staleTime: 10 * 60 * 1000 });
+  const [refreshing, setRefreshing] = useState(false);
+  const [feedRefreshToken, setFeedRefreshToken] = useState(0);
+  const [trending, setTrending] = useState<NormalizedItem[]>([]);
+  const [moviePopular, setMoviePopular] = useState<NormalizedItem[]>([]);
+  const [movieTop, setMovieTop] = useState<NormalizedItem[]>([]);
+  const [movieUpcoming, setMovieUpcoming] = useState<NormalizedItem[]>([]);
+  const [movieNowPlaying, setMovieNowPlaying] = useState<NormalizedItem[]>([]);
+  const [tvPopular, setTvPopular] = useState<NormalizedItem[]>([]);
+  const [tvTop, setTvTop] = useState<NormalizedItem[]>([]);
+  const [tvAiring, setTvAiring] = useState<NormalizedItem[]>([]);
+  const [animeTv, setAnimeTv] = useState<NormalizedItem[]>([]);
+  const [animeMovie, setAnimeMovie] = useState<NormalizedItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    const applyBatch = (results: PromiseSettledResult<{ results: NormalizedItem[] }>[], setters: ((items: NormalizedItem[]) => void)[]) => {
+      let failures = 0;
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') setters[index](result.value.results);
+        else failures += 1;
+      });
+      return failures;
+    };
+    try {
+      // Render the first two catalog rows as soon as their essential data arrives.
+      const primary = await Promise.allSettled([
+        fetchMovieList('popular', 1),
+        fetchTVList('popular', 1),
+        fetchTrendingAll(1),
+      ]);
+      const primaryFailures = applyBatch(primary, [setMoviePopular, setTvPopular, (items) => setTrending(items)]);
+
+      // Load secondary collections after the primary rows are ready, avoiding a
+      // ten-request burst that delays the first useful content on slower phones.
+      const secondary = await Promise.allSettled([
+        fetchMovieList('top_rated', 1),
+        fetchMovieList('upcoming', 1),
+        fetchMovieList('now_playing', 1),
+        fetchTVList('top_rated', 1),
+        fetchTVList('airing_today', 1),
+        fetchAnime('tv', 1),
+        fetchAnime('movie', 1),
+      ]);
+      const secondaryFailures = applyBatch(secondary, [
+        setMovieTop, setMovieUpcoming, setMovieNowPlaying, setTvTop, setTvAiring, setAnimeTv, setAnimeMovie,
+      ]);
+      setLoading(false);
+      setRefreshing(false);
+      if (primaryFailures + secondaryFailures === 10) setError('تعذر تحميل العناوين الآن. اسحب الشاشة لإعادة المحاولة.');
+      else if (primaryFailures + secondaryFailures > 0) setError('تعذر تحميل بعض الأقسام؛ ستبقى الأقسام المتاحة ظاهرة. اسحب الشاشة لإعادة المحاولة.');
+    } catch {
+      setError('تعذر الاتصال بخدمة العناوين الآن.');
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    load();
+    void comicTrendingQuery.refetch();
+    void bookTrendingQuery.refetch();
+    setFeedRefreshToken((value) => value + 1);
+  };
+
+  const openDetail = (item: NormalizedItem) => {
+    navigation.navigate('Detail', { mediaType: item.mediaType, id: item.id });
+  };
+
+  const sections: SectionData[] = useMemo(
+    () => [
+      {
+        key: 'movie_popular',
+        title: 'الأفلام الرائجة',
+        data: moviePopular,
+        loading,
+        seeAll: () => navigation.navigate('CategoryList', { title: 'الأفلام الرائجة', feed: { kind: 'movieList', list: 'popular' } }),
+      },
+      {
+        key: 'tv_popular',
+        title: 'المسلسلات الرائجة',
+        data: tvPopular,
+        loading,
+        seeAll: () => navigation.navigate('CategoryList', { title: 'المسلسلات الرائجة', feed: { kind: 'tvList', list: 'popular' } }),
+      },
+      {
+        key: 'anime_tv',
+        title: 'مسلسلات الأنمي الرائجة',
+        data: animeTv,
+        loading,
+        seeAll: () => navigation.navigate('CategoryList', { title: 'مسلسلات الأنمي الرائجة', feed: { kind: 'anime', media: 'tv' } }),
+      },
+      {
+        key: 'now_playing',
+        title: 'في دور العرض',
+        data: movieNowPlaying,
+        loading,
+        seeAll: () => navigation.navigate('CategoryList', { title: 'في دور العرض', feed: { kind: 'movieList', list: 'now_playing' } }),
+      },
+      {
+        key: 'anime_movie',
+        title: 'أفلام أنمي',
+        data: animeMovie,
+        loading,
+        seeAll: () => navigation.navigate('CategoryList', { title: 'أفلام أنمي', feed: { kind: 'anime', media: 'movie' } }),
+      },
+      {
+        key: 'movie_top',
+        title: 'الأفلام الأعلى تقييمًا',
+        data: movieTop,
+        loading,
+        seeAll: () => navigation.navigate('CategoryList', { title: 'الأفلام الأعلى تقييمًا', feed: { kind: 'movieList', list: 'top_rated' } }),
+      },
+      {
+        key: 'tv_top',
+        title: 'المسلسلات الأعلى تقييمًا',
+        data: tvTop,
+        loading,
+        seeAll: () => navigation.navigate('CategoryList', { title: 'المسلسلات الأعلى تقييمًا', feed: { kind: 'tvList', list: 'top_rated' } }),
+      },
+      {
+        key: 'tv_airing',
+        title: 'يُعرض اليوم',
+        data: tvAiring,
+        loading,
+        seeAll: () => navigation.navigate('CategoryList', { title: 'يُعرض اليوم', feed: { kind: 'tvList', list: 'airing_today' } }),
+      },
+      {
+        key: 'upcoming',
+        title: 'أفلام قادمة',
+        data: movieUpcoming,
+        loading,
+        seeAll: () => navigation.navigate('CategoryList', { title: 'أفلام قادمة', feed: { kind: 'movieList', list: 'upcoming' } }),
+      },
+    ],
+    [moviePopular, tvPopular, animeTv, movieNowPlaying, animeMovie, movieTop, tvTop, tvAiring, movieUpcoming, loading]
+  );
+
+  const visibleSections = sections;
+
+
+  return (
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
+      >
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.brand}>Blinkr</Text>
+          </View>
+          <View style={styles.headerActions}>
+            <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Search')} accessibilityRole="button" accessibilityLabel="البحث">
+              <Ionicons name="search" size={20} color={colors.text} />
+            </Pressable>
+          </View>
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  FlatList,
+  RefreshControl,
+  Pressable,
+  Dimensions,
+  TextInput,
+} from 'react-native';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import Svg, { Path } from 'react-native-svg';
+import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import SectionRow from '../components/SectionRow';
+import SectionHeader from '../components/SectionHeader';
 import ComicCard from '../components/ComicCard';
 import BookCard from '../components/BookCard';
 import ApiErrorState from '../components/ApiErrorState';
@@ -223,9 +448,7 @@ export default function HomeScreen() {
               <Ionicons name="search" size={20} color={colors.text} />
             </Pressable>
           </View>
-        </View>
 
-        <View style={styles.bookSection}>
           <View style={styles.bookSectionHeader}>
             <View><Text style={styles.bookSectionTitle}>الكتب الرائجة</Text><Text style={styles.bookSectionSubtitle}>{(bookTrendingQuery.data ?? []).length.toLocaleString('ar')} كتاب</Text></View>
             <Pressable onPress={() => navigation.navigate('Search', { booksTrending: true })}><Text style={styles.bookSectionMore}>عرض الكل</Text></Pressable>
@@ -244,20 +467,6 @@ export default function HomeScreen() {
           <View style={styles.bookSectionHeader}><View><Text style={styles.bookSectionTitle}>الكوميك الرائجة</Text><Text style={styles.bookSectionSubtitle}>{(comicTrendingQuery.data ?? []).length.toLocaleString('ar')} كوميك</Text></View><Pressable onPress={() => navigation.navigate('Search', { comicsTrending: true })}><Text style={styles.bookSectionMore}>عرض الكل</Text></Pressable></View>
           {comicTrendingQuery.isLoading ? <View style={styles.bookLoading}><Text style={styles.bookLoadingText}>جارٍ تحميل الكوميك…</Text></View> : comicTrendingQuery.isError ? <Pressable onPress={() => comicTrendingQuery.refetch()} style={styles.bookError}><Text style={styles.bookErrorText}>تعذر تحميل الكوميك — اضغط لإعادة المحاولة.</Text></Pressable> : <FlatList data={((comicTrendingQuery.data ?? []) as ComicSummary[]).filter((comic) => Boolean(comic.coverUrl))} horizontal showsHorizontalScrollIndicator={false} keyExtractor={(comic) => `comic-${comic.id}`} contentContainerStyle={styles.bookList} ListEmptyComponent={<View style={styles.bookLoading}><Text style={styles.bookLoadingText}>لا توجد كوميك بأغلفة متاحة حاليًا.</Text></View>} renderItem={({ item }) => <ComicCard comic={item} width={112} onPress={() => navigation.navigate('ComicDetail', { id: item.id, comic: item })} />} />}
         </View>
-
-        {hero && (
-          <Pressable style={styles.hero} onPress={() => openDetail(hero)} accessibilityRole="button" accessibilityLabel={`Trending today: ${hero.title}`}>
-            <Image source={{ uri: backdropUrl(hero.backdropPath, 'w1280') ?? undefined }} style={StyleSheet.absoluteFill} contentFit="cover" />
-            <LinearGradient colors={['transparent', 'rgba(6,8,11,0.55)', colors.bg]} style={StyleSheet.absoluteFill} />
-            <View style={styles.heroContent}>
-              <View style={styles.trendingTag}><Ionicons name="flame" size={12} color={colors.accent2} /><Text style={styles.trendingTagText}>الرائج اليوم</Text></View>
-              <Text style={styles.heroTitle} numberOfLines={2}>{hero.title}</Text>
-              <View style={styles.heroMetaRow}><Ionicons name="star" size={13} color={colors.gold} /><Text style={styles.heroMetaText}>{hero.voteAverage.toFixed(1)}</Text><Text style={styles.heroDot}>•</Text><Text style={styles.heroMetaText}>{hero.date?.slice(0, 4)}</Text><Text style={styles.heroDot}>•</Text><Text style={styles.heroMetaText}>{hero.mediaType === 'movie' ? 'فيلم' : 'مسلسل'}</Text></View>
-            </View>
-          </Pressable>
-        )}
-
-        {user ? <SocialReviewFeed enabled={Boolean(user)} refreshToken={feedRefreshToken} onOpenDetail={(item) => openCatalogItem(navigation, { mediaType: item.mediaType, mediaId: item.mediaId, title: item.title, posterPath: item.posterPath })} /> : null}
 
         {visibleSections.filter((section) => section.key !== 'movie_popular' && section.key !== 'tv_popular').map((s) => (
           <SectionRow key={s.key} title={s.title} data={s.data} loading={s.loading} onSeeAll={s.seeAll} onItemPress={openDetail} />
@@ -281,13 +490,19 @@ type FeedRow = {
 };
 
 function SocialReviewFeed({ onOpenDetail, enabled, refreshToken }: { onOpenDetail: (review: { mediaType: ReviewMediaType; mediaId: number; title: string; posterPath: string | null }) => void; enabled: boolean; refreshToken: number }) {
-  const feedQuery = trpc.social.feed.useQuery(undefined, { enabled });
+  const navigation = useNavigation<Nav>();
+  const feedQuery = trpc.social.feed.useQuery(undefined, { enabled, retry: 1, staleTime: 60 * 1000 });
   useEffect(() => { if (refreshToken > 0) void feedQuery.refetch(); }, [refreshToken, feedQuery.refetch]);
   const rows = (feedQuery.data ?? []) as FeedRow[];
 
   return (
     <View style={styles.socialSection}>
-      {feedQuery.isError ? (
+      <SectionHeader title="مراجعات المتابعين" subtitle="آخر ما نشره الأشخاص الذين تتابعهم" onSeeAll={() => navigation.navigate('Reviews')} />
+      {!enabled ? (
+        <View style={styles.socialEmpty}><Ionicons name="people-outline" size={24} color={colors.textFaint} /><Text style={styles.socialEmptyTitle}>سجّل الدخول لمتابعة المراجعات</Text><Text style={styles.socialEmptyText}>ستظهر هنا مراجعات الأشخاص الذين تتابعهم.</Text></View>
+      ) : feedQuery.isLoading ? (
+        <View style={styles.socialEmpty}><Text style={styles.socialEmptyText}>جارٍ تحميل المراجعات…</Text></View>
+      ) : feedQuery.isError ? (
         <ApiErrorState message="تعذر تحميل مراجعات المتابعين." onRetry={() => feedQuery.refetch()} />
       ) : rows.length === 0 ? (
         <View style={styles.socialEmpty}>
@@ -487,6 +702,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  heroSection: { marginBottom: spacing.lg },
+  heroCarousel: { paddingHorizontal: spacing.lg, gap: spacing.md },
+  heroSlide: { width: Math.min(SCREEN_W * 0.72, 300), height: 190, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.surface, marginRight: spacing.xs },
+  heroLoading: { height: 190, alignItems: 'center', justifyContent: 'center' },
   hero: {
     width: SCREEN_W - spacing.lg * 2,
     height: 220,
