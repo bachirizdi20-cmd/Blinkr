@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import AppRefreshControl from '../components/AppRefreshControl';
 import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
@@ -21,12 +21,14 @@ export default function SeasonScreen() {
   const [season, setSeason] = useState<SeasonDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchSeasonDetail(tvId, seasonNumber)
-      .then(setSeason)
-      .catch((e) => console.warn(e))
-      .finally(() => setLoading(false));
+  const reloadSeason = useCallback(async () => {
+    setLoading(true);
+    try { setSeason(await fetchSeasonDetail(tvId, seasonNumber)); }
+    catch (e) { console.warn(e); }
+    finally { setLoading(false); }
   }, [tvId, seasonNumber]);
+
+  useEffect(() => { void reloadSeason(); }, [reloadSeason]);
 
   const allWatched = season?.episodes.every((ep) => lib.isEpisodeWatched(tvId, seasonNumber, ep.episode_number)) ?? false;
 
@@ -64,7 +66,7 @@ export default function SeasonScreen() {
         </Pressable>
       </View>
 
-      <FlatList refreshControl={<AppRefreshControl />}
+      <FlatList refreshControl={<AppRefreshControl onRefresh={reloadSeason} />}
         data={season.episodes}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.list}
