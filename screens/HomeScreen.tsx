@@ -20,6 +20,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import SectionRow from '../components/SectionRow';
 import ComicCard from '../components/ComicCard';
+import BookCard from '../components/BookCard';
 import ApiErrorState from '../components/ApiErrorState';
 import { ContentStackParamList } from '../navigation/types';
 import {
@@ -36,6 +37,7 @@ import { trpc } from '../lib/trpc';
 import { colors, fontSizes, spacing, radius } from '../lib/theme';
 import { resolveMediaUrl } from '../lib/media-url';
 import { ComicSummary } from '../types/comics';
+import { BookSummary } from '../types/books';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
@@ -54,7 +56,8 @@ interface SectionData {
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const { user } = useAuth();
-  const comicTrendingQuery = trpc.comics.trending.useQuery({ limit: 20 }, { retry: 1 });
+  const bookTrendingQuery = trpc.books.trending.useQuery({ limit: 20 }, { retry: 0, staleTime: 10 * 60 * 1000, refetchOnWindowFocus: false });
+  const comicTrendingQuery = trpc.comics.trending.useQuery({ limit: 20 }, { retry: 0, staleTime: 10 * 60 * 1000, refetchOnWindowFocus: false });
   const [refreshing, setRefreshing] = useState(false);
   const [feedRefreshToken, setFeedRefreshToken] = useState(0);
   const [trending, setTrending] = useState<NormalizedItem[]>([]);
@@ -73,30 +76,36 @@ export default function HomeScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    try {
-      const results = await Promise.allSettled([
-        fetchTrendingAll(1),
-        fetchMovieList('popular', 1),
-        fetchMovieList('top_rated', 1),
-        fetchMovieList('upcoming', 1),
-        fetchMovieList('now_playing', 1),
-        fetchTVList('popular', 1),
-        fetchTVList('top_rated', 1),
-        fetchTVList('airing_today', 1),
-        fetchAnime('tv', 1),
-        fetchAnime('movie', 1),
-      ]);
-      const setters: ((items: NormalizedItem[]) => void)[] = [
-        setTrending, setMoviePopular, setMovieTop, setMovieUpcoming, setMovieNowPlaying,
-        setTvPopular, setTvTop, setTvAiring, setAnimeTv, setAnimeMovie,
-      ];
-      const failures: unknown[] = [];
+    const apply = (results: PromiseSettledResult<{ results: NormalizedItem[] }>[], setters: ((items: NormalizedItem[]) => void)[]) => {
+      let failed = 0;
       results.forEach((result, index) => {
         if (result.status === 'fulfilled') setters[index](result.value.results);
-        else failures.push(result.reason);
+        else failed += 1;
       });
-      if (failures.length === results.length) setError('تعذر تحميل العناوين الآن. اسحب الشاشة لإعادة المحاولة.');
-      else if (failures.length) setError('تعذر تحميل بعض الأقسام؛ ستبقى الأقسام المتاحة ظاهرة. اسحب الشاشة لإعادة المحاولة.');
+      return failed;
+    };
+    try {
+      // Load the first screen's essential shelves first; defer secondary shelves
+      // so low-memory phones are not hit with ten simultaneous catalog requests.
+      const primary = await Promise.allSettled([
+        fetchTrendingAll(1), fetchMovieList('popular', 1),
+        fetchTVList('popular', 1), fetchAnime('tv', 1),
+      ]);
+      const primaryFailed = apply(primary, [setTrending, setMoviePopular, setTvPopular, setAnimeTv]);
+      setLoading(false);
+      const secondary = await Promise.allSettled([
+        fetchMovieList('top_rated', 1), fetchMovieList('upcoming', 1),
+        fetchMovieList('now_playing', 1), fetchTVList('top_rated', 1),
+        fetchTVList('airing_today', 1), fetchAnime('movie', 1),
+      ]);
+      const secondaryFailed = apply(secondary, [
+        setMovieTop, setMovieUpcoming, setMovieNowPlaying, setTvTop, setTvAiring, setAnimeMovie,
+      ]);
+      if (primaryFailed === primary.length && secondaryFailed === secondary.length) {
+        setError('تعذر تحميل العناوين الآن. اسحب الشاشة لإعادة المحاولة.');
+      } else if (primaryFailed + secondaryFailed > 0) {
+        setError('تعذر تحميل بعض الأقسام؛ ستبقى الأقسام المتاحة ظاهرة. اسحب الشاشة لإعادة المحاولة.');
+      }
     } catch {
       setError('تعذر الاتصال بخدمة العناوين الآن.');
     } finally {
@@ -233,23 +242,25 @@ export default function HomeScreen() {
           </Pressable>
         )}
 
-        {user ? <SocialReviewFeed enabled={Boolean(user)} refreshToken={feedRefreshToken} onOpenDetail={(item) => openCatalogItem(navigation, { mediaType: item.mediaType, mediaId: item.mediaId, title: item.title, posterPath: item.posterPath })} /> : null}
+        <View style={styles.bookSection}>
+          <View style={styles.bookSectionHeader}><View><Text style={styles.bookSectionTitle}>الكتب الرائجة</Text><Text style={styles.bookSectionSubtitle}>{(bookTrendingQuery.data ?? []).length.toLocaleString('ar')} كتاب</Text></View><Pressable onPress={() => navigation.navigate('Search', { booksTrending: true })}><Text style={styles.bookSectionMore}>See All</Text></Pressable></View>
+          {bookTrendingQuery.isLoading ? <View style={styles.bookLoading}><Text style={styles.bookLoadingText}>جارٍ تحميل الكتب…</Text></View> : bookTrendingQuery.isError ? <Pressable onPress={() => bookTrendingQuery.refetch()} style={styles.bookError}><Text style={styles.bookErrorText}>تعذر تحميل الكتب — اضغط لإعادة المحاولة.</Text></Pressable> : <FlatList data={((bookTrendingQuery.data ?? []) as BookSummary[]).filter((book) => Boolean(book.coverUrl))} horizontal showsHorizontalScrollIndicator={false} keyExtractor={(book) => `book-${book.workId}`} contentContainerStyle={styles.bookList} ListEmptyComponent={<View style={styles.bookLoading}><Text style={styles.bookLoadingText}>لا توجد كتب بأغلفة متاحة حاليًا.</Text></View>} renderItem={({ item }) => <BookCard book={item} width={112} onPress={() => navigation.navigate('BookDetail', { workId: item.workId, book: item })} />} />}
+        </View>
+
+        {visibleSections.slice(0, 2).map((s) => (
+          <SectionRow key={s.key} title={s.title} data={s.data} loading={s.loading} onSeeAll={s.seeAll} onItemPress={openDetail} />
+        ))}
+
         <View style={styles.bookSection}>
           <View style={styles.bookSectionHeader}><View><Text style={styles.bookSectionTitle}>الكوميك الرائجة</Text><Text style={styles.bookSectionSubtitle}>{(comicTrendingQuery.data ?? []).length.toLocaleString('ar')} كوميك</Text></View><Pressable onPress={() => navigation.navigate('Search', { comicsTrending: true })}><Text style={styles.bookSectionMore}>See All</Text></Pressable></View>
           {comicTrendingQuery.isLoading ? <View style={styles.bookLoading}><Text style={styles.bookLoadingText}>جارٍ تحميل الكوميك…</Text></View> : comicTrendingQuery.isError ? <Pressable onPress={() => comicTrendingQuery.refetch()} style={styles.bookError}><Text style={styles.bookErrorText}>تعذر تحميل الكوميك — اضغط لإعادة المحاولة.</Text></Pressable> : <FlatList data={((comicTrendingQuery.data ?? []) as ComicSummary[]).filter((comic) => Boolean(comic.coverUrl))} horizontal showsHorizontalScrollIndicator={false} keyExtractor={(comic) => `comic-${comic.id}`} contentContainerStyle={styles.bookList} ListEmptyComponent={<View style={styles.bookLoading}><Text style={styles.bookLoadingText}>لا توجد كوميك بأغلفة متاحة حاليًا.</Text></View>} renderItem={({ item }) => <ComicCard comic={item} width={112} onPress={() => navigation.navigate('ComicDetail', { id: item.id, comic: item })} />} />}
         </View>
 
-        {error ? <ApiErrorState message={error} onRetry={load} /> : null}
-        {visibleSections.map((s) => (
-          <SectionRow
-            key={s.key}
-            title={s.title}
-            data={s.data}
-            loading={s.loading}
-            onSeeAll={s.seeAll}
-            onItemPress={openDetail}
-          />
+        {visibleSections.slice(2).map((s) => (
+          <SectionRow key={s.key} title={s.title} data={s.data} loading={s.loading} onSeeAll={s.seeAll} onItemPress={openDetail} />
         ))}
+        {user ? <SocialReviewFeed enabled={Boolean(user)} refreshToken={feedRefreshToken} onOpenDetail={(item) => openCatalogItem(navigation, { mediaType: item.mediaType, mediaId: item.mediaId, title: item.title, posterPath: item.posterPath })} /> : null}
+        {error ? <ApiErrorState message={error} onRetry={load} /> : null}
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
