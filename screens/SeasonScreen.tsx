@@ -66,7 +66,7 @@ export default function SeasonScreen() {
         </Pressable>
       </View>
 
-      <FlatList refreshControl={<AppRefreshControl onRefresh={reloadSeason} />}}
+      <FlatList refreshControl={<AppRefreshControl onRefresh={reloadSeason} />}
         data={season.episodes}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.list}
