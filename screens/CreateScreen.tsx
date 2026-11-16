@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import AppRefreshControl from '../components/AppRefreshControl';
 import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -136,7 +137,7 @@ export default function CreateScreen() {
         <View><Text style={styles.eyebrow}>إنشاء مراجعة</Text><Text style={styles.title}>شارك رأيك</Text></View>
         <View style={styles.headerButton}><Ionicons name="create-outline" size={20} color={colors.accent} /></View>
       </View>
-      {!searchOpen ? <ScrollView contentContainerStyle={styles.editor} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      {!searchOpen ? <ScrollView refreshControl={<AppRefreshControl />} contentContainerStyle={styles.editor} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {selectedItem && selection ? <View style={styles.selectedCard}>
           <Pressable style={{ flex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md }} onPress={() => setSearchOpen(true)}>
             <Image source={{ uri: selection.posterPath ? (selection.mediaType === 'book' || selection.mediaType === 'comic' ? selection.posterPath : `https://image.tmdb.org/t/p/w342${selection.posterPath}`) : undefined }} style={styles.selectedPoster} resizeMode="cover" />
