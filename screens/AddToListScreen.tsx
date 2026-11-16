@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import AppRefreshControl from '../components/AppRefreshControl';
 import { View, Text, StyleSheet, FlatList, Pressable, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -62,7 +63,7 @@ export default function AddToListScreen() {
         </Pressable>
       )}
 
-      <FlatList
+      <FlatList refreshControl={<AppRefreshControl />}
         data={lib.lists}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: spacing.lg }}
