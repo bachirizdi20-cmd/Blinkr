@@ -57,7 +57,7 @@ export default function PersonScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <FlatList refreshControl={<AppRefreshControl onRefresh={reloadPerson} />}
+      <FlatList refreshControl={<AppRefreshControl onRefresh={reloadPerson} />}}
         data={credits}
         keyExtractor={(item) => `${item.mediaType}-${item.id}`}
         numColumns={NUM_COLUMNS}
