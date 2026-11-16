@@ -205,9 +205,20 @@ export async function fetchReviews(mediaType: MediaType, id: number, page = 1): 
 }
 
 export async function fetchDetail(mediaType: MediaType, id: number): Promise<DetailResult> {
-  const data = await tmdbGet(`/${mediaType}/${id}`, {
-    append_to_response: 'credits,videos,similar,reviews',
-  });
+  let data: any;
+  try {
+    // TMDB's appended resources can occasionally fail as a group. Retry the
+    // core title endpoint so a valid film/series page is not lost with them.
+    data = await tmdbGet(`/${mediaType}/${id}`, {
+      append_to_response: 'credits,videos,similar,reviews',
+    });
+  } catch (appendError) {
+    try {
+      data = await tmdbGet(`/${mediaType}/${id}`);
+    } catch {
+      throw appendError;
+    }
+  }
   const base = mediaType === 'movie' ? normalizeMovie(data) : normalizeTV(data);
   const cast = (data.credits?.cast ?? []).slice(0, 20);
   const crew = (data.credits?.crew ?? []).filter((c: any) =>
