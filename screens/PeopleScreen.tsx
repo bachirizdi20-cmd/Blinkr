@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import AppRefreshControl from '../components/AppRefreshControl';
 import { ActivityIndicator, View, Text, StyleSheet, FlatList, Pressable, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -108,7 +109,7 @@ export default function PeopleScreen() {
       ) : filtered.length === 0 ? (
         <EmptyState icon="people-outline" title="لا يوجد أشخاص" message="جرّب اسمًا آخر أو غيّر عامل التصفية." />
       ) : (
-        <FlatList
+        <FlatList refreshControl={<AppRefreshControl />}
           data={filtered}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
