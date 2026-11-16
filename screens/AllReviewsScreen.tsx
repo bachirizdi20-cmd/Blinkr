@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import AppRefreshControl from '../components/AppRefreshControl';
 import { ActivityIndicator, FlatList, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -97,7 +98,7 @@ export default function AllReviewsScreen() {
       ) : sortedReviews.length === 0 ? (
         <EmptyState icon="chatbox-ellipses-outline" title="No reviews found" message="TMDB has not published reviews for this title yet." />
       ) : (
-        <FlatList
+        <FlatList refreshControl={<AppRefreshControl onRefresh={load} />}
           data={sortedReviews}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}

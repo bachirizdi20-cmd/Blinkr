@@ -46,7 +46,7 @@ export default function RootTabNavigator() {
   const unreadNotifications = notificationsQuery.data?.filter((item) => !item.readAt).length ?? 0;
 
   return (
-    <Tab.Navigator
+    <Tab.Navigator backBehavior="history"
       screenOptions={{
         headerShown: false,
         tabBarStyle: {

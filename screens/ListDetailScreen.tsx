@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import AppRefreshControl from '../components/AppRefreshControl';
 import { ActivityIndicator, View, Text, StyleSheet, FlatList, Pressable, TextInput, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -132,7 +133,7 @@ export default function ListDetailScreen() {
       {list.items.length === 0 ? (
         <EmptyState icon="film-outline" title="القائمة فارغة" message="اضغط على + للبحث عن عناصر وإضافتها." />
       ) : (
-        <FlatList
+        <FlatList refreshControl={<AppRefreshControl />}
           data={list.items}
           keyExtractor={(item) => `${item.mediaType}-${item.mediaId}`}
           numColumns={NUM_COLUMNS}

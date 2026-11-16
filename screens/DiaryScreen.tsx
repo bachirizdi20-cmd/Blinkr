@@ -1,4 +1,5 @@
 import React from 'react';
+import AppRefreshControl from '../components/AppRefreshControl';
 import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -50,7 +51,7 @@ export default function DiaryScreen() {
       {entries.length === 0 ? (
         <EmptyState icon="book-outline" title="لا توجد إدخالات بعد" message="سجّل كتابًا أو فيلمًا أو مسلسلًا من صفحة التفاصيل لبدء يومياتك." />
       ) : (
-        <FlatList
+        <FlatList refreshControl={<AppRefreshControl />}
           data={entries}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm }}

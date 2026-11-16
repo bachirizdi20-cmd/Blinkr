@@ -1,4 +1,5 @@
 import React from 'react';
+import AppRefreshControl from '../components/AppRefreshControl';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -37,7 +38,7 @@ export default function SettingsScreen() {
         <Text style={styles.title}>الإعدادات</Text>
         <View style={styles.backButton} />
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView refreshControl={<AppRefreshControl />} contentContainerStyle={styles.content}>
         <Text style={styles.sectionTitle}>الحساب</Text>
         <View style={styles.accountCard}>
           <View style={styles.accountIcon}><Ionicons name="person-outline" size={21} color={colors.accent} /></View>

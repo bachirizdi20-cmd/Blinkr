@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import AppRefreshControl from '../components/AppRefreshControl';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,17 +31,19 @@ export default function PersonScreen() {
   const [photo, setPhoto] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    Promise.all([fetchPersonCredits(personId), fetchPersonDetail(personId)])
-      .then(([creditsData, personData]) => {
-        const sorted = creditsData.sort((a, b) => (b.voteAverage * b.voteCount) - (a.voteAverage * a.voteCount));
-        setCredits(sorted);
-        setBio(personData.biography ?? '');
-        setPhoto(personData.profile_path ? profileUrl(personData.profile_path) : null);
-      })
-      .catch((e) => console.warn(e))
-      .finally(() => setLoading(false));
+  const reloadPerson = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [creditsData, personData] = await Promise.all([fetchPersonCredits(personId), fetchPersonDetail(personId)]);
+      const sorted = creditsData.sort((a, b) => (b.voteAverage * b.voteCount) - (a.voteAverage * a.voteCount));
+      setCredits(sorted);
+      setBio(personData.biography ?? '');
+      setPhoto(personData.profile_path ? profileUrl(personData.profile_path) : null);
+    } catch (e) { console.warn(e); }
+    finally { setLoading(false); }
   }, [personId]);
+
+  useEffect(() => { void reloadPerson(); }, [reloadPerson]);
 
   if (loading) {
     return (
@@ -54,7 +57,7 @@ export default function PersonScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <FlatList
+      <FlatList refreshControl={<AppRefreshControl onRefresh={reloadPerson} />}
         data={credits}
         keyExtractor={(item) => `${item.mediaType}-${item.id}`}
         numColumns={NUM_COLUMNS}

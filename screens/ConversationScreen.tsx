@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import AppRefreshControl from '../components/AppRefreshControl';
 import {
   View,
   Text,
@@ -344,7 +345,7 @@ export default function ConversationScreen() {
             <EmptyState icon={messageSearch.trim() ? 'search-outline' : 'chatbubble-ellipses-outline'} title={messageSearch.trim() ? 'لا توجد رسائل مطابقة' : `ابدأ المحادثة مع ${user.displayName}`} message={messageSearch.trim() ? 'جرّب كلمات بحث مختلفة.' : user.bio || 'أرسل أول رسالة لبدء الحديث.'} />
           </View>
         ) : (
-          <FlatList
+          <FlatList refreshControl={<AppRefreshControl />}
             ref={listRef}
             data={data}
             inverted

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import AppRefreshControl from '../components/AppRefreshControl';
 import { View, Text, StyleSheet, FlatList, Pressable, TextInput } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -72,7 +73,7 @@ export default function ListsScreen() {
       {lib.lists.length === 0 && !creating ? (
         <EmptyState icon="list-outline" title="No lists yet" message="Tap + to create your first curated list." />
       ) : (
-        <FlatList
+        <FlatList refreshControl={<AppRefreshControl />}
           data={lib.lists}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}

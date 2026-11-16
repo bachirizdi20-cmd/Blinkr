@@ -1,4 +1,5 @@
 import React from 'react';
+import AppRefreshControl from '../components/AppRefreshControl';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -28,7 +29,7 @@ export default function AuthorBooksScreen() {
         <View style={styles.heading}><Text style={styles.title}>كتب المؤلف</Text><Text style={styles.author} numberOfLines={1}>{authorName}</Text></View>
         <View style={styles.back} />
       </View>
-      {query.isLoading ? <View style={styles.center}><ActivityIndicator size="large" color={colors.accent} /><Text style={styles.muted}>جارٍ تحميل كتب المؤلف…</Text></View> : query.isError ? <ApiErrorState message="تعذر تحميل كتب المؤلف من Hardcover." onRetry={() => void query.refetch()} /> : books.length === 0 ? <View style={styles.center}><Ionicons name="book-outline" size={34} color={colors.textFaint} /><Text style={styles.muted}>لا توجد كتب بأغلفة متاحة لهذا المؤلف.</Text></View> : <FlatList
+      {query.isLoading ? <View style={styles.center}><ActivityIndicator size="large" color={colors.accent} /><Text style={styles.muted}>جارٍ تحميل كتب المؤلف…</Text></View> : query.isError ? <ApiErrorState message="تعذر تحميل كتب المؤلف من Hardcover." onRetry={() => void query.refetch()} /> : books.length === 0 ? <View style={styles.center}><Ionicons name="book-outline" size={34} color={colors.textFaint} /><Text style={styles.muted}>لا توجد كتب بأغلفة متاحة لهذا المؤلف.</Text></View> : <FlatList refreshControl={<AppRefreshControl />}
         data={books}
         numColumns={3}
         keyExtractor={(book) => String(book.workId)}
