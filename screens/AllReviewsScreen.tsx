@@ -98,7 +98,7 @@ export default function AllReviewsScreen() {
       ) : sortedReviews.length === 0 ? (
         <EmptyState icon="chatbox-ellipses-outline" title="No reviews found" message="TMDB has not published reviews for this title yet." />
       ) : (
-        <FlatList refreshControl={<AppRefreshControl onRefresh={load} />
+        <FlatList refreshControl={<AppRefreshControl onRefresh={load} />}
           data={sortedReviews}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
