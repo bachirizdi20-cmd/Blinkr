@@ -99,6 +99,13 @@
       "when": 1794750000000,
       "tag": "0013_half_point_review_ratings",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1794823672320,
+      "tag": "0014_threaded_review_comments",
+      "breakpoints": true
     }
   ]
 }
