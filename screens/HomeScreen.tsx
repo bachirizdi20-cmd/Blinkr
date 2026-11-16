@@ -19,7 +19,6 @@ import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import SectionRow from '../components/SectionRow';
-import BookCard from '../components/BookCard';
 import ComicCard from '../components/ComicCard';
 import ApiErrorState from '../components/ApiErrorState';
 import { ContentStackParamList } from '../navigation/types';
@@ -36,7 +35,6 @@ import { useAuth } from '../hooks/use-auth';
 import { trpc } from '../lib/trpc';
 import { colors, fontSizes, spacing, radius } from '../lib/theme';
 import { resolveMediaUrl } from '../lib/media-url';
-import { BookSummary } from '../types/books';
 import { ComicSummary } from '../types/comics';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
 
@@ -56,7 +54,6 @@ interface SectionData {
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const { user } = useAuth();
-  const hardcoverTrendingQuery = trpc.books.trending.useQuery({ limit: 100 }, { retry: 1 });
   const comicTrendingQuery = trpc.comics.trending.useQuery({ limit: 20 }, { retry: 1 });
   const [refreshing, setRefreshing] = useState(false);
   const [feedRefreshToken, setFeedRefreshToken] = useState(0);
@@ -115,7 +112,6 @@ export default function HomeScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     load();
-    void hardcoverTrendingQuery.refetch();
     void comicTrendingQuery.refetch();
     setFeedRefreshToken((value) => value + 1);
   };
@@ -275,7 +271,7 @@ type FeedRow = {
 function SocialReviewFeed({ onOpenDetail, enabled, refreshToken }: { onOpenDetail: (review: { mediaType: ReviewMediaType; mediaId: number; title: string; posterPath: string | null }) => void; enabled: boolean; refreshToken: number }) {
   const [showAllReviews, setShowAllReviews] = useState(false);
   const feedQuery = trpc.social.feed.useQuery(undefined, { enabled });
-  useEffect(() => { if (refreshToken > 0) void feedQuery.refetch(); }, [refreshToken]);
+  useEffect(() => { if (refreshToken > 0) void feedQuery.refetch(); }, [refreshToken, feedQuery.refetch]);
   const rows = (feedQuery.data ?? []) as FeedRow[];
   const visibleRows = showAllReviews ? rows : rows.slice(0, 3);
 
