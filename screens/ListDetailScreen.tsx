@@ -132,7 +132,7 @@ export default function ListDetailScreen() {
       {list.items.length === 0 ? (
         <EmptyState icon="film-outline" title="القائمة فارغة" message="اضغط على + للبحث عن عناصر وإضافتها." />
       ) : (
-        <FlatList
+        <FlatList refreshControl={<AppRefreshControl />}
           data={list.items}
           keyExtractor={(item) => `${item.mediaType}-${item.mediaId}`}
           numColumns={NUM_COLUMNS}
