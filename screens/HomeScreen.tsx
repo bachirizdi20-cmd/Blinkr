@@ -233,12 +233,12 @@ export default function HomeScreen() {
           </Pressable>
         )}
 
+        {user ? <SocialReviewFeed enabled={Boolean(user)} refreshToken={feedRefreshToken} onOpenDetail={(item) => openCatalogItem(navigation, { mediaType: item.mediaType, mediaId: item.mediaId, title: item.title, posterPath: item.posterPath })} /> : null}
         <View style={styles.bookSection}>
           <View style={styles.bookSectionHeader}><View><Text style={styles.bookSectionTitle}>الكوميك الرائجة</Text><Text style={styles.bookSectionSubtitle}>{(comicTrendingQuery.data ?? []).length.toLocaleString('ar')} كوميك</Text></View><Pressable onPress={() => navigation.navigate('Search', { comicsTrending: true })}><Text style={styles.bookSectionMore}>See All</Text></Pressable></View>
           {comicTrendingQuery.isLoading ? <View style={styles.bookLoading}><Text style={styles.bookLoadingText}>جارٍ تحميل الكوميك…</Text></View> : comicTrendingQuery.isError ? <Pressable onPress={() => comicTrendingQuery.refetch()} style={styles.bookError}><Text style={styles.bookErrorText}>تعذر تحميل الكوميك — اضغط لإعادة المحاولة.</Text></Pressable> : <FlatList data={((comicTrendingQuery.data ?? []) as ComicSummary[]).filter((comic) => Boolean(comic.coverUrl))} horizontal showsHorizontalScrollIndicator={false} keyExtractor={(comic) => `comic-${comic.id}`} contentContainerStyle={styles.bookList} ListEmptyComponent={<View style={styles.bookLoading}><Text style={styles.bookLoadingText}>لا توجد كوميك بأغلفة متاحة حاليًا.</Text></View>} renderItem={({ item }) => <ComicCard comic={item} width={112} onPress={() => navigation.navigate('ComicDetail', { id: item.id, comic: item })} />} />}
         </View>
 
-        {user ? <SocialReviewFeed enabled={Boolean(user)} refreshToken={feedRefreshToken} onOpenDetail={(item) => openCatalogItem(navigation, { mediaType: item.mediaType, mediaId: item.mediaId, title: item.title, posterPath: item.posterPath })} /> : null}
         {error ? <ApiErrorState message={error} onRetry={load} /> : null}
         {visibleSections.map((s) => (
           <SectionRow
