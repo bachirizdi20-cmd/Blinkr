@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import AppRefreshControl from '../components/AppRefreshControl';
 import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -63,7 +64,7 @@ export default function SeasonScreen() {
         </Pressable>
       </View>
 
-      <FlatList
+      <FlatList refreshControl={<AppRefreshControl />}
         data={season.episodes}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.list}
