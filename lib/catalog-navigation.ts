@@ -2,6 +2,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { ContentStackParamList } from "../navigation/types";
 import type { ReviewMediaType } from "../types/tmdb";
 import type { BookSummary } from "../types/books";
+import type { ComicSummary } from "../types/comics";
 import { posterUrl } from "./tmdb";
 import { bookCoverUrl } from "./book-utils";
 
@@ -24,6 +25,7 @@ export interface CatalogItemLink {
   date?: string | null;
   voteAverage?: number | null;
   book?: Partial<BookSummary>;
+  comic?: Partial<ComicSummary>;
 }
 
 export function openCatalogItem(
@@ -31,7 +33,22 @@ export function openCatalogItem(
   item: CatalogItemLink,
 ) {
   if (item.mediaType === "comic") {
-    navigation.navigate("ComicDetail", { id: item.mediaId });
+    const comic: Partial<ComicSummary> | undefined = item.comic || item.title || item.posterPath || item.date ? {
+      id: item.mediaId,
+      title: item.title ?? "كوميك",
+      issueNumber: null,
+      volumeName: null,
+      coverUrl: item.posterPath ?? null,
+      description: null,
+      deck: null,
+      publisher: null,
+      publishDate: item.date ?? null,
+      creators: [],
+      rating: item.voteAverage ?? null,
+      sourceUrl: "",
+      ...item.comic,
+    } : undefined;
+    navigation.navigate("ComicDetail", { id: item.mediaId, comic });
     return;
   }
   if (item.mediaType === "book") {

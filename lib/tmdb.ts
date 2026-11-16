@@ -12,6 +12,35 @@ import { resolveMediaUrl } from './media-url';
 import { isAnimeItem, TMDB_ANIME_GENRE_ID } from './media-categories';
 
 const tmdbClient = createTRPCClient();
+const tmdbMemoryCache = new Map<string, { expiresAt: number; value: unknown }>();
+const tmdbPending = new Map<string, Promise<unknown>>();
+const TRENDING_CACHE_TTL_MS = 15 * 60 * 1000;
+const DETAIL_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
+function readTmdbCache<T>(key: string): T | null {
+  const entry = tmdbMemoryCache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    tmdbMemoryCache.delete(key);
+    return null;
+  }
+  tmdbMemoryCache.delete(key);
+  tmdbMemoryCache.set(key, entry);
+  return entry.value as T;
+}
+
+function writeTmdbCache(key: string, value: unknown, ttl: number): void {
+  if (tmdbMemoryCache.size >= 100 && !tmdbMemoryCache.has(key)) {
+    const oldest = tmdbMemoryCache.keys().next().value;
+    if (oldest) tmdbMemoryCache.delete(oldest);
+  }
+  tmdbMemoryCache.set(key, { value, expiresAt: Date.now() + ttl });
+}
+
+export function getCachedTrendingAll(page = 1): FeedPage | null {
+  return readTmdbCache<FeedPage>(`trending-all:${page}`);
+}
+
 export const IMG_BASE = 'https://image.tmdb.org/t/p/';
 
 export const posterUrl = (path: string | null, size: 'w200' | 'w342' | 'w500' = 'w342') =>
@@ -80,13 +109,30 @@ export interface FeedPage {
   totalPages: number;
 }
 
-export async function fetchTrendingAll(page = 1): Promise<FeedPage> {
-  const data = await tmdbGet('/trending/all/day', { page });
-  return {
-    results: data.results.map(normalizeAny).filter(Boolean) as NormalizedItem[],
-    page: data.page,
-    totalPages: Math.min(data.total_pages, 500),
-  };
+export async function fetchTrendingAll(page = 1, forceRefresh = false): Promise<FeedPage> {
+  const key = `trending-all:${page}`;
+  if (!forceRefresh) {
+    const cached = readTmdbCache<FeedPage>(key);
+    if (cached) return cached;
+  }
+  const pending = tmdbPending.get(key);
+  if (pending && !forceRefresh) return pending as Promise<FeedPage>;
+  const request = (async () => {
+    const data = await tmdbGet('/trending/all/day', { page });
+    const result: FeedPage = {
+      results: data.results.map(normalizeAny).filter(Boolean) as NormalizedItem[],
+      page: data.page,
+      totalPages: Math.min(data.total_pages, 500),
+    };
+    writeTmdbCache(key, result, TRENDING_CACHE_TTL_MS);
+    return result;
+  })();
+  tmdbPending.set(key, request);
+  try {
+    return await request;
+  } finally {
+    if (tmdbPending.get(key) === request) tmdbPending.delete(key);
+  }
 }
 
 export async function fetchMovieList(
@@ -205,6 +251,12 @@ export async function fetchReviews(mediaType: MediaType, id: number, page = 1): 
 }
 
 export async function fetchDetail(mediaType: MediaType, id: number): Promise<DetailResult> {
+  const cacheKey = `detail:${mediaType}:${id}`;
+  const cached = readTmdbCache<DetailResult>(cacheKey);
+  if (cached) return cached;
+  const pending = tmdbPending.get(cacheKey);
+  if (pending) return pending as Promise<DetailResult>;
+  const request = (async (): Promise<DetailResult> => {
   let data: any;
   try {
     // TMDB's appended resources can occasionally fail as a group. Retry the
@@ -245,6 +297,15 @@ export async function fetchDetail(mediaType: MediaType, id: number): Promise<Det
     numberOfEpisodes: data.number_of_episodes ?? 0,
     reviews,
   };
+  })();
+  tmdbPending.set(cacheKey, request);
+  try {
+    const result = await request;
+    writeTmdbCache(cacheKey, result, DETAIL_CACHE_TTL_MS);
+    return result;
+  } finally {
+    if (tmdbPending.get(cacheKey) === request) tmdbPending.delete(cacheKey);
+  }
 }
 
 export async function fetchSeasonDetail(tvId: number, seasonNumber: number): Promise<SeasonDetail> {

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import AppRefreshControl from '../components/AppRefreshControl';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -28,7 +28,7 @@ export default function BookDetailScreen() {
   const { user } = useAuth();
   const lib = useLibrary();
   const mediaSource = 'hardcover' as const;
-  const detailQuery = trpc.books.detail.useQuery({ workId }, { retry: 1 });
+  const detailQuery = trpc.books.detail.useQuery({ workId }, { retry: 1, staleTime: 6 * 60 * 60 * 1000, gcTime: 24 * 60 * 60 * 1000 });
   const statusQuery = trpc.library.getStatus.useQuery({ mediaType: 'book', mediaId: workId, mediaSource }, { enabled: Boolean(user), retry: false });
   const myReviewQuery = trpc.reviews.getMine.useQuery({ mediaType: 'book', mediaId: workId, mediaSource }, { enabled: Boolean(user), retry: false });
   const setStatusMutation = trpc.library.setStatus.useMutation();
@@ -103,10 +103,10 @@ export default function BookDetailScreen() {
     posterPath: book.coverUrl,
   });
 
-  if (detailQuery.isLoading) return <LoadingView />;
+  if (detailQuery.isLoading && !fallback) return <LoadingView />;
 
   if (detailQuery.isError && !fallback) {
-    return <SafeAreaView style={styles.safe}><View style={styles.topBar}><Pressable onPress={() => navigation.goBack()} style={styles.iconButton}><Ionicons name="chevron-back" size={22} color={colors.text} /></Pressable></View><ApiErrorState message="تعذر تحميل تفاصيل الكتاب من Hardcover." onRetry={() => void detailQuery.refetch()} /></SafeAreaView>;
+    return <SafeAreaView style={styles.safe}><View style={styles.topBar}><Pressable onPress={() => navigation.goBack()} style={styles.iconButton}><Ionicons name="chevron-back" size={22} color={colors.text} /></Pressable></View><ApiErrorState message="تعذر تحميل تفاصيل الكتاب الآن." onRetry={() => void detailQuery.refetch()} /></SafeAreaView>;
   }
 
   const info = [
@@ -125,13 +125,13 @@ export default function BookDetailScreen() {
       <ScrollView refreshControl={<AppRefreshControl />} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.hero}>
           <View style={styles.coverFrame}>
-            {book.coverUrl ? <Image source={{ uri: book.coverUrl }} style={styles.cover} contentFit="cover" transition={180} /> : <View style={[styles.cover, styles.coverFallback]}><Ionicons name="book-outline" size={42} color={colors.textFaint} /><Text style={styles.muted}>لا يتوفر غلاف</Text></View>}
+            {book.coverUrl ? <Image source={{ uri: book.coverUrl }} style={styles.cover} contentFit="cover" transition={0} cachePolicy="memory-disk" /> : <View style={[styles.cover, styles.coverFallback]}><Ionicons name="book-outline" size={42} color={colors.textFaint} /><Text style={styles.muted}>لا يتوفر غلاف</Text></View>}
           </View>
           <View style={styles.heroCopy}>
             <Text style={styles.title}>{book.title}</Text>
             {book.authorNames.length > 0 ? <View style={styles.authorRow}>{book.authorNames.map((author) => <Pressable key={author} onPress={() => navigation.navigate('AuthorBooks', { authorName: author, excludeWorkId: workId })} accessibilityRole="button" accessibilityLabel={`عرض كتب ${author}`}><Text style={styles.authors}>{author}</Text></Pressable>)}</View> : <Text style={styles.muted}>المؤلف غير محدد</Text>}
             {info.map((line) => <Text key={line} style={styles.meta}>{line}</Text>)}
-            {book.ratingsAverage != null && book.ratingsCount > 0 ? <View style={styles.ratingRow}><Ionicons name="star" size={16} color={colors.gold} /><Text style={styles.rating}>{book.ratingsAverage.toFixed(1)} / 5</Text><Text style={styles.muted}>({book.ratingsCount.toLocaleString('ar')}) · Hardcover</Text></View> : null}
+            {book.ratingsAverage != null && book.ratingsCount > 0 ? <View style={styles.ratingRow}><Ionicons name="star" size={16} color={colors.gold} /><Text style={styles.rating}>{book.ratingsAverage.toFixed(1)} / 5</Text><Text style={styles.muted}>({book.ratingsCount.toLocaleString('ar')})</Text></View> : null}
             {rating > 0 ? <Text style={styles.yourRating}>تقييمك: {rating}/10</Text> : null}
           </View>
         </View>
@@ -154,8 +154,6 @@ export default function BookDetailScreen() {
           <Text style={styles.sectionTitle}>كتب مشابهة</Text>
           {similarQuery.isLoading ? <Text style={styles.muted}>جارٍ تحميل الكتب المشابهة…</Text> : similarQuery.isError ? <Pressable onPress={() => void similarQuery.refetch()}><Text style={styles.muted}>تعذر تحميل الكتب المشابهة — اضغط لإعادة المحاولة.</Text></Pressable> : similarQuery.data?.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.similarList}>{similarQuery.data.filter((item) => Boolean(item.coverUrl)).map((item) => <BookCard key={item.workId} book={item} width={112} onPress={() => navigation.push('BookDetail', { workId: item.workId, book: item })} />)}</ScrollView> : <Text style={styles.muted}>لا توجد كتب مشابهة بأغلفة متاحة حاليًا.</Text>}
         </View>
-        {book.sourceUrl ? <Pressable onPress={() => Linking.openURL(book.sourceUrl!)} style={styles.sourceLink}><Text style={styles.sourceText}>عرض المصدر على Hardcover</Text><Ionicons name="open-outline" size={15} color={colors.accent} /></Pressable> : null}
-        {!detailCompatible ? <Text style={styles.muted}>تعذر التحقق من مصدر الكتاب المحفوظ؛ نعرض بياناته المحفوظة فقط.</Text> : null}
         {detailQuery.isError ? <Pressable onPress={() => void detailQuery.refetch()} accessibilityRole="button"><Text style={styles.muted}>تعذر جلب التفاصيل؛ نعرض البيانات المتاحة. اضغط لإعادة المحاولة.</Text></Pressable> : null}
       </ScrollView>
     </SafeAreaView>
@@ -199,7 +197,5 @@ const styles = StyleSheet.create({
   subjects: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   subject: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: radius.pill },
   subjectText: { color: colors.textDim, fontSize: fontSizes.xs },
-  sourceLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: spacing.xl },
-  sourceText: { color: colors.accent, fontSize: fontSizes.sm, fontWeight: '800' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
 });
