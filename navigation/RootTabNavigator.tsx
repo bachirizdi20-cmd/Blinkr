@@ -38,7 +38,7 @@ function ProfileStackScreen() {
 export default function RootTabNavigator() {
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'web' ? 8 : 6);
-  const tabBarHeight = 58 + bottomInset;
+  const tabBarHeight = 68 + bottomInset;
   const { user } = useAuth();
   const conversationsQuery = trpc.social.conversations.useQuery(undefined, { enabled: Boolean(user), retry: 1, refetchInterval: 5000 });
   const totalUnread = conversationsQuery.data?.reduce((total, conversation) => total + conversation.unreadCount, 0) ?? 0;
@@ -60,7 +60,8 @@ export default function RootTabNavigator() {
         },
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textDim,
-        tabBarShowLabel: false,
+        tabBarShowLabel: true,
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '700', marginTop: 1 },
         tabBarIconStyle: { marginTop: 0 },
         tabBarHideOnKeyboard: true,
       }}

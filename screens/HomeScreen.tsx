@@ -19,6 +19,7 @@ import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import SectionRow from '../components/SectionRow';
+import SectionHeader from '../components/SectionHeader';
 import ComicCard from '../components/ComicCard';
 import BookCard from '../components/BookCard';
 import ApiErrorState from '../components/ApiErrorState';
@@ -134,8 +135,6 @@ export default function HomeScreen() {
     navigation.navigate('Detail', { mediaType: item.mediaType, id: item.id });
   };
 
-  const hero = trending[0];
-
   const sections: SectionData[] = useMemo(
     () => [
       {
@@ -225,6 +224,32 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        <View style={styles.heroSection}>
+          <SectionHeader title="الرائج اليوم" subtitle="أغلفة الأفلام الأكثر رواجًا اليوم" />
+          {trending.length === 0 && loading ? (
+            <View style={styles.heroLoading}><Text style={styles.bookLoadingText}>جارٍ تحميل الرائج اليوم…</Text></View>
+          ) : (
+            <FlatList horizontal data={(trending.filter((item) => item.mediaType === 'movie').length ? trending.filter((item) => item.mediaType === 'movie') : trending).slice(0, 10)} keyExtractor={(item) => `daily-${item.mediaType}-${item.id}`} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.heroCarousel}
+              renderItem={({ item }) => {
+                const poster = catalogPosterUrl(item.mediaType, item.posterPath, 'w500');
+                return (
+                  <Pressable style={styles.heroSlide} onPress={() => openDetail(item)} accessibilityRole="button" accessibilityLabel={`فتح ${item.title}`}>
+                    {poster ? <Image source={{ uri: poster }} style={StyleSheet.absoluteFill} contentFit="cover" /> : <Image source={{ uri: backdropUrl(item.backdropPath, 'w780') ?? undefined }} style={StyleSheet.absoluteFill} contentFit="cover" />}
+                    <LinearGradient colors={['transparent', 'rgba(6,8,11,0.88)']} style={StyleSheet.absoluteFill} />
+                    <View style={styles.heroContent}>
+                      <View style={styles.trendingTag}><Ionicons name="flame" size={12} color={colors.accent2} /><Text style={styles.trendingTagText}>الرائج اليوم</Text></View>
+                      <Text style={styles.heroTitle} numberOfLines={2}>{item.title}</Text>
+                      <View style={styles.heroMetaRow}><Ionicons name="star" size={13} color={colors.gold} /><Text style={styles.heroMetaText}>{item.voteAverage.toFixed(1)}</Text><Text style={styles.heroDot}>•</Text><Text style={styles.heroMetaText}>{item.date?.slice(0, 4)}</Text></View>
+                    </View>
+                  </Pressable>
+                );
+              }}
+            />
+          )}
+        </View>
+
+        <SocialReviewFeed enabled={Boolean(user)} refreshToken={feedRefreshToken} onOpenDetail={(item) => openCatalogItem(navigation, { mediaType: item.mediaType, mediaId: item.mediaId, title: item.title, posterPath: item.posterPath })} />
+
         <View style={styles.bookSection}>
           <View style={styles.bookSectionHeader}>
             <View><Text style={styles.bookSectionTitle}>الكتب الرائجة</Text><Text style={styles.bookSectionSubtitle}>{(bookTrendingQuery.data ?? []).length.toLocaleString('ar')} كتاب</Text></View>
@@ -244,20 +269,6 @@ export default function HomeScreen() {
           <View style={styles.bookSectionHeader}><View><Text style={styles.bookSectionTitle}>الكوميك الرائجة</Text><Text style={styles.bookSectionSubtitle}>{(comicTrendingQuery.data ?? []).length.toLocaleString('ar')} كوميك</Text></View><Pressable onPress={() => navigation.navigate('Search', { comicsTrending: true })}><Text style={styles.bookSectionMore}>عرض الكل</Text></Pressable></View>
           {comicTrendingQuery.isLoading ? <View style={styles.bookLoading}><Text style={styles.bookLoadingText}>جارٍ تحميل الكوميك…</Text></View> : comicTrendingQuery.isError ? <Pressable onPress={() => comicTrendingQuery.refetch()} style={styles.bookError}><Text style={styles.bookErrorText}>تعذر تحميل الكوميك — اضغط لإعادة المحاولة.</Text></Pressable> : <FlatList data={((comicTrendingQuery.data ?? []) as ComicSummary[]).filter((comic) => Boolean(comic.coverUrl))} horizontal showsHorizontalScrollIndicator={false} keyExtractor={(comic) => `comic-${comic.id}`} contentContainerStyle={styles.bookList} ListEmptyComponent={<View style={styles.bookLoading}><Text style={styles.bookLoadingText}>لا توجد كوميك بأغلفة متاحة حاليًا.</Text></View>} renderItem={({ item }) => <ComicCard comic={item} width={112} onPress={() => navigation.navigate('ComicDetail', { id: item.id, comic: item })} />} />}
         </View>
-
-        {hero && (
-          <Pressable style={styles.hero} onPress={() => openDetail(hero)} accessibilityRole="button" accessibilityLabel={`Trending today: ${hero.title}`}>
-            <Image source={{ uri: backdropUrl(hero.backdropPath, 'w1280') ?? undefined }} style={StyleSheet.absoluteFill} contentFit="cover" />
-            <LinearGradient colors={['transparent', 'rgba(6,8,11,0.55)', colors.bg]} style={StyleSheet.absoluteFill} />
-            <View style={styles.heroContent}>
-              <View style={styles.trendingTag}><Ionicons name="flame" size={12} color={colors.accent2} /><Text style={styles.trendingTagText}>الرائج اليوم</Text></View>
-              <Text style={styles.heroTitle} numberOfLines={2}>{hero.title}</Text>
-              <View style={styles.heroMetaRow}><Ionicons name="star" size={13} color={colors.gold} /><Text style={styles.heroMetaText}>{hero.voteAverage.toFixed(1)}</Text><Text style={styles.heroDot}>•</Text><Text style={styles.heroMetaText}>{hero.date?.slice(0, 4)}</Text><Text style={styles.heroDot}>•</Text><Text style={styles.heroMetaText}>{hero.mediaType === 'movie' ? 'فيلم' : 'مسلسل'}</Text></View>
-            </View>
-          </Pressable>
-        )}
-
-        {user ? <SocialReviewFeed enabled={Boolean(user)} refreshToken={feedRefreshToken} onOpenDetail={(item) => openCatalogItem(navigation, { mediaType: item.mediaType, mediaId: item.mediaId, title: item.title, posterPath: item.posterPath })} /> : null}
 
         {visibleSections.filter((section) => section.key !== 'movie_popular' && section.key !== 'tv_popular').map((s) => (
           <SectionRow key={s.key} title={s.title} data={s.data} loading={s.loading} onSeeAll={s.seeAll} onItemPress={openDetail} />
@@ -281,13 +292,18 @@ type FeedRow = {
 };
 
 function SocialReviewFeed({ onOpenDetail, enabled, refreshToken }: { onOpenDetail: (review: { mediaType: ReviewMediaType; mediaId: number; title: string; posterPath: string | null }) => void; enabled: boolean; refreshToken: number }) {
-  const feedQuery = trpc.social.feed.useQuery(undefined, { enabled });
+  const feedQuery = trpc.social.feed.useQuery(undefined, { enabled, retry: 1, staleTime: 60 * 1000 });
   useEffect(() => { if (refreshToken > 0) void feedQuery.refetch(); }, [refreshToken, feedQuery.refetch]);
   const rows = (feedQuery.data ?? []) as FeedRow[];
 
   return (
     <View style={styles.socialSection}>
-      {feedQuery.isError ? (
+      <SectionHeader title="مراجعات المتابعين" subtitle="آخر ما نشره الأشخاص الذين تتابعهم" />
+      {!enabled ? (
+        <View style={styles.socialEmpty}><Ionicons name="people-outline" size={24} color={colors.textFaint} /><Text style={styles.socialEmptyTitle}>سجّل الدخول لمتابعة المراجعات</Text><Text style={styles.socialEmptyText}>ستظهر هنا مراجعات الأشخاص الذين تتابعهم.</Text></View>
+      ) : feedQuery.isLoading ? (
+        <View style={styles.socialEmpty}><Text style={styles.socialEmptyText}>جارٍ تحميل المراجعات…</Text></View>
+      ) : feedQuery.isError ? (
         <ApiErrorState message="تعذر تحميل مراجعات المتابعين." onRetry={() => feedQuery.refetch()} />
       ) : rows.length === 0 ? (
         <View style={styles.socialEmpty}>
@@ -487,6 +503,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  heroSection: { marginBottom: spacing.lg },
+  heroCarousel: { paddingHorizontal: spacing.lg, gap: spacing.md },
+  heroSlide: { width: 138, height: 208, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.surface, marginRight: spacing.xs },
+  heroLoading: { height: 190, alignItems: 'center', justifyContent: 'center' },
   hero: {
     width: SCREEN_W - spacing.lg * 2,
     height: 220,
@@ -509,7 +529,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   trendingTagText: { color: colors.accent2, fontSize: 11, fontWeight: '700' },
-  heroTitle: { color: colors.text, fontSize: fontSizes.xxl, fontWeight: '800' },
+  heroTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800' },
   heroMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.xs },
   heroMetaText: { color: colors.textDim, fontSize: fontSizes.sm, fontWeight: '600' },
   heroDot: { color: colors.textFaint },
