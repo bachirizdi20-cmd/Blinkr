@@ -26,6 +26,7 @@ import ApiErrorState from '../components/ApiErrorState';
 import { ContentStackParamList } from '../navigation/types';
 import {
   fetchTrendingAll,
+  getCachedTrendingAll,
   fetchMovieList,
   fetchTVList,
   fetchAnime,
@@ -57,11 +58,11 @@ interface SectionData {
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const { user } = useAuth();
-  const comicTrendingQuery = trpc.comics.trending.useQuery({ limit: 20 }, { retry: 1, staleTime: 10 * 60 * 1000 });
-  const bookTrendingQuery = trpc.books.trending.useQuery({ limit: 20 }, { retry: 1, staleTime: 10 * 60 * 1000 });
+  const comicTrendingQuery = trpc.comics.trending.useQuery({ limit: 20 }, { retry: 1, staleTime: 30 * 60 * 1000, gcTime: 24 * 60 * 60 * 1000 });
+  const bookTrendingQuery = trpc.books.trending.useQuery({ limit: 20 }, { retry: 1, staleTime: 30 * 60 * 1000, gcTime: 24 * 60 * 60 * 1000 });
   const [refreshing, setRefreshing] = useState(false);
   const [feedRefreshToken, setFeedRefreshToken] = useState(0);
-  const [trending, setTrending] = useState<NormalizedItem[]>([]);
+  const [trending, setTrending] = useState<NormalizedItem[]>(() => getCachedTrendingAll(1)?.results ?? []);
   const [moviePopular, setMoviePopular] = useState<NormalizedItem[]>([]);
   const [movieTop, setMovieTop] = useState<NormalizedItem[]>([]);
   const [movieUpcoming, setMovieUpcoming] = useState<NormalizedItem[]>([]);
@@ -71,10 +72,10 @@ export default function HomeScreen() {
   const [tvAiring, setTvAiring] = useState<NormalizedItem[]>([]);
   const [animeTv, setAnimeTv] = useState<NormalizedItem[]>([]);
   const [animeMovie, setAnimeMovie] = useState<NormalizedItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !getCachedTrendingAll(1));
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     setError(null);
     const applyBatch = (results: PromiseSettledResult<{ results: NormalizedItem[] }>[], setters: ((items: NormalizedItem[]) => void)[]) => {
@@ -90,7 +91,7 @@ export default function HomeScreen() {
       const primary = await Promise.allSettled([
         fetchMovieList('popular', 1),
         fetchTVList('popular', 1),
-        fetchTrendingAll(1),
+        fetchTrendingAll(1, forceRefresh),
       ]);
       const primaryFailures = applyBatch(primary, [setMoviePopular, setTvPopular, (items) => setTrending(items)]);
 
@@ -125,7 +126,7 @@ export default function HomeScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    load();
+    load(true);
     void comicTrendingQuery.refetch();
     void bookTrendingQuery.refetch();
     setFeedRefreshToken((value) => value + 1);
@@ -231,7 +232,7 @@ export default function HomeScreen() {
             <View style={styles.heroLoading}><Text style={styles.bookLoadingText}>جارٍ تحميل الرائج اليوم…</Text></View>
           ) : hero ? (
             <Pressable style={styles.hero} onPress={() => openDetail(hero)} accessibilityRole="button" accessibilityLabel={`فتح ${hero.title}`}>
-              <Image source={{ uri: backdropUrl(hero.backdropPath, 'w1280') ?? catalogPosterUrl(hero.mediaType, hero.posterPath, 'w500') ?? undefined }} style={StyleSheet.absoluteFill} contentFit="cover" />
+              <Image source={{ uri: backdropUrl(hero.backdropPath, 'w1280') ?? catalogPosterUrl(hero.mediaType, hero.posterPath, 'w500') ?? undefined }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" transition={0} />
               <LinearGradient colors={['transparent', 'rgba(6,8,11,0.55)', colors.bg]} style={StyleSheet.absoluteFill} />
               <View style={styles.heroContent}>
                 <View style={styles.trendingTag}><Ionicons name="flame" size={12} color={colors.accent2} /><Text style={styles.trendingTagText}>الرائج اليوم</Text></View>
@@ -260,7 +261,7 @@ export default function HomeScreen() {
         ))}
 
         <View style={styles.bookSection}>
-          <View style={styles.bookSectionHeader}><View><Text style={styles.bookSectionTitle}>الكوميك الرائجة</Text><Text style={styles.bookSectionSubtitle}>{(comicTrendingQuery.data ?? []).length.toLocaleString('ar')} كوميك</Text></View><Pressable onPress={() => navigation.navigate('Search', { comicsTrending: true })}><Text style={styles.bookSectionMore}>عرض الكل</Text></Pressable></View>
+          <View style={styles.bookSectionHeader}><View><Text style={styles.bookSectionTitle}>الكوميك الرائجة</Text></View><Pressable onPress={() => navigation.navigate('Search', { comicsTrending: true })}><Text style={styles.bookSectionMore}>عرض الكل</Text></Pressable></View>
           {comicTrendingQuery.isLoading ? <View style={styles.bookLoading}><Text style={styles.bookLoadingText}>جارٍ تحميل الكوميك…</Text></View> : comicTrendingQuery.isError ? <Pressable onPress={() => comicTrendingQuery.refetch()} style={styles.bookError}><Text style={styles.bookErrorText}>تعذر تحميل الكوميك — اضغط لإعادة المحاولة.</Text></Pressable> : <FlatList data={((comicTrendingQuery.data ?? []) as ComicSummary[]).filter((comic) => Boolean(comic.coverUrl))} horizontal showsHorizontalScrollIndicator={false} keyExtractor={(comic) => `comic-${comic.id}`} contentContainerStyle={styles.bookList} ListEmptyComponent={<View style={styles.bookLoading}><Text style={styles.bookLoadingText}>لا توجد كوميك بأغلفة متاحة حاليًا.</Text></View>} renderItem={({ item }) => <ComicCard comic={item} width={112} onPress={() => navigation.navigate('ComicDetail', { id: item.id, comic: item })} />} />}
         </View>
 
