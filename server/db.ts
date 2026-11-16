@@ -615,7 +615,7 @@ export async function listReviewComments(viewerId: number, reviewId: number) {
   if (!db) return [];
   const review = (await db.select().from(reviews).where(eq(reviews.id, reviewId)).limit(1))[0];
   if (!review || !(await canViewReview(db, viewerId, review))) return [];
-  return db.select({ comment: reviewComments, name: users.name, username: userData.username }).from(reviewComments).innerJoin(users, eq(users.id, reviewComments.userId)).leftJoin(userData, eq(userData.userId, reviewComments.userId)).where(eq(reviewComments.reviewId, reviewId)).orderBy(desc(reviewComments.createdAt)).limit(100);
+  return db.select({ comment: reviewComments, name: users.name, username: userData.username, avatarUrl: userData.avatarUrl }).from(reviewComments).innerJoin(users, eq(users.id, reviewComments.userId)).leftJoin(userData, eq(userData.userId, reviewComments.userId)).where(eq(reviewComments.reviewId, reviewId)).orderBy(desc(reviewComments.createdAt)).limit(100);
 }
 
 export async function listNotifications(userId: number) {
