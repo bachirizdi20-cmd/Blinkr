@@ -12,6 +12,7 @@ import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import ComicCard from '../components/ComicCard';
 import ApiErrorState from '../components/ApiErrorState';
 import DetailActionBar from '../components/DetailActionBar';
+import LoadingView from '../components/LoadingView';
 import { useAuth } from '../hooks/use-auth';
 import { useLibrary } from '../context/LibraryContext';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
@@ -49,8 +50,8 @@ export default function ComicDetailScreen() {
   const similarQuery = trpc.comics.similar.useQuery({ id, title: comic?.title ?? '', publisher: comic?.publisher ?? null, limit: 8 }, { enabled: Boolean(comic), retry: 1 });
   const info = useMemo(() => [comic?.issueNumber ? `العدد ${comic.issueNumber}` : null, comic?.publishDate, comic?.publisher].filter(Boolean), [comic]);
 
-  if (detailQuery.isLoading && !comic) return <View style={styles.center}><ActivityIndicator color={colors.accent} size="large" /><Text style={styles.muted}>جارٍ تحميل الكوميك…</Text></View>;
-  if (detailQuery.isError && !comic) return <View style={styles.safe}><ApiErrorState message="تعذر تحميل تفاصيل الكوميك من Comic Vine." onRetry={() => void detailQuery.refetch()} /></View>;
+  if (detailQuery.isLoading && !comic) return <LoadingView />;
+  if (detailQuery.isError && !comic) return <View style={styles.safe}><View style={styles.topBar}><Pressable onPress={() => navigation.goBack()} style={styles.iconButton} accessibilityLabel="رجوع"><Ionicons name="chevron-back" size={22} color={colors.text} /></Pressable><Text style={styles.topTitle}>تفاصيل الكوميك</Text><View style={styles.iconButton} /></View><ApiErrorState message="تعذر تحميل تفاصيل الكوميك الآن." onRetry={() => void detailQuery.refetch()} /></View>;
   if (!comic) return null;
 
   const mediaRef = { mediaType: 'comic' as const, mediaId: id, title: comic.title, posterPath: comic.coverUrl, date: comic.publishDate ?? undefined };
