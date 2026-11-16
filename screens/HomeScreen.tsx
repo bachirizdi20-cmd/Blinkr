@@ -14,8 +14,8 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Svg, { Circle, Path } from 'react-native-svg';
-import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
+import Svg, { Path } from 'react-native-svg';
+import Animated from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import SectionRow from '../components/SectionRow';
@@ -377,10 +377,15 @@ function FeedReviewCard({
           <Text style={styles.socialActionText}>{commentCount}</Text>
         </Pressable>
       </View>
-      {commentOpen && (commentsQuery.data ?? []).slice(0, 2).map((item) => (
+      {commentOpen && (commentsQuery.data ?? []).map((item) => (
         <View key={item.comment.id} style={styles.commentRow}>
-          <Text style={styles.commentAuthor}>{item.name ?? item.username ?? 'مستخدم'}</Text>
-          <Text style={styles.commentBody}>{item.comment.text}</Text>
+          <View style={styles.commentAvatar}>
+            {resolveMediaUrl(item.avatarUrl) ? <Image source={{ uri: resolveMediaUrl(item.avatarUrl) }} style={StyleSheet.absoluteFillObject} contentFit="cover" /> : <Text style={styles.commentAvatarText}>{(item.name ?? item.username ?? 'م').slice(0, 1)}</Text>}
+          </View>
+          <View style={styles.commentContent}>
+            <Text style={styles.commentAuthor}>{item.name ?? item.username ?? 'مستخدم'}</Text>
+            <Text style={styles.commentBody}>{item.comment.text}</Text>
+          </View>
         </View>
       ))}
       {commentOpen && (
@@ -530,7 +535,7 @@ const styles = StyleSheet.create({
   socialActionText: { color: colors.textDim, fontSize: fontSizes.xs, fontWeight: '700' },
   commentRow: { flexDirection: 'row', gap: 5, marginTop: spacing.xs, backgroundColor: colors.surfaceHigh, borderRadius: radius.sm, padding: spacing.sm },
   commentAuthor: { color: colors.text, fontSize: 11, fontWeight: '800' },
-  commentBody: { color: colors.textDim, flex: 1, fontSize: 11, lineHeight: 16 },
+  commentBody: { color: colors.textDim, fontSize: 11, lineHeight: 17 },
   commentComposer: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
   commentInput: { flex: 1, minHeight: 38, color: colors.text, backgroundColor: colors.bg, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, fontSize: fontSizes.sm },
   commentSend: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
