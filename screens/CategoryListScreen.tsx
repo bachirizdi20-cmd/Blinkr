@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import AppRefreshControl from '../components/AppRefreshControl';
 import { View, StyleSheet, FlatList, ActivityIndicator, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -75,7 +76,7 @@ export default function CategoryListScreen() {
       ) : items.length === 0 ? (
         <EmptyState icon="film-outline" title="No results" message="Nothing to show here yet." />
       ) : (
-        <FlatList
+        <FlatList refreshControl={<AppRefreshControl />}
           data={items}
           keyExtractor={(item) => `${item.mediaType}-${item.id}`}
           numColumns={NUM_COLUMNS}
