@@ -76,33 +76,43 @@ export default function HomeScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    const applyBatch = (results: PromiseSettledResult<{ results: NormalizedItem[] }>[], setters: ((items: NormalizedItem[]) => void)[]) => {
+      let failures = 0;
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') setters[index](result.value.results);
+        else failures += 1;
+      });
+      return failures;
+    };
     try {
-      const results = await Promise.allSettled([
-        fetchTrendingAll(1),
+      // Render the first two catalog rows as soon as their essential data arrives.
+      const primary = await Promise.allSettled([
         fetchMovieList('popular', 1),
+        fetchTVList('popular', 1),
+        fetchTrendingAll(1),
+      ]);
+      const primaryFailures = applyBatch(primary, [setMoviePopular, setTvPopular, (items) => setTrending(items)]);
+      setLoading(false);
+      setRefreshing(false);
+
+      // Load secondary collections after the primary rows are ready, avoiding a
+      // ten-request burst that delays the first useful content on slower phones.
+      const secondary = await Promise.allSettled([
         fetchMovieList('top_rated', 1),
         fetchMovieList('upcoming', 1),
         fetchMovieList('now_playing', 1),
-        fetchTVList('popular', 1),
         fetchTVList('top_rated', 1),
         fetchTVList('airing_today', 1),
         fetchAnime('tv', 1),
         fetchAnime('movie', 1),
       ]);
-      const setters: ((items: NormalizedItem[]) => void)[] = [
-        setTrending, setMoviePopular, setMovieTop, setMovieUpcoming, setMovieNowPlaying,
-        setTvPopular, setTvTop, setTvAiring, setAnimeTv, setAnimeMovie,
-      ];
-      const failures: unknown[] = [];
-      results.forEach((result, index) => {
-        if (result.status === 'fulfilled') setters[index](result.value.results);
-        else failures.push(result.reason);
-      });
-      if (failures.length === results.length) setError('تعذر تحميل العناوين الآن. اسحب الشاشة لإعادة المحاولة.');
-      else if (failures.length) setError('تعذر تحميل بعض الأقسام؛ ستبقى الأقسام المتاحة ظاهرة. اسحب الشاشة لإعادة المحاولة.');
+      const secondaryFailures = applyBatch(secondary, [
+        setMovieTop, setMovieUpcoming, setMovieNowPlaying, setTvTop, setTvAiring, setAnimeTv, setAnimeMovie,
+      ]);
+      if (primaryFailures + secondaryFailures === 10) setError('تعذر تحميل العناوين الآن. اسحب الشاشة لإعادة المحاولة.');
+      else if (primaryFailures + secondaryFailures > 0) setError('تعذر تحميل بعض الأقسام؛ ستبقى الأقسام المتاحة ظاهرة. اسحب الشاشة لإعادة المحاولة.');
     } catch {
       setError('تعذر الاتصال بخدمة العناوين الآن.');
-    } finally {
       setLoading(false);
       setRefreshing(false);
     }
