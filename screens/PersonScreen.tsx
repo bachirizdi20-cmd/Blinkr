@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import AppRefreshControl from '../components/AppRefreshControl';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -54,7 +55,7 @@ export default function PersonScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <FlatList
+      <FlatList refreshControl={<AppRefreshControl />}
         data={credits}
         keyExtractor={(item) => `${item.mediaType}-${item.id}`}
         numColumns={NUM_COLUMNS}
