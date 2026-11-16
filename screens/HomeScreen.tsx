@@ -269,44 +269,40 @@ type FeedRow = {
 };
 
 function SocialReviewFeed({ onOpenDetail, enabled, refreshToken }: { onOpenDetail: (review: { mediaType: ReviewMediaType; mediaId: number; title: string; posterPath: string | null }) => void; enabled: boolean; refreshToken: number }) {
-  const [showAllReviews, setShowAllReviews] = useState(false);
   const feedQuery = trpc.social.feed.useQuery(undefined, { enabled });
   useEffect(() => { if (refreshToken > 0) void feedQuery.refetch(); }, [refreshToken, feedQuery.refetch]);
   const rows = (feedQuery.data ?? []) as FeedRow[];
-  const visibleRows = showAllReviews ? rows : rows.slice(0, 3);
 
   return (
     <View style={styles.socialSection}>
-      <View style={styles.socialSectionHeader}>
-        <View>
-          <Text style={styles.socialTitle}>من تتابعهم</Text>
-          <Text style={styles.socialSubtitle}>أحدث آراء دائرتك</Text>
-        </View>
-        {rows.length > 3 ? (
-          <Pressable style={styles.socialMoreButton} onPress={() => setShowAllReviews((current) => !current)} accessibilityRole="button">
-            <Text style={styles.socialMoreText}>{showAllReviews ? 'عرض أقل' : 'عرض المزيد'}</Text>
-            <Ionicons name={showAllReviews ? 'chevron-up' : 'chevron-down'} size={15} color={colors.accent} />
-          </Pressable>
-        ) : <Ionicons name="people-outline" size={19} color={colors.accent} />}
-      </View>
       {feedQuery.isError ? (
-        <ApiErrorState message="تعذر تحميل موجز مراجعاتك." onRetry={() => feedQuery.refetch()} />
+        <ApiErrorState message="تعذر تحميل مراجعات المتابعين." onRetry={() => feedQuery.refetch()} />
       ) : rows.length === 0 ? (
         <View style={styles.socialEmpty}>
           <Ionicons name="chatbubble-ellipses-outline" size={24} color={colors.textFaint} />
           <Text style={styles.socialEmptyTitle}>لا توجد مراجعات جديدة بعد</Text>
-          <Text style={styles.socialEmptyText}>تابع أشخاصًا آخرين لتظهر آراؤهم هنا.</Text>
+          <Text style={styles.socialEmptyText}>عندما ينشر من تتابعهم مراجعة ستظهر هنا.</Text>
         </View>
       ) : (
-        visibleRows.map((row, index) => (
-          <FeedReviewCard
-            key={row.review.id}
-            row={row}
-            index={index}
-            onOpenDetail={onOpenDetail}
-            onChanged={() => feedQuery.refetch()}
-          />
-        ))
+        <FlatList
+          horizontal
+          data={rows}
+          keyExtractor={(row) => String(row.review.id)}
+          renderItem={({ item, index }) => (
+            <FeedReviewCard
+              row={item}
+              index={index}
+              onOpenDetail={onOpenDetail}
+              onChanged={() => feedQuery.refetch()}
+            />
+          )}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.socialCarouselContent}
+          snapToInterval={SCREEN_W - spacing.lg}
+          decelerationRate="fast"
+          disableIntervalMomentum
+          getItemLayout={(_, index) => ({ length: SCREEN_W - spacing.lg, offset: (SCREEN_W - spacing.lg) * index, index })}
+        />
       )}
     </View>
   );
@@ -410,7 +406,7 @@ function FeedReviewCard({
 }
 
 function OkayHandIcon({ active }: { active: boolean }) {
-  const color = active ? colors.accent : colors.textDim;
+  const color = active ? colors.accent : colors.textFaint;
   return (
     <Svg width={22} height={22} viewBox="0 0 24 24" accessibilityLabel="رمز التفاعل">
       <Circle cx={7.2} cy={14.2} r={3.8} fill="none" stroke={color} strokeWidth={1.8} />
@@ -504,7 +500,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   genreChipText: { color: colors.text, fontSize: fontSizes.xs, fontWeight: '600' },
-  socialSection: { paddingHorizontal: spacing.lg, marginBottom: spacing.lg },
+  socialSection: { marginBottom: spacing.lg },\n  socialCarouselContent: { paddingHorizontal: spacing.lg },
   socialSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
   socialTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '800' },
   socialSubtitle: { color: colors.textFaint, fontSize: fontSizes.xs, marginTop: 2 },
@@ -513,7 +509,7 @@ const styles = StyleSheet.create({
   socialEmpty: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
   socialEmptyTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '800', marginTop: spacing.sm },
   socialEmptyText: { color: colors.textDim, fontSize: fontSizes.xs, textAlign: 'center', marginTop: 4 },
-  socialCard: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginBottom: spacing.md },
+  socialCard: { width: SCREEN_W - spacing.lg * 2 - spacing.sm, backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginRight: spacing.sm },
   socialCardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   socialAvatar: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   socialAvatarText: { color: colors.bg, fontSize: fontSizes.md, fontWeight: '800' },
