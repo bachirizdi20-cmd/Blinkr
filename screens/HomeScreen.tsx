@@ -135,6 +135,8 @@ export default function HomeScreen() {
     navigation.navigate('Detail', { mediaType: item.mediaType, id: item.id });
   };
 
+  const hero = trending.find((item) => item.mediaType === 'movie') ?? trending[0];
+
   const sections: SectionData[] = useMemo(
     () => [
       {
@@ -225,34 +227,26 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.heroSection}>
-          <SectionHeader title="الرائج اليوم" subtitle="أغلفة الأفلام الأكثر رواجًا اليوم" />
           {trending.length === 0 && loading ? (
             <View style={styles.heroLoading}><Text style={styles.bookLoadingText}>جارٍ تحميل الرائج اليوم…</Text></View>
-          ) : (
-            <FlatList horizontal data={(trending.filter((item) => item.mediaType === 'movie').length ? trending.filter((item) => item.mediaType === 'movie') : trending).slice(0, 10)} keyExtractor={(item) => `daily-${item.mediaType}-${item.id}`} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.heroCarousel}
-              renderItem={({ item }) => {
-                const poster = catalogPosterUrl(item.mediaType, item.posterPath, 'w500');
-                return (
-                  <Pressable style={styles.heroSlide} onPress={() => openDetail(item)} accessibilityRole="button" accessibilityLabel={`فتح ${item.title}`}>
-                    {poster ? <Image source={{ uri: poster }} style={StyleSheet.absoluteFill} contentFit="cover" /> : <Image source={{ uri: backdropUrl(item.backdropPath, 'w780') ?? undefined }} style={StyleSheet.absoluteFill} contentFit="cover" />}
-                    <LinearGradient colors={['transparent', 'rgba(6,8,11,0.88)']} style={StyleSheet.absoluteFill} />
-                    <View style={styles.heroContent}>
-                      <View style={styles.trendingTag}><Ionicons name="flame" size={12} color={colors.accent2} /><Text style={styles.trendingTagText}>الرائج اليوم</Text></View>
-                      <Text style={styles.heroTitle} numberOfLines={2}>{item.title}</Text>
-                      <View style={styles.heroMetaRow}><Ionicons name="star" size={13} color={colors.gold} /><Text style={styles.heroMetaText}>{item.voteAverage.toFixed(1)}</Text><Text style={styles.heroDot}>•</Text><Text style={styles.heroMetaText}>{item.date?.slice(0, 4)}</Text></View>
-                    </View>
-                  </Pressable>
-                );
-              }}
-            />
-          )}
+          ) : hero ? (
+            <Pressable style={styles.hero} onPress={() => openDetail(hero)} accessibilityRole="button" accessibilityLabel={`فتح ${hero.title}`}>
+              <Image source={{ uri: backdropUrl(hero.backdropPath, 'w1280') ?? catalogPosterUrl(hero.mediaType, hero.posterPath, 'w500') ?? undefined }} style={StyleSheet.absoluteFill} contentFit="cover" />
+              <LinearGradient colors={['transparent', 'rgba(6,8,11,0.55)', colors.bg]} style={StyleSheet.absoluteFill} />
+              <View style={styles.heroContent}>
+                <View style={styles.trendingTag}><Ionicons name="flame" size={12} color={colors.accent2} /><Text style={styles.trendingTagText}>الرائج اليوم</Text></View>
+                <Text style={styles.heroTitle} numberOfLines={2}>{hero.title}</Text>
+                <View style={styles.heroMetaRow}><Ionicons name="star" size={13} color={colors.gold} /><Text style={styles.heroMetaText}>{hero.voteAverage.toFixed(1)}</Text><Text style={styles.heroDot}>•</Text><Text style={styles.heroMetaText}>{hero.date?.slice(0, 4)}</Text><Text style={styles.heroDot}>•</Text><Text style={styles.heroMetaText}>{hero.mediaType === 'movie' ? 'فيلم' : 'مسلسل'}</Text></View>
+              </View>
+            </Pressable>
+          ) : null}
         </View>
 
         <SocialReviewFeed enabled={Boolean(user)} refreshToken={feedRefreshToken} onOpenDetail={(item) => openCatalogItem(navigation, { mediaType: item.mediaType, mediaId: item.mediaId, title: item.title, posterPath: item.posterPath })} />
 
         <View style={styles.bookSection}>
           <View style={styles.bookSectionHeader}>
-            <View><Text style={styles.bookSectionTitle}>الكتب الرائجة</Text><Text style={styles.bookSectionSubtitle}>{(bookTrendingQuery.data ?? []).length.toLocaleString('ar')} كتاب</Text></View>
+            <View><Text style={styles.bookSectionTitle}>الكتب الرائجة</Text></View>
             <Pressable onPress={() => navigation.navigate('Search', { booksTrending: true })}><Text style={styles.bookSectionMore}>عرض الكل</Text></Pressable>
           </View>
           {bookTrendingQuery.isLoading ? <View style={styles.bookLoading}><Text style={styles.bookLoadingText}>جارٍ تحميل الكتب…</Text></View>
@@ -504,9 +498,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   heroSection: { marginBottom: spacing.lg },
-  heroCarousel: { paddingHorizontal: spacing.lg, gap: spacing.md },
-  heroSlide: { width: 138, height: 208, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.surface, marginRight: spacing.xs },
-  heroLoading: { height: 190, alignItems: 'center', justifyContent: 'center' },
+  heroLoading: { height: 220, marginHorizontal: spacing.lg, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, marginBottom: spacing.lg },
   hero: {
     width: SCREEN_W - spacing.lg * 2,
     height: 220,
