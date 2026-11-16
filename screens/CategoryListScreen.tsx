@@ -76,7 +76,7 @@ export default function CategoryListScreen() {
       ) : items.length === 0 ? (
         <EmptyState icon="film-outline" title="No results" message="Nothing to show here yet." />
       ) : (
-        <FlatList refreshControl={<AppRefreshControl onRefresh={() => { setLoading(true); return loadPage(1, true); }} />
+        <FlatList refreshControl={<AppRefreshControl onRefresh={() => { setLoading(true); return loadPage(1, true); }} />}
           data={items}
           keyExtractor={(item) => `${item.mediaType}-${item.id}`}
           numColumns={NUM_COLUMNS}
