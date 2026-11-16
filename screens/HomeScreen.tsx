@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Svg, { Path } from 'react-native-svg';
+import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import SectionRow from '../components/SectionRow';
@@ -321,16 +322,17 @@ function FeedReviewCard({
   const { review, username, displayName, avatarUrl, likeCount, commentCount, likedByMe } = row;
   const [commentOpen, setCommentOpen] = useState(false);
   const [commentText, setCommentText] = useState('');
+  const [replyTarget, setReplyTarget] = useState<{ id: number; name: string } | null>(null);
   const commentsQuery = trpc.social.comments.useQuery({ reviewId: review.id }, { enabled: commentOpen });
   const toggleLikeMutation = trpc.social.toggleLike.useMutation({ onSuccess: onChanged });
   const addCommentMutation = trpc.social.addComment.useMutation({
-    onSuccess: () => { setCommentText(''); commentsQuery.refetch(); onChanged(); },
+    onSuccess: () => { setCommentText(''); setReplyTarget(null); commentsQuery.refetch(); onChanged(); },
   });
   const reportMutation = trpc.social.report.useMutation({ onSuccess: () => Alert.alert('تم إرسال البلاغ', 'شكرًا، سيراجع فريق Blinkr البلاغ.') });
 
   const submitComment = () => {
     if (!commentText.trim()) return;
-    addCommentMutation.mutate({ reviewId: review.id, text: commentText.trim() });
+    addCommentMutation.mutate({ reviewId: review.id, text: commentText.trim(), ...(replyTarget ? { parentCommentId: replyTarget.id } : {}) });
   };
 
   const poster = catalogPosterUrl(review.mediaType, review.posterPath, 'w342');
@@ -376,23 +378,47 @@ function FeedReviewCard({
           <Text style={styles.socialActionText}>{commentCount}</Text>
         </Pressable>
       </View>
-      {commentOpen && (commentsQuery.data ?? []).map((item) => (
-        <View key={item.comment.id} style={styles.commentRow}>
-          <View style={styles.commentAvatar}>
-            {resolveMediaUrl(item.avatarUrl) ? <Image source={{ uri: resolveMediaUrl(item.avatarUrl) }} style={StyleSheet.absoluteFillObject} contentFit="cover" /> : <Text style={styles.commentAvatarText}>{(item.name ?? item.username ?? 'م').slice(0, 1)}</Text>}
+      {commentOpen && (commentsQuery.data ?? []).filter((item) => !item.comment.parentCommentId).map((item) => {
+        const authorName = item.name ?? item.username ?? 'مستخدم';
+        const replies = (commentsQuery.data ?? []).filter((reply) => reply.comment.parentCommentId === item.comment.id);
+        return (
+          <View key={item.comment.id} style={styles.commentThread}>
+            <View style={styles.commentRow}>
+              <View style={styles.commentAvatar}>
+                {resolveMediaUrl(item.avatarUrl) ? <Image source={{ uri: resolveMediaUrl(item.avatarUrl) }} style={StyleSheet.absoluteFillObject} contentFit="cover" /> : <Text style={styles.commentAvatarText}>{authorName.slice(0, 1)}</Text>}
+              </View>
+              <View style={styles.commentContent}>
+                <Text style={styles.commentAuthor}>{authorName}</Text>
+                <Text style={styles.commentBody}>{item.comment.text}</Text>
+                <Pressable onPress={() => setReplyTarget({ id: item.comment.id, name: authorName })} accessibilityRole="button">
+                  <Text style={styles.replyAction}>رد</Text>
+                </Pressable>
+              </View>
+            </View>
+            {replies.map((reply) => {
+              const replyName = reply.name ?? reply.username ?? 'مستخدم';
+              return (
+                <View key={reply.comment.id} style={styles.replyRow}>
+                  <View style={styles.commentAvatarSmall}>
+                    {resolveMediaUrl(reply.avatarUrl) ? <Image source={{ uri: resolveMediaUrl(reply.avatarUrl) }} style={StyleSheet.absoluteFillObject} contentFit="cover" /> : <Text style={styles.commentAvatarText}>{replyName.slice(0, 1)}</Text>}
+                  </View>
+                  <View style={styles.commentContent}>
+                    <Text style={styles.commentAuthor}>{replyName}</Text>
+                    <Text style={styles.commentBody}>{reply.comment.text}</Text>
+                  </View>
+                </View>
+              );
+            })}
           </View>
-          <View style={styles.commentContent}>
-            <Text style={styles.commentAuthor}>{item.name ?? item.username ?? 'مستخدم'}</Text>
-            <Text style={styles.commentBody}>{item.comment.text}</Text>
-          </View>
-        </View>
-      ))}
+        );
+      })}
       {commentOpen && (
         <View style={styles.commentComposer}>
+          {replyTarget && <View style={styles.replyingTo}><Text style={styles.replyingToText}>الرد على {replyTarget.name}</Text><Pressable onPress={() => setReplyTarget(null)}><Ionicons name="close-circle" size={17} color={colors.textDim} /></Pressable></View>}
           <TextInput
             value={commentText}
             onChangeText={setCommentText}
-            placeholder="اكتب تعليقًا…"
+            placeholder={replyTarget ? `اكتب ردًا على ${replyTarget.name}…` : "اكتب تعليقًا…"}
             placeholderTextColor={colors.textFaint}
             selectionColor={colors.accent}
             cursorColor={colors.accent}
@@ -400,7 +426,7 @@ function FeedReviewCard({
             returnKeyType="send"
             onSubmitEditing={submitComment}
           />
-          <Pressable style={styles.commentSend} onPress={submitComment} accessibilityRole="button" accessibilityLabel="إرسال التعليق">
+          <Pressable style={styles.commentSend} onPress={submitComment} accessibilityRole="button" accessibilityLabel={replyTarget ? "إرسال الرد" : "إرسال التعليق"}>
             <Ionicons name="arrow-up" size={16} color={colors.bg} />
           </Pressable>
         </View>
@@ -530,7 +556,13 @@ const styles = StyleSheet.create({
   socialActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border, marginTop: spacing.md, paddingTop: spacing.sm },
   socialAction: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   socialActionText: { color: colors.textDim, fontSize: fontSizes.xs, fontWeight: '700' },
+  commentThread: { marginTop: spacing.xs },
   commentRow: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.xs, backgroundColor: colors.surfaceHigh, borderRadius: radius.md, padding: spacing.sm },
+  replyRow: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: spacing.sm, marginTop: 5, marginRight: 34, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRightWidth: 2, borderRightColor: colors.border },
+  commentAvatarSmall: { width: 24, height: 24, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  replyAction: { color: colors.accent, fontSize: 11, fontWeight: '800', marginTop: 5 },
+  replyingTo: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, marginBottom: 4 },
+  replyingToText: { color: colors.accent, fontSize: 11, fontWeight: '700' },
   commentAvatar: { width: 30, height: 30, borderRadius: 15, overflow: 'hidden', backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   commentAvatarText: { color: colors.bg, fontSize: 12, fontWeight: '800' },
   commentContent: { flex: 1, gap: 3 },
