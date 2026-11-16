@@ -19,7 +19,6 @@ import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import SectionRow from '../components/SectionRow';
-import BookCard from '../components/BookCard';
 import ComicCard from '../components/ComicCard';
 import ApiErrorState from '../components/ApiErrorState';
 import { ContentStackParamList } from '../navigation/types';
@@ -36,7 +35,6 @@ import { useAuth } from '../hooks/use-auth';
 import { trpc } from '../lib/trpc';
 import { colors, fontSizes, spacing, radius } from '../lib/theme';
 import { resolveMediaUrl } from '../lib/media-url';
-import { BookSummary } from '../types/books';
 import { ComicSummary } from '../types/comics';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
 
@@ -56,11 +54,9 @@ interface SectionData {
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const { user } = useAuth();
-  const notificationsQuery = trpc.social.notifications.useQuery(undefined, { enabled: Boolean(user) });
-  const hardcoverTrendingQuery = trpc.books.trending.useQuery({ limit: 100 }, { retry: 1 });
   const comicTrendingQuery = trpc.comics.trending.useQuery({ limit: 20 }, { retry: 1 });
-  const unreadNotifications = (notificationsQuery.data ?? []).filter((item) => item.kind !== 'message' && !item.readAt).length;
   const [refreshing, setRefreshing] = useState(false);
+  const [feedRefreshToken, setFeedRefreshToken] = useState(0);
   const [trending, setTrending] = useState<NormalizedItem[]>([]);
   const [moviePopular, setMoviePopular] = useState<NormalizedItem[]>([]);
   const [movieTop, setMovieTop] = useState<NormalizedItem[]>([]);
@@ -116,9 +112,8 @@ export default function HomeScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     load();
-    void hardcoverTrendingQuery.refetch();
     void comicTrendingQuery.refetch();
-    if (user) void notificationsQuery.refetch();
+    setFeedRefreshToken((value) => value + 1);
   };
 
   const openDetail = (item: NormalizedItem) => {
@@ -208,13 +203,8 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.brand}>Blinkr</Text>
-            <Text style={styles.tagline}>تابع كل قصة تشاهدها</Text>
           </View>
           <View style={styles.headerActions}>
-            <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Notifications')} accessibilityRole="button" accessibilityLabel="الإشعارات">
-              <Ionicons name="notifications-outline" size={20} color={colors.text} />
-              {unreadNotifications > 0 ? <View style={styles.notificationDot}><Text style={styles.notificationCount}>{unreadNotifications > 9 ? '9+' : unreadNotifications}</Text></View> : null}
-            </Pressable>
             <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Search')} accessibilityRole="button" accessibilityLabel="البحث">
               <Ionicons name="search" size={20} color={colors.text} />
             </Pressable>
@@ -243,22 +233,7 @@ export default function HomeScreen() {
           </Pressable>
         )}
 
-        <View style={styles.bookSection}>
-          <View style={styles.bookSectionHeader}>
-            <View><Text style={styles.bookSectionTitle}>الكتب الرائجة عالميًا</Text><Text style={styles.bookSectionSubtitle}>{(hardcoverTrendingQuery.data ?? []).length.toLocaleString('ar')} كتاب</Text></View>
-            <Pressable onPress={() => navigation.navigate('Search', { booksTrending: true })} accessibilityRole="button"><Text style={styles.bookSectionMore}>See All</Text></Pressable>
-          </View>
-          {hardcoverTrendingQuery.isLoading ? <View style={styles.bookLoading}><Text style={styles.bookLoadingText}>جارٍ تحميل الكتب…</Text></View> : hardcoverTrendingQuery.isError ? <Pressable onPress={() => hardcoverTrendingQuery.refetch()} style={styles.bookError}><Text style={styles.bookErrorText}>تعذر تحميل كتب Hardcover — اضغط لإعادة المحاولة.</Text></Pressable> : <FlatList
-            data={((hardcoverTrendingQuery.data ?? []) as BookSummary[]).filter((book) => Boolean(book.coverUrl))}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(book) => `hardcover-${book.workId}`}
-            contentContainerStyle={styles.bookList}
-            ListEmptyComponent={<View style={styles.bookLoading}><Text style={styles.bookLoadingText}>لا توجد كتب رائجة بأغلفة متاحة حاليًا.</Text></View>}
-            renderItem={({ item }) => <BookCard book={item} width={112} onPress={() => navigation.navigate('BookDetail', { workId: item.workId, book: item })} />}
-          />}
-        </View>
-
+        {user ? <SocialReviewFeed enabled={Boolean(user)} refreshToken={feedRefreshToken} onOpenDetail={(item) => openCatalogItem(navigation, { mediaType: item.mediaType, mediaId: item.mediaId, title: item.title, posterPath: item.posterPath })} /> : null}
         <View style={styles.bookSection}>
           <View style={styles.bookSectionHeader}><View><Text style={styles.bookSectionTitle}>الكوميك الرائجة</Text><Text style={styles.bookSectionSubtitle}>{(comicTrendingQuery.data ?? []).length.toLocaleString('ar')} كوميك</Text></View><Pressable onPress={() => navigation.navigate('Search', { comicsTrending: true })}><Text style={styles.bookSectionMore}>See All</Text></Pressable></View>
           {comicTrendingQuery.isLoading ? <View style={styles.bookLoading}><Text style={styles.bookLoadingText}>جارٍ تحميل الكوميك…</Text></View> : comicTrendingQuery.isError ? <Pressable onPress={() => comicTrendingQuery.refetch()} style={styles.bookError}><Text style={styles.bookErrorText}>تعذر تحميل الكوميك — اضغط لإعادة المحاولة.</Text></Pressable> : <FlatList data={((comicTrendingQuery.data ?? []) as ComicSummary[]).filter((comic) => Boolean(comic.coverUrl))} horizontal showsHorizontalScrollIndicator={false} keyExtractor={(comic) => `comic-${comic.id}`} contentContainerStyle={styles.bookList} ListEmptyComponent={<View style={styles.bookLoading}><Text style={styles.bookLoadingText}>لا توجد كوميك بأغلفة متاحة حاليًا.</Text></View>} renderItem={({ item }) => <ComicCard comic={item} width={112} onPress={() => navigation.navigate('ComicDetail', { id: item.id, comic: item })} />} />}
@@ -293,9 +268,10 @@ type FeedRow = {
   likedByMe: boolean;
 };
 
-function SocialReviewFeed({ onOpenDetail, enabled }: { onOpenDetail: (review: { mediaType: ReviewMediaType; mediaId: number; title: string; posterPath: string | null }) => void; enabled: boolean }) {
+function SocialReviewFeed({ onOpenDetail, enabled, refreshToken }: { onOpenDetail: (review: { mediaType: ReviewMediaType; mediaId: number; title: string; posterPath: string | null }) => void; enabled: boolean; refreshToken: number }) {
   const [showAllReviews, setShowAllReviews] = useState(false);
   const feedQuery = trpc.social.feed.useQuery(undefined, { enabled });
+  useEffect(() => { if (refreshToken > 0) void feedQuery.refetch(); }, [refreshToken, feedQuery.refetch]);
   const rows = (feedQuery.data ?? []) as FeedRow[];
   const visibleRows = showAllReviews ? rows : rows.slice(0, 3);
 
@@ -456,8 +432,6 @@ function formatSocialTime(value: number) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  notificationDot: { position: 'absolute' as const, top: -5, right: -5, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: colors.danger, alignItems: 'center' as const, justifyContent: 'center' as const, paddingHorizontal: 3 },
-  notificationCount: { color: '#fff', fontSize: 9, fontWeight: '800' as const },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -467,7 +441,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   brand: { color: colors.text, fontSize: fontSizes.xxl, fontWeight: '800', letterSpacing: 0.3 },
-  tagline: { color: colors.textDim, fontSize: fontSizes.xs, marginTop: 2 },
   searchBtn: {
     width: 40,
     height: 40,

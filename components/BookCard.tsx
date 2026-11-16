@@ -12,7 +12,7 @@ export default function BookCard({ book, onPress, width = 108 }: { book: BookSum
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.card, { width, opacity: pressed ? 0.76 : 1 }]} accessibilityRole="button" accessibilityLabel={`عرض كتاب ${book.title}`}>
       <View style={[styles.coverWrap, { height: width * 1.5 }]}>
-        {coverUrl ? <Image source={{ uri: coverUrl }} style={styles.cover} contentFit="cover" transition={150} /> : <View style={[styles.cover, styles.fallback]}><Ionicons name="book-outline" size={30} color={colors.textFaint} /><Text style={styles.noCover}>لا يتوفر غلاف</Text></View>}
+        {coverUrl ? <Image source={{ uri: coverUrl }} style={styles.cover} contentFit="cover" transition={0} cachePolicy="memory-disk" /> : <View style={[styles.cover, styles.fallback]}><Ionicons name="book-outline" size={30} color={colors.textFaint} /><Text style={styles.noCover}>لا يتوفر غلاف</Text></View>}
         {book.ratingsAverage != null && book.ratingsCount > 0 ? <View style={styles.rating}><Ionicons name="star" size={10} color={colors.gold} /><Text style={styles.ratingText}>{book.ratingsAverage.toFixed(1)}</Text></View> : null}
       </View>
       <Text style={styles.title} numberOfLines={2}>{book.title}</Text>
