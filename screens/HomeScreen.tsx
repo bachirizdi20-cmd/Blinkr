@@ -72,7 +72,7 @@ export default function HomeScreen() {
   const [tvAiring, setTvAiring] = useState<NormalizedItem[]>([]);
   const [animeTv, setAnimeTv] = useState<NormalizedItem[]>([]);
   const [animeMovie, setAnimeMovie] = useState<NormalizedItem[]>([]);
-  const [loading, setLoading] = useState(() => !getCachedTrendingAll(1));
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (forceRefresh = false) => {
