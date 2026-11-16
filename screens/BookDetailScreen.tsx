@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import AppRefreshControl from '../components/AppRefreshControl';
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -16,6 +16,7 @@ import ApiErrorState from '../components/ApiErrorState';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
 import BookCard from '../components/BookCard';
 import DetailActionBar from '../components/DetailActionBar';
+import LoadingView from '../components/LoadingView';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type RouteT = RouteProp<ContentStackParamList, 'BookDetail'>;
@@ -102,9 +103,7 @@ export default function BookDetailScreen() {
     posterPath: book.coverUrl,
   });
 
-  if (detailQuery.isLoading && !fallback) {
-    return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={colors.accent} /><Text style={styles.muted}>جارٍ تحميل بيانات الكتاب…</Text></View></SafeAreaView>;
-  }
+  if (detailQuery.isLoading) return <LoadingView />;
 
   if (detailQuery.isError && !fallback) {
     return <SafeAreaView style={styles.safe}><View style={styles.topBar}><Pressable onPress={() => navigation.goBack()} style={styles.iconButton}><Ionicons name="chevron-back" size={22} color={colors.text} /></Pressable></View><ApiErrorState message="تعذر تحميل تفاصيل الكتاب من Hardcover." onRetry={() => void detailQuery.refetch()} /></SafeAreaView>;
