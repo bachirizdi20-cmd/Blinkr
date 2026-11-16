@@ -292,14 +292,13 @@ type FeedRow = {
 };
 
 function SocialReviewFeed({ onOpenDetail, enabled, refreshToken }: { onOpenDetail: (review: { mediaType: ReviewMediaType; mediaId: number; title: string; posterPath: string | null }) => void; enabled: boolean; refreshToken: number }) {
-  const navigation = useNavigation<Nav>();
   const feedQuery = trpc.social.feed.useQuery(undefined, { enabled, retry: 1, staleTime: 60 * 1000 });
   useEffect(() => { if (refreshToken > 0) void feedQuery.refetch(); }, [refreshToken, feedQuery.refetch]);
   const rows = (feedQuery.data ?? []) as FeedRow[];
 
   return (
     <View style={styles.socialSection}>
-      <SectionHeader title="مراجعات المتابعين" subtitle="آخر ما نشره الأشخاص الذين تتابعهم" onSeeAll={() => navigation.navigate('Reviews')} />
+      <SectionHeader title="مراجعات المتابعين" subtitle="آخر ما نشره الأشخاص الذين تتابعهم" />
       {!enabled ? (
         <View style={styles.socialEmpty}><Ionicons name="people-outline" size={24} color={colors.textFaint} /><Text style={styles.socialEmptyTitle}>سجّل الدخول لمتابعة المراجعات</Text><Text style={styles.socialEmptyText}>ستظهر هنا مراجعات الأشخاص الذين تتابعهم.</Text></View>
       ) : feedQuery.isLoading ? (
@@ -506,7 +505,7 @@ const styles = StyleSheet.create({
   },
   heroSection: { marginBottom: spacing.lg },
   heroCarousel: { paddingHorizontal: spacing.lg, gap: spacing.md },
-  heroSlide: { width: Math.min(SCREEN_W * 0.72, 300), height: 190, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.surface, marginRight: spacing.xs },
+  heroSlide: { width: 138, height: 208, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.surface, marginRight: spacing.xs },
   heroLoading: { height: 190, alignItems: 'center', justifyContent: 'center' },
   hero: {
     width: SCREEN_W - spacing.lg * 2,
@@ -530,7 +529,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   trendingTagText: { color: colors.accent2, fontSize: 11, fontWeight: '700' },
-  heroTitle: { color: colors.text, fontSize: fontSizes.xxl, fontWeight: '800' },
+  heroTitle: { color: colors.text, fontSize: fontSizes.md, fontWeight: '800' },
   heroMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.xs },
   heroMetaText: { color: colors.textDim, fontSize: fontSizes.sm, fontWeight: '600' },
   heroDot: { color: colors.textFaint },
