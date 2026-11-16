@@ -191,7 +191,7 @@ export default function DetailScreen() {
     <View style={styles.container}>
       <ScrollView refreshControl={<AppRefreshControl />} showsVerticalScrollIndicator={false} bounces={false}>
         <View style={{ height: BACKDROP_HEIGHT, backgroundColor: colors.surface }}>
-          {backdrop && <Image source={{ uri: backdrop }} style={StyleSheet.absoluteFill} contentFit="cover" />}
+          {backdrop && <Image source={{ uri: backdrop }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" transition={0} />}
           <LinearGradient colors={['rgba(6,8,11,0.3)', 'transparent', colors.bg]} style={StyleSheet.absoluteFill} />
           <SafeAreaView edges={['top']} style={styles.topBar}>
             <Pressable style={styles.iconBtn} onPress={() => navigation.goBack()}>
@@ -208,7 +208,7 @@ export default function DetailScreen() {
         <View style={styles.headerRow}>
           <View style={styles.posterWrap}>
             {poster ? (
-              <Image source={{ uri: poster }} style={styles.poster} contentFit="cover" />
+              <Image source={{ uri: poster }} style={styles.poster} contentFit="cover" cachePolicy="memory-disk" transition={0} />
             ) : (
               <View style={[styles.poster, styles.posterFallback]}>
                 <Ionicons name="film-outline" size={30} color={colors.textFaint} />
