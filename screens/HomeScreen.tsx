@@ -92,8 +92,6 @@ export default function HomeScreen() {
         fetchTrendingAll(1),
       ]);
       const primaryFailures = applyBatch(primary, [setMoviePopular, setTvPopular, (items) => setTrending(items)]);
-      setLoading(false);
-      setRefreshing(false);
 
       // Load secondary collections after the primary rows are ready, avoiding a
       // ten-request burst that delays the first useful content on slower phones.
@@ -109,6 +107,8 @@ export default function HomeScreen() {
       const secondaryFailures = applyBatch(secondary, [
         setMovieTop, setMovieUpcoming, setMovieNowPlaying, setTvTop, setTvAiring, setAnimeTv, setAnimeMovie,
       ]);
+      setLoading(false);
+      setRefreshing(false);
       if (primaryFailures + secondaryFailures === 10) setError('تعذر تحميل العناوين الآن. اسحب الشاشة لإعادة المحاولة.');
       else if (primaryFailures + secondaryFailures > 0) setError('تعذر تحميل بعض الأقسام؛ ستبقى الأقسام المتاحة ظاهرة. اسحب الشاشة لإعادة المحاولة.');
     } catch {
