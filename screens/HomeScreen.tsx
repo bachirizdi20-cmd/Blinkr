@@ -414,9 +414,7 @@ function OkayHandIcon({ active }: { active: boolean }) {
   const color = active ? colors.accent : colors.textFaint;
   return (
     <Svg width={22} height={22} viewBox="0 0 24 24" accessibilityLabel="رمز التفاعل">
-      <Circle cx={7.2} cy={14.2} r={3.8} fill="none" stroke={color} strokeWidth={1.8} />
-      <Path d="M10.2 13.8c1.1.8 1.8 1.1 2.8 1.1h3.5c1.3 0 2.5-.7 3.1-1.8l1.1-2c.4-.7-.6-1.4-1.1-.7l-.8 1.1V7.2c0-.8-1.1-1-1.4-.2l-.9 2.5V5.2c0-.9-1.3-1-1.5-.1l-.8 4.4V5.8c0-.9-1.3-1-1.5-.1l-1 5.2-1.1 1.3" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-      <Path d="M10.2 13.8 8.8 12" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+      <Path d="M2.5 10.5h3.2v10H2.5zM8 20.5h8.2c1 0 1.8-.7 2-1.6l1.4-6.1c.3-1.2-.6-2.3-1.8-2.3h-5.1l.8-4.1c.2-1-.3-2-1.2-2.4L11.5 4 6.8 10.2c-.5.6-.8 1.3-.8 2.1v6.2c0 1.1.9 2 2 2z" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
 }
@@ -533,7 +531,10 @@ const styles = StyleSheet.create({
   socialActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border, marginTop: spacing.md, paddingTop: spacing.sm },
   socialAction: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   socialActionText: { color: colors.textDim, fontSize: fontSizes.xs, fontWeight: '700' },
-  commentRow: { flexDirection: 'row', gap: 5, marginTop: spacing.xs, backgroundColor: colors.surfaceHigh, borderRadius: radius.sm, padding: spacing.sm },
+  commentRow: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.xs, backgroundColor: colors.surfaceHigh, borderRadius: radius.md, padding: spacing.sm },
+  commentAvatar: { width: 30, height: 30, borderRadius: 15, overflow: 'hidden', backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  commentAvatarText: { color: colors.bg, fontSize: 12, fontWeight: '800' },
+  commentContent: { flex: 1, gap: 3 },
   commentAuthor: { color: colors.text, fontSize: 11, fontWeight: '800' },
   commentBody: { color: colors.textDim, fontSize: 11, lineHeight: 17 },
   commentComposer: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
