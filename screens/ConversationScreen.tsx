@@ -106,7 +106,7 @@ export default function ConversationScreen() {
   const [pendingImage, setPendingImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [failedAudio, setFailedAudio] = useState<AudioDraft | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  const listRef = useRef<FlatList refreshControl={<AppRefreshControl />} >(null);
+  const listRef = useRef<FlatList>(null);
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(audioRecorder, 250);
   const audioPlayerRef = useRef<any>(null);
@@ -345,7 +345,7 @@ export default function ConversationScreen() {
             <EmptyState icon={messageSearch.trim() ? 'search-outline' : 'chatbubble-ellipses-outline'} title={messageSearch.trim() ? 'لا توجد رسائل مطابقة' : `ابدأ المحادثة مع ${user.displayName}`} message={messageSearch.trim() ? 'جرّب كلمات بحث مختلفة.' : user.bio || 'أرسل أول رسالة لبدء الحديث.'} />
           </View>
         ) : (
-          <FlatList
+          <FlatList refreshControl={<AppRefreshControl />}
             ref={listRef}
             data={data}
             inverted
