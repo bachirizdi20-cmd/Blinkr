@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import AppRefreshControl from '../components/AppRefreshControl';
 import {
   View,
   Text,
@@ -105,7 +106,7 @@ export default function ConversationScreen() {
   const [pendingImage, setPendingImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [failedAudio, setFailedAudio] = useState<AudioDraft | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  const listRef = useRef<FlatList>(null);
+  const listRef = useRef<FlatList refreshControl={<AppRefreshControl />} >(null);
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(audioRecorder, 250);
   const audioPlayerRef = useRef<any>(null);
