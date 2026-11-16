@@ -106,7 +106,7 @@ export default function BookDetailScreen() {
   if (detailQuery.isLoading && !fallback) return <LoadingView />;
 
   if (detailQuery.isError && !fallback) {
-    return <SafeAreaView style={styles.safe}><View style={styles.topBar}><Pressable onPress={() => navigation.goBack()} style={styles.iconButton}><Ionicons name="chevron-back" size={22} color={colors.text} /></Pressable></View><ApiErrorState message="تعذر تحميل تفاصيل الكتاب من Hardcover." onRetry={() => void detailQuery.refetch()} /></SafeAreaView>;
+    return <SafeAreaView style={styles.safe}><View style={styles.topBar}><Pressable onPress={() => navigation.goBack()} style={styles.iconButton}><Ionicons name="chevron-back" size={22} color={colors.text} /></Pressable></View><ApiErrorState message="تعذر تحميل تفاصيل الكتاب الآن." onRetry={() => void detailQuery.refetch()} /></SafeAreaView>;
   }
 
   const info = [
@@ -125,7 +125,7 @@ export default function BookDetailScreen() {
       <ScrollView refreshControl={<AppRefreshControl />} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.hero}>
           <View style={styles.coverFrame}>
-            {book.coverUrl ? <Image source={{ uri: book.coverUrl }} style={styles.cover} contentFit="cover" transition={180} /> : <View style={[styles.cover, styles.coverFallback]}><Ionicons name="book-outline" size={42} color={colors.textFaint} /><Text style={styles.muted}>لا يتوفر غلاف</Text></View>}
+            {book.coverUrl ? <Image source={{ uri: book.coverUrl }} style={styles.cover} contentFit="cover" transition={0} cachePolicy="memory-disk" /> : <View style={[styles.cover, styles.coverFallback]}><Ionicons name="book-outline" size={42} color={colors.textFaint} /><Text style={styles.muted}>لا يتوفر غلاف</Text></View>}
           </View>
           <View style={styles.heroCopy}>
             <Text style={styles.title}>{book.title}</Text>
