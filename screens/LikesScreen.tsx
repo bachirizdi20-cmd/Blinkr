@@ -1,4 +1,5 @@
 import React from 'react';
+import AppRefreshControl from '../components/AppRefreshControl';
 import { View, Text, StyleSheet, FlatList, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -28,7 +29,7 @@ export default function LikesScreen() {
       {items.length === 0 ? (
         <EmptyState icon="heart-outline" title="لا توجد عناصر مفضلة بعد" message="اضغط على رمز القلب في أي عنوان لإضافته إلى المفضلة." />
       ) : (
-        <FlatList
+        <FlatList refreshControl={<AppRefreshControl />}
           data={items}
           keyExtractor={(item) => `${item.mediaType}-${item.mediaId}`}
           numColumns={NUM_COLUMNS}
