@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import AppRefreshControl from '../components/AppRefreshControl';
 import {
   View,
   Text,
@@ -188,7 +189,7 @@ export default function DetailScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+      <ScrollView refreshControl={<AppRefreshControl />} showsVerticalScrollIndicator={false} bounces={false}>
         <View style={{ height: BACKDROP_HEIGHT, backgroundColor: colors.surface }}>
           {backdrop && <Image source={{ uri: backdrop }} style={StyleSheet.absoluteFill} contentFit="cover" />}
           <LinearGradient colors={['rgba(6,8,11,0.3)', 'transparent', colors.bg]} style={StyleSheet.absoluteFill} />
