@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import AppRefreshControl from '../components/AppRefreshControl';
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
@@ -15,6 +15,7 @@ import DetailActionBar from '../components/DetailActionBar';
 import { useAuth } from '../hooks/use-auth';
 import { useLibrary } from '../context/LibraryContext';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
+import { readPersistentCache, writePersistentCache } from '../lib/persistent-cache';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type RouteT = RouteProp<ContentStackParamList, 'ComicDetail'>;
@@ -25,8 +26,15 @@ export default function ComicDetailScreen() {
   const { id, comic: fallback } = route.params;
   const { user } = useAuth();
   const lib = useLibrary();
+  const [cachedComic, setCachedComic] = useState<Partial<ComicSummary> | undefined>(fallback);
   const detailQuery = trpc.comics.detail.useQuery({ id }, { retry: 1 });
-  const comic = (detailQuery.data ?? fallback) as ComicSummary | undefined;
+  useEffect(() => {
+    void readPersistentCache<Partial<ComicSummary>>(`comic-detail:${id}`).then((value) => { if (value) setCachedComic((current) => current ?? value); });
+  }, [id]);
+  useEffect(() => {
+    if (detailQuery.data) void writePersistentCache(`comic-detail:${id}`, detailQuery.data);
+  }, [id, detailQuery.data]);
+  const comic = (detailQuery.data ?? cachedComic) as ComicSummary | undefined;
   const statusQuery = trpc.library.getStatus.useQuery({ mediaType: 'comic', mediaId: id }, { enabled: Boolean(user), retry: false });
   const setStatusMutation = trpc.library.setStatus.useMutation();
   const removeStatusMutation = trpc.library.removeStatus.useMutation();
@@ -35,7 +43,7 @@ export default function ComicDetailScreen() {
   const similarQuery = trpc.comics.similar.useQuery({ id, title: comic?.title ?? '', publisher: comic?.publisher ?? null, limit: 8 }, { enabled: Boolean(comic), retry: 1 });
   const info = useMemo(() => [comic?.issueNumber ? `العدد ${comic.issueNumber}` : null, comic?.publishDate, comic?.publisher].filter(Boolean), [comic]);
 
-  if (detailQuery.isLoading && !comic) return <View style={styles.center}><ActivityIndicator color={colors.accent} size="large" /><Text style={styles.muted}>جارٍ تحميل الكوميك…</Text></View>;
+  if (detailQuery.isLoading && !comic) return <View style={styles.center}><ActivityIndicator color={colors.accent} size="large" /></View>;
   if (detailQuery.isError && !comic) return <View style={styles.safe}><ApiErrorState message="تعذر تحميل تفاصيل الكوميك من Comic Vine." onRetry={() => void detailQuery.refetch()} /></View>;
   if (!comic) return null;
 

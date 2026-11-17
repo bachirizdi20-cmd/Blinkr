@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import AppRefreshControl from '../components/AppRefreshControl';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
@@ -7,6 +7,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ContentStackParamList } from '../navigation/types';
+import { BookSummary } from '../types/books';
 import { trpc } from '../lib/trpc';
 import { isBookDetailCompatible, mergeBookDetails } from '../lib/book-utils';
 import { useAuth } from '../hooks/use-auth';
@@ -17,6 +18,7 @@ import { PlatformAlert as Alert } from '../lib/platform-alert';
 import BookCard from '../components/BookCard';
 import DetailActionBar from '../components/DetailActionBar';
 import LoadingView from '../components/LoadingView';
+import { readPersistentCache, writePersistentCache } from '../lib/persistent-cache';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type RouteT = RouteProp<ContentStackParamList, 'BookDetail'>;
@@ -27,16 +29,24 @@ export default function BookDetailScreen() {
   const { workId, book: fallback } = route.params;
   const { user } = useAuth();
   const lib = useLibrary();
+  const [cachedBook, setCachedBook] = useState<Partial<BookSummary> | undefined>(fallback);
   const mediaSource = 'hardcover' as const;
   const detailQuery = trpc.books.detail.useQuery({ workId }, { retry: 1 });
+  useEffect(() => {
+    void readPersistentCache<Partial<BookSummary>>(`book-detail:${workId}`).then((value) => { if (value) setCachedBook((current) => current ?? value); });
+  }, [workId]);
+  useEffect(() => {
+    if (detailQuery.data) void writePersistentCache(`book-detail:${workId}`, detailQuery.data);
+  }, [workId, detailQuery.data]);
   const statusQuery = trpc.library.getStatus.useQuery({ mediaType: 'book', mediaId: workId, mediaSource }, { enabled: Boolean(user), retry: false });
   const myReviewQuery = trpc.reviews.getMine.useQuery({ mediaType: 'book', mediaId: workId, mediaSource }, { enabled: Boolean(user), retry: false });
   const setStatusMutation = trpc.library.setStatus.useMutation();
   const removeStatusMutation = trpc.library.removeStatus.useMutation();
   const saveReviewMutation = trpc.reviews.save.useMutation();
 
-  const detailCompatible = isBookDetailCompatible(fallback, detailQuery.data);
-  const book = useMemo(() => mergeBookDetails(workId, fallback, detailCompatible ? detailQuery.data : null), [workId, fallback, detailQuery.data, detailCompatible]);
+  const fallbackBook = fallback ?? cachedBook;
+  const detailCompatible = isBookDetailCompatible(fallbackBook, detailQuery.data);
+  const book = useMemo(() => mergeBookDetails(workId, fallbackBook, detailCompatible ? detailQuery.data : null), [workId, fallbackBook, detailQuery.data, detailCompatible]);
   const similarQuery = trpc.books.similar.useQuery(
     { workId, subjects: book.subjects.slice(0, 5), authorName: book.authorNames[0], limit: 20 },
     { enabled: Boolean(book.coverUrl), retry: 1 },
@@ -103,9 +113,9 @@ export default function BookDetailScreen() {
     posterPath: book.coverUrl,
   });
 
-  if (detailQuery.isLoading) return <LoadingView />;
+  if (detailQuery.isLoading && !fallbackBook) return <LoadingView />;
 
-  if (detailQuery.isError && !fallback) {
+  if (detailQuery.isError && !fallbackBook) {
     return <SafeAreaView style={styles.safe}><View style={styles.topBar}><Pressable onPress={() => navigation.goBack()} style={styles.iconButton}><Ionicons name="chevron-back" size={22} color={colors.text} /></Pressable></View><ApiErrorState message="تعذر تحميل تفاصيل الكتاب من Hardcover." onRetry={() => void detailQuery.refetch()} /></SafeAreaView>;
   }
 

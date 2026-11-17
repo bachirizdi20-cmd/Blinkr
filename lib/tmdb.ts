@@ -10,6 +10,7 @@ import {
 import { createTRPCClient } from '@/lib/trpc';
 import { resolveMediaUrl } from './media-url';
 import { isAnimeItem, TMDB_ANIME_GENRE_ID } from './media-categories';
+import { readPersistentCache, writePersistentCache } from './persistent-cache';
 
 const tmdbClient = createTRPCClient();
 export const IMG_BASE = 'https://image.tmdb.org/t/p/';
@@ -230,7 +231,7 @@ export async function fetchDetail(mediaType: MediaType, id: number): Promise<Det
     .slice(0, 20);
   const reviews = (data.reviews?.results ?? []).slice(0, 8).map(mapReview);
 
-  return {
+  const result: DetailResult = {
     ...base,
     genres: data.genres ?? [],
     runtimeMinutes: mediaType === 'movie' ? data.runtime ?? null : data.episode_run_time?.[0] ?? null,
@@ -245,6 +246,12 @@ export async function fetchDetail(mediaType: MediaType, id: number): Promise<Det
     numberOfEpisodes: data.number_of_episodes ?? 0,
     reviews,
   };
+  void writePersistentCache(`tmdb-detail:${mediaType}:${id}`, result);
+  return result;
+}
+
+export function readCachedDetail(mediaType: MediaType, id: number) {
+  return readPersistentCache<DetailResult>(`tmdb-detail:${mediaType}:${id}`);
 }
 
 export async function fetchSeasonDetail(tvId: number, seasonNumber: number): Promise<SeasonDetail> {

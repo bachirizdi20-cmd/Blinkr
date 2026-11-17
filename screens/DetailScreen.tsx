@@ -25,7 +25,7 @@ import EmptyState from '../components/EmptyState';
 import ApiErrorState from '../components/ApiErrorState';
 import { ContentStackParamList } from '../navigation/types';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
-import { fetchDetail, posterUrl, backdropUrl, profileUrl } from '../lib/tmdb';
+import { fetchDetail, readCachedDetail, posterUrl, backdropUrl, profileUrl } from '../lib/tmdb';
 import { DetailResult } from '../types/tmdb';
 import { useLibrary, mediaKey } from '../context/LibraryContext';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
@@ -68,14 +68,21 @@ export default function DetailScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    let hasCached = false;
     setLoading(true);
     setError(null);
+    const cached = await readCachedDetail(mediaType, id);
+    if (cached) {
+      hasCached = true;
+      setDetail(cached);
+      setLoading(false);
+    }
     try {
       const data = await fetchDetail(mediaType, id);
       setDetail(data);
     } catch (err) {
       console.warn(err);
-      setError('تعذر تحميل بيانات هذا العنوان. تحقق من الاتصال وحاول مجددًا.');
+      if (!hasCached) setError('تعذر تحميل بيانات هذا العنوان. تحقق من الاتصال وحاول مجددًا.');
     } finally {
       setLoading(false);
     }
@@ -129,7 +136,7 @@ export default function DetailScreen() {
   const runtimeLabel =
     mediaType === 'movie'
       ? formatRuntime(detail.runtimeMinutes)
-      : `${detail.numberOfSeasons.toLocaleString('ar')} موسم`;
+      : `${Number(detail.numberOfSeasons ?? 0).toLocaleString('ar')} موسم`;
 
   const handleRate = async (rating: number) => {
     if (!mediaRef) return;
@@ -222,8 +229,8 @@ export default function DetailScreen() {
             </Text>
             <View style={styles.tmdbRow}>
               <Ionicons name="star" size={14} color={colors.gold} />
-              <Text style={styles.tmdbScore}>{detail.voteAverage.toFixed(1)}</Text>
-              <Text style={styles.tmdbLabel}>TMDB ({detail.voteCount.toLocaleString()})</Text>
+              <Text style={styles.tmdbScore}>{Number(detail.voteAverage ?? 0).toFixed(1)}</Text>
+              <Text style={styles.tmdbLabel}>TMDB ({Number(detail.voteCount ?? 0).toLocaleString()})</Text>
             </View>
           </View>
         </View>

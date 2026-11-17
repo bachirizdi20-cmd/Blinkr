@@ -90,7 +90,17 @@ function AuthenticatedTabs() {
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({ ...Ionicons.font, ...MaterialIcons.font });
-  const [queryClient] = React.useState(() => new QueryClient());
+  const [queryClient] = React.useState(() => new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 5 * 60 * 1000,
+        gcTime: 24 * 60 * 60 * 1000,
+        refetchOnMount: false,
+        refetchOnReconnect: true,
+        retry: 1,
+      },
+    },
+  }));
   const [trpcClient] = React.useState(() => createTRPCClient());
 
   if (!fontsLoaded) return null;
