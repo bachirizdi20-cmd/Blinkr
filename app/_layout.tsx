@@ -21,7 +21,7 @@ function FirstLaunchGate() {
   const { user, loading, error, refresh } = useAuth();
 
   if (loading) {
-    return <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", gap: spacing.sm }}><ActivityIndicator color={colors.accent} /><Text style={{ color: colors.textDim, fontSize: fontSizes.sm, writingDirection: "rtl" }}>جارٍ التحقق من جلسة الدخول…</Text></View>;
+    return <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }}><ActivityIndicator size="large" color={colors.accent} /></View>;
   }
 
   if (!user) {
@@ -80,7 +80,7 @@ function AuthenticatedTabs() {
               <Text style={{ color: colors.textDim, fontSize: fontSizes.sm }}>تسجيل الخروج</Text>
             </Pressable>
           </>
-        ) : <ActivityIndicator color={colors.accent} />}
+        ) : <ActivityIndicator size="large" color={colors.accent} />}
       </View>
     );
   }
