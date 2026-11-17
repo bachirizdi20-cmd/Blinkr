@@ -33,6 +33,7 @@ import { createAudioPlayer, RecordingPresets, requestRecordingPermissionsAsync, 
 import { trpc } from '../lib/trpc';
 import { useAuth } from '../hooks/use-auth';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
+import * as Clipboard from 'expo-clipboard';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type RouteT = RouteProp<ContentStackParamList, 'Conversation'>;
@@ -103,6 +104,7 @@ export default function ConversationScreen() {
   const [text, setText] = useState('');
   const [replyTarget, setReplyTarget] = useState<any>(null);
   const [editingMessage, setEditingMessage] = useState<any>(null);
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [pendingImage, setPendingImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [failedAudio, setFailedAudio] = useState<AudioDraft | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
@@ -141,7 +143,7 @@ export default function ConversationScreen() {
       if (!authUser || !isRemoteConversation) return;
       if (editingMessage) await updateMessageMutation.mutateAsync({ messageId: Number(editingMessage.id), text: text.trim() });
       else await sendMessageMutation.mutateAsync({ otherUserId: numericOtherUserId, text: text.trim(), ...(replyTarget ? { replyToId: Number(replyTarget.id) } : {}) });
-      setText(''); setReplyTarget(null); setEditingMessage(null);
+      setText(''); setReplyTarget(null); setEditingMessage(null); setSelectedMessageId(null);
     } catch { Alert.alert(editingMessage ? 'تعذر تعديل الرسالة' : 'تعذر إرسال الرسالة', 'حاول مرة أخرى.'); }
   };
   const handleMessageLongPress = (item: any) => {
@@ -152,6 +154,34 @@ export default function ConversationScreen() {
     }
     if (item.sender !== 'me' || !item.text) actions.push({ text: 'إلغاء', style: 'cancel' });
     Alert.alert('خيارات الرسالة', undefined, actions);
+  };
+
+  const handleCopyMessage = async (item: any) => {
+    if (!item.text) return;
+    try {
+      await Clipboard.setStringAsync(item.text);
+      setSelectedMessageId(null);
+      Alert.alert('تم النسخ', 'تم نسخ نص الرسالة.');
+    } catch {
+      Alert.alert('تعذر النسخ', 'حاول مرة أخرى.');
+    }
+  };
+
+  const handleEditSelectedMessage = (item: any) => {
+    setReplyTarget(null);
+    setEditingMessage(item);
+    setText(item.text ?? '');
+    setSelectedMessageId(null);
+  };
+
+  const handleDeleteSelectedMessage = (item: any) => {
+    Alert.alert('حذف الرسالة؟', 'سيتم حذفها نهائيًا من المحادثة.', [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'حذف', style: 'destructive', onPress: () => {
+        deleteMessageMutation.mutate({ messageId: Number(item.id) });
+        setSelectedMessageId(null);
+      } },
+    ]);
   };
 
   const handlePickImage = async (fromCamera: boolean) => {
@@ -355,7 +385,7 @@ export default function ConversationScreen() {
               const mine = item.sender === 'me';
               return (
                 <View style={[styles.bubbleRow, mine ? styles.bubbleRowMine : styles.bubbleRowTheirs]}>
-                  <Pressable onLongPress={() => handleMessageLongPress(item)} delayLongPress={350} style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+                  <Pressable onPress={() => setSelectedMessageId((current) => current === item.id ? null : item.id)} onLongPress={() => handleMessageLongPress(item)} delayLongPress={450} style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
                     {(item as any).replyToId ? <View style={styles.replyQuote}><Text style={styles.replyQuoteTitle}>رد على رسالة</Text><Text style={styles.replyQuoteText} numberOfLines={2}>{remoteMessages.find((message: any) => Number(message.id) === Number((item as any).replyToId))?.text ?? 'رسالة غير متاحة'}</Text></View> : null}
                     {!!(item as any).sharedMediaId && <Pressable style={styles.mediaCard} onPress={() => openCatalogItem(navigation, { mediaType: normalizeReviewMediaType((item as any).sharedMediaType), mediaId: Number((item as any).sharedMediaId), title: (item as any).sharedTitle, posterPath: (item as any).sharedPosterPath })}><Image source={{ uri: catalogPosterUrl(normalizeReviewMediaType((item as any).sharedMediaType), (item as any).sharedPosterPath, 'w342') ?? undefined }} style={styles.cardPoster} resizeMode="cover" /><View style={styles.cardCopy}><Text style={styles.cardLabel}>{(item as any).sharedMediaType === 'book' ? 'كتاب' : 'عنوان من TMDB'}</Text><Text style={styles.cardTitle} numberOfLines={2}>{(item as any).sharedTitle}</Text><Text style={styles.cardRating}>★ {(((item as any).sharedRating ?? 0) / 10).toFixed(1)}</Text></View></Pressable>}
                     {!!(item as any).mediaUrl && (item as any).mediaType === 'audio' ? <Pressable style={styles.audioMessage} onPress={() => handlePlayAudio((item as any).mediaUrl)}><Ionicons name="play" size={18} color={mine ? '#04120C' : colors.accent} /><View style={styles.audioWave}><View style={styles.audioLine} /><View style={[styles.audioLine, styles.audioLineLong]} /><View style={styles.audioLine} /></View><Text style={[styles.audioLabel, mine && styles.bubbleTextMine]}>رسالة صوتية</Text></Pressable> : null}
@@ -363,6 +393,13 @@ export default function ConversationScreen() {
                     {!!(item as any).mediaUrl && (item as any).mediaType !== 'audio' && (item as any).mediaType !== 'gif' && resolveMediaUrl((item as any).mediaUrl) ? <Image source={{ uri: resolveMediaUrl((item as any).mediaUrl) }} style={styles.messageImage} resizeMode="cover" /> : null}
                     {!!item.text && <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.text}</Text>}
                   </Pressable>
+                  {selectedMessageId === item.id ? (
+                    <View style={[styles.messageQuickActions, mine ? styles.quickActionsMine : styles.quickActionsTheirs]}>
+                      {item.text ? <Pressable style={styles.quickAction} onPress={() => void handleCopyMessage(item)} accessibilityLabel="نسخ الرسالة"><Ionicons name="copy-outline" size={15} color={colors.textDim} /><Text style={styles.quickActionText}>نسخ</Text></Pressable> : null}
+                      {mine && item.text ? <Pressable style={styles.quickAction} onPress={() => handleEditSelectedMessage(item)} accessibilityLabel="تعديل الرسالة"><Ionicons name="create-outline" size={15} color={colors.textDim} /><Text style={styles.quickActionText}>تعديل</Text></Pressable> : null}
+                      {mine ? <Pressable style={styles.quickAction} onPress={() => handleDeleteSelectedMessage(item)} accessibilityLabel="حذف الرسالة"><Ionicons name="trash-outline" size={15} color="#E87979" /><Text style={[styles.quickActionText, styles.quickActionDestructive]}>حذف</Text></Pressable> : null}
+                    </View>
+                  ) : null}
                   <Text style={[styles.bubbleTime, mine ? styles.bubbleTimeMine : styles.bubbleTimeTheirs]}>
                     {formatMessageTime(item.createdAt)}{mine ? `  ${((item as any).readAt ? '✓✓' : '✓')}` : ''}
                   </Text>
@@ -470,6 +507,12 @@ const styles = StyleSheet.create({
   bubbleTheirs: { backgroundColor: colors.surfaceHigh, borderBottomLeftRadius: 4 },
   bubbleText: { color: colors.text, fontSize: fontSizes.md, lineHeight: 20 },
   bubbleTextMine: { color: '#04120C', fontWeight: '600' },
+  messageQuickActions: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 5, paddingVertical: 4, marginTop: 5, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignSelf: 'flex-start' },
+  quickActionsMine: { alignSelf: 'flex-end' },
+  quickActionsTheirs: { alignSelf: 'flex-start' },
+  quickAction: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 5, borderRadius: radius.sm },
+  quickActionText: { color: colors.textDim, fontSize: 10, fontWeight: '700' },
+  quickActionDestructive: { color: '#E87979' },
   bubbleTime: { fontSize: 10, marginTop: 3, marginHorizontal: 4 },
   bubbleTimeMine: { color: colors.textFaint },
   bubbleTimeTheirs: { color: colors.textFaint },
