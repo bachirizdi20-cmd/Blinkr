@@ -14,11 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "358102487595-0bqcjimq81fismoseihmo4mnopbsun6b.apps.googleusercontent.com",
+          "client_id": "358102487595-7m41bfff321t3relre04ab0gkf9o7mhb.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.blinkr.space",
-            "certificate_hash": "b7c13ee30b02e95148d00d2680ee68f63c088e85"
+            "certificate_hash": "64e428a8f9a3fcd9e022e4e76bd58ce568ed9a8e"
           }
         },
         {
