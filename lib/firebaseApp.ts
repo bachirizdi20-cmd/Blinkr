@@ -2,7 +2,7 @@ import { getApp, getApps, initializeApp } from "firebase/app";
 
 // Firebase web-app configuration is public client configuration, not an Admin credential.
 export const firebaseConfig = {
-  apiKey: "AIzaSyBCWk_kh5mouJnzPejqLrMd30oirzXl0xY",
+  apiKey: "AIzaSyAQf74xpdk2RHUKln6TSSFG7rJmu3qz19E",
   authDomain: "blinkr-c7f8d.firebaseapp.com",
   projectId: "blinkr-c7f8d",
   storageBucket: "blinkr-c7f8d.firebasestorage.app",
@@ -12,7 +12,7 @@ export const firebaseConfig = {
 };
 
 export const googleOAuthClientIds = {
-  android: "358102487595-0bqcjimq81fismoseihmo4mnopbsun6b.apps.googleusercontent.com",
+  android: "358102487595-7m41bfff321t3relre04ab0gkf9o7mhb.apps.googleusercontent.com",
   web: "358102487595-i20cpabbj9evlekrk5a4escoubs209go.apps.googleusercontent.com",
 };
 

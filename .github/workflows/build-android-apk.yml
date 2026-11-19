@@ -9,6 +9,9 @@ on:
       - .github/workflows/build-android-apk.yml
       - app.config.ts
       - google-services.json
+      - components/AuthPanel.tsx
+      - lib/firebaseApp.ts
+      - server/_core/env.ts
       - package.json
       - pnpm-lock.yaml
 
