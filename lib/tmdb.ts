@@ -251,7 +251,28 @@ export async function fetchDetail(mediaType: MediaType, id: number): Promise<Det
 }
 
 export function readCachedDetail(mediaType: MediaType, id: number) {
-  return readPersistentCache<DetailResult>(`tmdb-detail:${mediaType}:${id}`);
+  return readPersistentCache<Partial<DetailResult>>(`tmdb-detail:${mediaType}:${id}`).then((cached) => {
+    if (!cached || typeof cached.title !== 'string') return null;
+
+    // Older app versions could persist a partial detail object. Normalize every
+    // collection before rendering so a stale cache can never crash the screen.
+    return {
+      ...cached,
+      genres: Array.isArray(cached.genres) ? cached.genres : [],
+      cast: Array.isArray(cached.cast) ? cached.cast : [],
+      crew: Array.isArray(cached.crew) ? cached.crew : [],
+      videos: Array.isArray(cached.videos) ? cached.videos : [],
+      similar: Array.isArray(cached.similar) ? cached.similar : [],
+      seasons: Array.isArray(cached.seasons) ? cached.seasons : [],
+      reviews: Array.isArray(cached.reviews)
+        ? cached.reviews.map((review) => ({
+            ...review,
+            content: typeof review.content === 'string' ? review.content : '',
+            author: typeof review.author === 'string' ? review.author : 'TMDB user',
+          }))
+        : [],
+    } as DetailResult;
+  });
 }
 
 export async function fetchSeasonDetail(tvId: number, seasonNumber: number): Promise<SeasonDetail> {
