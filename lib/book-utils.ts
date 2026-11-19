@@ -39,7 +39,11 @@ export function isBookDetailCompatible(fallback?: Partial<BookSummary>, detail?:
 
 /** Prefer detail fields but keep usable search/persisted values when the detail is sparse. */
 export function mergeBookDetails(workId: number, fallback?: Partial<BookSummary>, detail?: Partial<BookSummary> | null): BookSummary {
-  const preferArray = (first?: string[], second?: string[]) => first?.length ? first : second ?? [];
+  const preferArray = (first?: string[], second?: string[]) => Array.isArray(first) && first.length
+    ? first.filter((value): value is string => typeof value === 'string')
+    : Array.isArray(second)
+      ? second.filter((value): value is string => typeof value === 'string')
+      : [];
   return {
     workId,
     workKey: detail?.workKey ?? fallback?.workKey ?? `hardcover-${workId}`,

@@ -20,6 +20,27 @@ import { readPersistentCache, writePersistentCache } from '../lib/persistent-cac
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type RouteT = RouteProp<ContentStackParamList, 'ComicDetail'>;
 
+function normalizeComic(value?: Partial<ComicSummary> | null): ComicSummary | null {
+  if (!value) return null;
+  const id = Number(value.id);
+  const title = typeof value.title === 'string' ? value.title.trim() : '';
+  if (!Number.isInteger(id) || id <= 0 || !title) return null;
+  return {
+    id,
+    title,
+    issueNumber: typeof value.issueNumber === 'string' ? value.issueNumber : null,
+    volumeName: typeof value.volumeName === 'string' ? value.volumeName : null,
+    coverUrl: typeof value.coverUrl === 'string' ? value.coverUrl : null,
+    description: typeof value.description === 'string' ? value.description : null,
+    deck: typeof value.deck === 'string' ? value.deck : null,
+    publisher: typeof value.publisher === 'string' ? value.publisher : null,
+    publishDate: typeof value.publishDate === 'string' ? value.publishDate : null,
+    creators: Array.isArray(value.creators) ? value.creators.filter((creator): creator is string => typeof creator === 'string' && creator.trim().length > 0) : [],
+    rating: typeof value.rating === 'number' && Number.isFinite(value.rating) ? value.rating : null,
+    sourceUrl: typeof value.sourceUrl === 'string' ? value.sourceUrl : '',
+  };
+}
+
 export default function ComicDetailScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<RouteT>();
@@ -34,7 +55,7 @@ export default function ComicDetailScreen() {
   useEffect(() => {
     if (detailQuery.data) void writePersistentCache(`comic-detail:${id}`, detailQuery.data);
   }, [id, detailQuery.data]);
-  const comic = (detailQuery.data ?? cachedComic) as ComicSummary | undefined;
+  const comic = useMemo(() => normalizeComic(detailQuery.data ?? cachedComic), [detailQuery.data, cachedComic]);
   const statusQuery = trpc.library.getStatus.useQuery({ mediaType: 'comic', mediaId: id }, { enabled: Boolean(user), retry: false });
   const setStatusMutation = trpc.library.setStatus.useMutation();
   const removeStatusMutation = trpc.library.removeStatus.useMutation();
@@ -45,7 +66,7 @@ export default function ComicDetailScreen() {
 
   if (detailQuery.isLoading && !comic) return <View style={styles.center}><ActivityIndicator color={colors.accent} size="large" /></View>;
   if (detailQuery.isError && !comic) return <View style={styles.safe}><ApiErrorState message="تعذر تحميل تفاصيل الكوميك من Comic Vine." onRetry={() => void detailQuery.refetch()} /></View>;
-  if (!comic) return null;
+  if (!comic) return <View style={styles.safe}><ApiErrorState message="بيانات الكوميك غير مكتملة. أعد المحاولة." onRetry={() => void detailQuery.refetch()} /></View>;
 
   const mediaRef = { mediaType: 'comic' as const, mediaId: id, title: comic.title, posterPath: comic.coverUrl, date: comic.publishDate ?? undefined };
   const completed = lib.isWatched('comic', id) || statusQuery.data?.status === 'watched';
@@ -64,7 +85,7 @@ export default function ComicDetailScreen() {
 
     <DetailActionBar completed={completed} inList={inList} completionLabel="تمت قراءته" listLabel="قائمة القراءة" onReview={() => navigation.navigate('ReviewModal', { mediaType: 'comic', mediaId: id, title: comic.title, posterPath: comic.coverUrl })} onToggleList={() => void syncStatus(inList ? null : 'watchlist')} onToggleCompleted={() => { lib.toggleWatchedQuick(mediaRef); void syncStatus(completed ? null : 'watched'); }} rating={rating} onRatingChange={(value) => { lib.setQuickRating(mediaRef, value); if (user) void saveReviewMutation.mutateAsync({ mediaType: 'comic', mediaId: id, title: comic.title, posterPath: comic.coverUrl, rating: value, review: myReviewQuery.data?.review ?? '', spoiler: false, watchedDate: myReviewQuery.data?.watchedDate ? new Date(myReviewQuery.data.watchedDate).toISOString() : new Date().toISOString() }).then(() => myReviewQuery.refetch()).catch((error) => Alert.alert('تعذر حفظ التقييم', error instanceof Error ? error.message : 'حاول مرة أخرى.')); }} />
     {comic.description || comic.deck ? <View style={styles.section}><Text style={styles.sectionTitle}>عن الكوميك</Text><Text style={styles.description}>{comic.description ?? comic.deck}</Text></View> : null}
-    <Pressable onPress={() => Linking.openURL(comic.sourceUrl)} style={styles.source}><Text style={styles.sourceText}>عرض المصدر على Comic Vine</Text><Ionicons name="open-outline" size={15} color={colors.accent} /></Pressable>
+    {comic.sourceUrl ? <Pressable onPress={() => Linking.openURL(comic.sourceUrl)} style={styles.source}><Text style={styles.sourceText}>عرض المصدر على Comic Vine</Text><Ionicons name="open-outline" size={15} color={colors.accent} /></Pressable> : null}
     <View style={styles.section}><Text style={styles.sectionTitle}>كوميك مشابهة</Text>{similarQuery.isLoading ? <ActivityIndicator color={colors.accent} /> : similarQuery.isError ? <Text style={styles.muted}>تعذر تحميل الكوميك المشابهة.</Text> : (similarQuery.data ?? []).length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.similarList}>{(similarQuery.data ?? []).filter((item) => Boolean(item.coverUrl)).map((item) => <ComicCard key={item.id} comic={item} width={112} onPress={() => navigation.push('ComicDetail', { id: item.id, comic: item })} />)}</ScrollView> : <Text style={styles.muted}>لا توجد كوميك مشابهة بأغلفة متاحة حاليًا.</Text>}</View>
   </ScrollView></View>;
 }

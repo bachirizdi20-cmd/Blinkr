@@ -17,6 +17,30 @@ import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { AuthPanel } from "@/components/AuthPanel";
 import { colors, fontSizes, spacing } from "@/lib/theme";
 
+type ErrorBoundaryState = { error: Error | null };
+
+class AppErrorBoundary extends React.Component<React.PropsWithChildren, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { error };
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", padding: spacing.lg }}>
+        <Text style={{ color: colors.text, fontSize: fontSizes.lg, fontWeight: "800", textAlign: "center", writingDirection: "rtl" }}>حدث خطأ في عرض الصفحة</Text>
+        <Text style={{ color: colors.textDim, fontSize: fontSizes.sm, textAlign: "center", marginTop: spacing.sm, writingDirection: "rtl" }}>لم نفقد بياناتك. اضغط لإعادة فتح الصفحة.</Text>
+        {__DEV__ ? <Text selectable style={{ color: colors.danger, fontSize: 11, textAlign: "center", marginTop: spacing.sm }}>{this.state.error.message}</Text> : null}
+        <Pressable onPress={() => this.setState({ error: null })} style={{ marginTop: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: 10, backgroundColor: colors.accent }} accessibilityRole="button">
+          <Text style={{ color: colors.bg, fontWeight: "800" }}>إعادة المحاولة</Text>
+        </Pressable>
+      </View>
+    );
+  }
+}
+
 function FirstLaunchGate() {
   const { user, loading, error, refresh } = useAuth();
 
@@ -114,7 +138,9 @@ export default function RootLayout() {
               <MetadataProvider>
                 <SocialProvider>
                   <StatusBar style="light" />
-                  <FirstLaunchGate />
+                  <AppErrorBoundary>
+                    <FirstLaunchGate />
+                  </AppErrorBoundary>
                 </SocialProvider>
               </MetadataProvider>
             </AuthProvider>
