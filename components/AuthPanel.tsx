@@ -354,25 +354,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
             : "أدخل بيانات حسابك للمتابعة إلى Blinkr."}
       </Text>
 
-      {!isForgot ? <>
-        <View style={styles.socialButtons}>
-          <Pressable
-            onPress={handleGoogleSignIn}
-            disabled={busy}
-            style={({ pressed }) => [styles.socialButton, pressed && styles.pressed, busy && styles.disabled]}
-            accessibilityRole="button"
-            accessibilityLabel={isRegister ? "إنشاء حساب باستخدام Google" : "تسجيل الدخول باستخدام Google"}
-          >
-            {isGoogleSubmitting ? <ActivityIndicator size="small" color="#4285F4" /> : <GoogleGMark />}
-            <Text style={styles.socialButtonText}>{isGoogleSubmitting ? "جارٍ إكمال تسجيل Google…" : "المتابعة باستخدام Google"}</Text>
-          </Pressable>
-        </View>
-        <View style={styles.socialDivider}>
-          <View style={styles.socialDividerLine} />
-          <Text style={styles.socialDividerText}>أو بالبريد الإلكتروني</Text>
-          <View style={styles.socialDividerLine} />
-        </View>
-      </> : null}
+
 
       {isRegister ? <>
         <Text style={styles.label}>الاسم</Text>
@@ -510,7 +492,26 @@ export function AuthPanel({ onAuthenticated }: Props) {
         {busy ? <ActivityIndicator color={colors.bg} /> : <Text style={styles.primaryText}>{submitLabel}</Text>}
       </Pressable>
 
-      {mode === "login" ? <Pressable onPress={() => changeMode("forgot")} disabled={busy} style={styles.switch}><Text style={styles.switchText}>نسيت كلمة المرور؟</Text></Pressable> : null}
+      {!isForgot ? <>
+        <View style={styles.socialButtons}>
+          <Pressable
+            onPress={handleGoogleSignIn}
+            disabled={busy}
+            style={({ pressed }) => [styles.socialButton, pressed && styles.pressed, busy && styles.disabled]}
+            accessibilityRole="button"
+            accessibilityLabel={isRegister ? "إنشاء حساب باستخدام Google" : "تسجيل الدخول باستخدام Google"}
+          >
+            {isGoogleSubmitting ? <ActivityIndicator size="small" color="#4285F4" /> : <GoogleGMark />}
+            <Text style={styles.socialButtonText}>{isGoogleSubmitting ? "جارٍ إكمال تسجيل Google…" : "المتابعة باستخدام Google"}</Text>
+          </Pressable>
+        </View>
+        <View style={styles.socialDivider}>
+          <View style={styles.socialDividerLine} />
+          <Text style={styles.socialDividerText}>أو بالبريد الإلكتروني</Text>
+          <View style={styles.socialDividerLine} />
+        </View>
+      </> : null}
+
       {isForgot ? <Pressable onPress={() => changeMode("login")} disabled={busy} style={styles.switch}><Text style={styles.switchText}>العودة إلى تسجيل الدخول</Text></Pressable> : null}
       <Pressable onPress={() => changeMode(isRegister ? "login" : "register")} disabled={busy} style={[styles.switch, styles.modeSwitch]}>
         <Text style={styles.switchText}>{isRegister ? "لديك حساب بالفعل؟ سجّل الدخول" : "مستخدم جديد؟ أنشئ حسابًا"}</Text>
