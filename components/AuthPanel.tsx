@@ -135,7 +135,7 @@ export function AuthPanel({ onAuthenticated }: Props) {
   }, []);
 
   const completeFederatedSignIn = React.useCallback(async (user: User) => {
-    const idToken = await user.getIdToken(true);
+    const idToken = await user.getIdToken();
     const result = await firebaseSession.mutateAsync({
       idToken,
       name: user.displayName || undefined,
@@ -336,6 +336,15 @@ export function AuthPanel({ onAuthenticated }: Props) {
 
   return (
     <View style={styles.container}>
+      <View style={styles.brandHeader}>
+        <View style={styles.brandMark}>
+          <Ionicons name="sparkles" size={19} color={colors.bg} />
+        </View>
+        <View style={styles.brandCopy}>
+          <Text style={styles.brandName}>BLINKR</Text>
+          <Text style={styles.brandTagline}>مساحتك لاكتشاف ومشاركة ما تحب</Text>
+        </View>
+      </View>
       <Text style={styles.modeTitle}>{isRegister ? "إنشاء حساب" : isForgot ? "استعادة كلمة المرور" : "تسجيل الدخول"}</Text>
       <Text style={styles.modeSubtitle}>
         {isForgot
@@ -512,10 +521,15 @@ export function AuthPanel({ onAuthenticated }: Props) {
 }
 
 const styles = {
-  container: { width: "100%" as const, maxWidth: 420, alignSelf: "center" as const, direction: "rtl" as const },
-  modeTitle: { color: colors.text, fontSize: fontSizes.xl, fontWeight: "900" as const, lineHeight: 30, textAlign: "center" as const, marginBottom: spacing.sm, writingDirection: "rtl" as const },
-  modeSubtitle: { color: colors.textDim, fontSize: fontSizes.md, lineHeight: 23, textAlign: "center" as const, marginBottom: spacing.md, writingDirection: "rtl" as const },
-  label: { color: colors.text, fontSize: fontSizes.sm, fontWeight: "800" as const, lineHeight: 20, textAlign: "right" as const, marginTop: spacing.sm, marginBottom: spacing.xs, writingDirection: "rtl" as const },
+  container: { width: "100%" as const, maxWidth: 440, alignSelf: "center" as const, direction: "rtl" as const, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, paddingHorizontal: spacing.xl, paddingVertical: spacing.xl },
+  brandHeader: { flexDirection: "row-reverse" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: spacing.md, marginBottom: spacing.xl },
+  brandMark: { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.accent, alignItems: "center" as const, justifyContent: "center" as const },
+  brandCopy: { alignItems: "flex-start" as const, gap: 2 },
+  brandName: { color: colors.text, fontSize: 16, fontWeight: "900" as const, letterSpacing: 2, lineHeight: 20 },
+  brandTagline: { color: colors.textDim, fontSize: 11, lineHeight: 16, writingDirection: "rtl" as const },
+  modeTitle: { color: colors.text, fontSize: 25, fontWeight: "900" as const, lineHeight: 34, textAlign: "center" as const, marginBottom: spacing.sm, writingDirection: "rtl" as const },
+  modeSubtitle: { color: colors.textDim, fontSize: fontSizes.md, lineHeight: 24, textAlign: "center" as const, marginBottom: spacing.lg, writingDirection: "rtl" as const },
+  label: { color: colors.text, fontSize: fontSizes.sm, fontWeight: "700" as const, lineHeight: 20, textAlign: "right" as const, marginTop: spacing.md, marginBottom: spacing.xs, writingDirection: "rtl" as const },
   input: { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.borderLight, borderRadius: radius.md, color: colors.text, paddingHorizontal: spacing.lg, paddingVertical: 11, fontSize: 16, lineHeight: 22, minHeight: 52 },
   rtlInput: { textAlign: "right" as const, writingDirection: "rtl" as const },
   ltrInput: { textAlign: "left" as const, writingDirection: "ltr" as const },
@@ -537,7 +551,7 @@ const styles = {
   switchText: { color: colors.accent, fontSize: fontSizes.sm, fontWeight: "700" as const, textAlign: "center" as const, writingDirection: "rtl" as const },
   passwordHint: { color: colors.textDim, fontSize: 12, lineHeight: 18, textAlign: "center" as const, marginTop: spacing.xs, writingDirection: "rtl" as const },
   socialButtons: { width: "100%" as const, marginTop: spacing.xs },
-  socialButton: { width: "100%" as const, alignSelf: "center" as const, flexDirection: "row-reverse" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 10, minHeight: 52, paddingHorizontal: spacing.lg, borderWidth: 1.5, borderColor: "#FFFFFF", borderRadius: radius.md, backgroundColor: "#FFFFFF", elevation: 1 },
+  socialButton: { width: "100%" as const, alignSelf: "center" as const, flexDirection: "row-reverse" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 10, minHeight: 54, paddingHorizontal: spacing.lg, borderWidth: 1, borderColor: "#E5E7EB", borderRadius: radius.lg, backgroundColor: "#FFFFFF", elevation: 0 },
   socialButtonText: { color: "#1F2933", fontSize: fontSizes.md, fontWeight: "800" as const, lineHeight: 22, textAlign: "center" as const, writingDirection: "rtl" as const },
   socialDivider: { flexDirection: "row" as const, alignItems: "center" as const, gap: spacing.sm, marginTop: spacing.md, marginBottom: spacing.xs },
   socialDividerLine: { flex: 1, height: 1, backgroundColor: colors.borderLight },
