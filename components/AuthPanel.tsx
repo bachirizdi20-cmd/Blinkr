@@ -504,6 +504,26 @@ export function AuthPanel({ onAuthenticated }: Props) {
             {isGoogleSubmitting ? <ActivityIndicator size="small" color="#4285F4" /> : <GoogleGMark />}
             <Text style={styles.socialButtonText}>{isGoogleSubmitting ? "جارٍ إكمال تسجيل Google…" : "المتابعة باستخدام Google"}</Text>
           </Pressable>
+          <Pressable
+            disabled
+            style={[styles.futureSocialButton, styles.futureSocialButtonSpacing]}
+            accessibilityRole="button"
+            accessibilityLabel="المتابعة باستخدام Microsoft، قريباً"
+          >
+            <Ionicons name="logo-microsoft" size={19} color={colors.text} />
+            <Text style={styles.futureSocialButtonText}>المتابعة باستخدام Microsoft</Text>
+            <Text style={styles.comingSoon}>قريباً</Text>
+          </Pressable>
+          <Pressable
+            disabled
+            style={styles.futureSocialButton}
+            accessibilityRole="button"
+            accessibilityLabel="المتابعة برقم الهاتف، قريباً"
+          >
+            <Ionicons name="call-outline" size={19} color={colors.text} />
+            <Text style={styles.futureSocialButtonText}>المتابعة برقم الهاتف</Text>
+            <Text style={styles.comingSoon}>قريباً</Text>
+          </Pressable>
         </View>
         <View style={styles.socialDivider}>
           <View style={styles.socialDividerLine} />
@@ -554,6 +574,10 @@ const styles = {
   socialButtons: { width: "100%" as const, marginTop: spacing.xs },
   socialButton: { width: "100%" as const, alignSelf: "center" as const, flexDirection: "row-reverse" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 10, minHeight: 54, paddingHorizontal: spacing.lg, borderWidth: 1, borderColor: "#E5E7EB", borderRadius: radius.lg, backgroundColor: "#FFFFFF", elevation: 0 },
   socialButtonText: { color: "#1F2933", fontSize: fontSizes.md, fontWeight: "800" as const, lineHeight: 22, textAlign: "center" as const, writingDirection: "rtl" as const },
+  futureSocialButton: { width: "100%" as const, alignSelf: "center" as const, flexDirection: "row-reverse" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 10, minHeight: 54, paddingHorizontal: spacing.md, borderWidth: 1, borderColor: colors.borderLight, borderRadius: radius.lg, backgroundColor: colors.surface, opacity: 0.78 },
+  futureSocialButtonSpacing: { marginTop: spacing.sm },
+  futureSocialButtonText: { color: colors.text, fontSize: fontSizes.sm, fontWeight: "700" as const, lineHeight: 22, textAlign: "center" as const, writingDirection: "rtl" as const },
+  comingSoon: { color: colors.accent, fontSize: 10, fontWeight: "800" as const, writingDirection: "rtl" as const },
   socialDivider: { flexDirection: "row" as const, alignItems: "center" as const, gap: spacing.sm, marginTop: spacing.md, marginBottom: spacing.xs },
   socialDividerLine: { flex: 1, height: 1, backgroundColor: colors.borderLight },
   socialDividerText: { color: colors.textDim, fontSize: 12, writingDirection: "rtl" as const },
