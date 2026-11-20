@@ -2,6 +2,19 @@ name: Build Blinkr Android APK
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/build-android-apk.yml
+      - app.config.ts
+      - google-services.json
+      - components/AuthPanel.tsx
+      - lib/googleNative.ts
+      - lib/firebaseApp.ts
+      - server/_core/env.ts
+      - package.json
+      - pnpm-lock.yaml
   push:
     branches:
       - main
@@ -10,6 +23,7 @@ on:
       - app.config.ts
       - google-services.json
       - components/AuthPanel.tsx
+      - lib/googleNative.ts
       - lib/firebaseApp.ts
       - server/_core/env.ts
       - package.json
@@ -62,6 +76,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check TypeScript
+        run: pnpm check
+
       - name: Generate native Android project
         run: pnpm exec expo prebuild --platform android --no-install --non-interactive
 
@@ -109,7 +126,7 @@ jobs:
         run: |
           APK="android/app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK"
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | grep -F "package: name='com.blinkr.space'"
           ls -lh "$APK"
 
