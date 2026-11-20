@@ -79,16 +79,6 @@ const config: ExpoConfig = {
         ],
         category: ["BROWSABLE", "DEFAULT"],
       },
-      {
-        action: "VIEW",
-        data: [
-          {
-            scheme: "com.googleusercontent.apps.358102487595-7m41bfff321t3relre04ab0gkf9o7mhb",
-            pathPrefix: "/oauthredirect",
-          },
-        ],
-        category: ["BROWSABLE", "DEFAULT"],
-      },
     ],
   },
   web: {
