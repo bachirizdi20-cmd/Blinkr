@@ -61,14 +61,7 @@ function FirstLaunchGate() {
           keyboardShouldPersistTaps="always"
           keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "none"}
         >
-          <View style={{ width: "100%", maxWidth: 460, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.border, borderRadius: 18, paddingHorizontal: spacing.lg, paddingVertical: spacing.lg }}>
-            <View style={{ alignItems: "center", marginBottom: spacing.md }}>
-              <View style={{ width: 56, height: 56, borderRadius: 17, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center", marginBottom: spacing.sm }}>
-                <Text style={{ color: colors.bg, fontSize: 32, fontWeight: "900", letterSpacing: -2 }}>B</Text>
-              </View>
-              <Text style={{ color: colors.text, fontSize: 30, fontWeight: "900", letterSpacing: -1 }}>Blinkr</Text>
-              <Text style={{ color: colors.textDim, fontSize: fontSizes.sm, textAlign: "center", lineHeight: 21, marginTop: spacing.xs, maxWidth: 320, writingDirection: "rtl" }}>اكتشف ما تشاهده. شارك ما تحب.</Text>
-            </View>
+          <View style={{ width: "100%", maxWidth: 460 }}>
             {error ? <Text style={{ color: colors.danger, fontSize: fontSizes.sm, textAlign: "center", marginBottom: spacing.md, writingDirection: "rtl" }}>{error.message}</Text> : null}
             <AuthPanel onAuthenticated={refresh} />
           </View>
