@@ -83,7 +83,7 @@ const config: ExpoConfig = {
         action: "VIEW",
         data: [
           {
-            scheme: "com.googleusercontent.apps.358102487595-0bqcjimq81fismoseihmo4mnopbsun6b",
+            scheme: "com.googleusercontent.apps.358102487595-7m41bfff321t3relre04ab0gkf9o7mhb",
             pathPrefix: "/oauthredirect",
           },
         ],
