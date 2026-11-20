@@ -10,6 +10,7 @@ on:
       - app.config.ts
       - google-services.json
       - components/AuthPanel.tsx
+      - app/_layout.tsx
       - lib/googleNative.ts
       - lib/firebaseApp.ts
       - server/_core/env.ts
@@ -23,6 +24,7 @@ on:
       - app.config.ts
       - google-services.json
       - components/AuthPanel.tsx
+      - app/_layout.tsx
       - lib/googleNative.ts
       - lib/firebaseApp.ts
       - server/_core/env.ts
