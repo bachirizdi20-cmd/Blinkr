@@ -38,7 +38,7 @@ export default function DiaryScreen() {
       <View style={{ flex: 1 }}>
         <Text style={styles.title} numberOfLines={1}>{item.title}</Text>
         <Text style={styles.date}>{item.watchedDate}{item.rewatch ? (item.mediaType === 'book' ? '  •  إعادة قراءة' : '  •  إعادة مشاهدة') : ''}</Text>
-        {!!item.rating && <RatingStars rating={item.rating} size={14} />}
+        {!!item.rating && <FiveStarRating rating={item.rating} size={14} />}
         {!!item.review && <Text numberOfLines={2} style={styles.review}>{item.review}</Text>}
       </View>
       <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
