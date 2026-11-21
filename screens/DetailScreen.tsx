@@ -18,7 +18,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import CastRow from '../components/CastRow';
 import SectionRow from '../components/SectionRow';
 import GenreChips from '../components/GenreChips';
-import RatingStars from '../components/RatingStars';
+import FiveStarRating from '../components/FiveStarRating';
 import DetailActionBar from '../components/DetailActionBar';
 import LoadingView from '../components/LoadingView';
 import EmptyState from '../components/EmptyState';
@@ -268,6 +268,10 @@ export default function DetailScreen() {
             onReview={() => navigation.navigate('ReviewModal', { mediaType, mediaId: id, title: detail.title, posterPath: detail.posterPath, genreIds: detail.genreIds })}
             onToggleList={handleToggleWatchlist}
             onToggleCompleted={handleToggleWatched}
+            inProgress={watching}
+            inProgressLabel="أشاهده الآن"
+            startProgressLabel="بدء المشاهدة"
+            onToggleInProgress={handleSetWatching}
             rating={userRating}
             onRatingChange={handleRate}
           />
@@ -284,7 +288,7 @@ export default function DetailScreen() {
 
           {myReviewQuery.data && (
             <View style={styles.ownReviewCard}>
-              <View style={styles.ownReviewHeader}><Text style={styles.sectionTitle}>مراجعتك</Text><RatingStars rating={myReviewQuery.data.rating} size={15} /></View>
+              <View style={styles.ownReviewHeader}><Text style={styles.sectionTitle}>مراجعتك</Text><FiveStarRating rating={myReviewQuery.data.rating} size={15} /></View>
               {!!myReviewQuery.data.review && <Text style={styles.ownReviewBody}>{myReviewQuery.data.review}</Text>}
             </View>
           )}
