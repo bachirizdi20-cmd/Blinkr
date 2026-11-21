@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import RatingStars from '../components/RatingStars';
+import FiveStarRating from '../components/FiveStarRating';
 import EmptyState from '../components/EmptyState';
 import { ContentStackParamList } from '../navigation/types';
 import { useLibrary, DiaryEntry } from '../context/LibraryContext';
