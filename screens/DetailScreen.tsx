@@ -434,7 +434,7 @@ export default function DetailScreen() {
                   </Text>
                   {entry.rewatch && <Text style={styles.rewatchTag}>إعادة المشاهدة</Text>}
                 </View>
-                {!!entry.rating && <RatingStars rating={entry.rating} size={15} />}
+                {!!entry.rating && <FiveStarRating rating={entry.rating} size={15} />}
                 {!!entry.review && <Text style={styles.reviewText} numberOfLines={4}>{entry.review}</Text>}
               </Pressable>
             ))}
