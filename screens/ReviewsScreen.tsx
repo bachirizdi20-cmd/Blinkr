@@ -28,7 +28,7 @@ export default function ReviewsScreen() {
         <View style={{ flex: 1 }}>
           <Text style={styles.title} numberOfLines={1}>{item.title}</Text>
           <Text style={styles.date}>{item.watchedDate}</Text>
-          {!!item.rating && <RatingStars rating={item.rating} size={14} />}
+          {!!item.rating && <FiveStarRating rating={item.rating} size={14} />}
         </View>
       </View>
       <Text style={styles.review}>{item.review}</Text>
