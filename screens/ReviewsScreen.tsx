@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import RatingStars from '../components/RatingStars';
+import FiveStarRating from '../components/FiveStarRating';
 import EmptyState from '../components/EmptyState';
 import { ContentStackParamList } from '../navigation/types';
 import { useLibrary, DiaryEntry } from '../context/LibraryContext';
@@ -28,7 +28,7 @@ export default function ReviewsScreen() {
         <View style={{ flex: 1 }}>
           <Text style={styles.title} numberOfLines={1}>{item.title}</Text>
           <Text style={styles.date}>{item.watchedDate}</Text>
-          {!!item.rating && <RatingStars rating={item.rating} size={14} />}
+          {!!item.rating && <FiveStarRating rating={item.rating} size={14} />}
         </View>
       </View>
       <Text style={styles.review}>{item.review}</Text>

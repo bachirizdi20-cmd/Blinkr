@@ -18,7 +18,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import CastRow from '../components/CastRow';
 import SectionRow from '../components/SectionRow';
 import GenreChips from '../components/GenreChips';
-import RatingStars from '../components/RatingStars';
+import FiveStarRating from '../components/FiveStarRating';
+import ContentDetailHero from '../components/ContentDetailHero';
 import DetailActionBar from '../components/DetailActionBar';
 import LoadingView from '../components/LoadingView';
 import EmptyState from '../components/EmptyState';
@@ -232,28 +233,14 @@ export default function DetailScreen() {
           </SafeAreaView>
         </View>
 
-        <View style={styles.headerRow}>
-          <View style={styles.posterWrap}>
-            {poster ? (
-              <Image source={{ uri: poster }} style={styles.poster} contentFit="cover" />
-            ) : (
-              <View style={[styles.poster, styles.posterFallback]}>
-                <Ionicons name="film-outline" size={30} color={colors.textFaint} />
-              </View>
-            )}
-          </View>
-          <View style={styles.headerInfo}>
-            <Text style={styles.title} numberOfLines={3}>{detail.title}</Text>
-            <Text style={styles.metaLine}>
-              {year}{runtimeLabel ? `  •  ${runtimeLabel}` : ''}{'  •  '}{mediaType === 'movie' ? 'فيلم' : 'مسلسل'}
-            </Text>
-            <View style={styles.tmdbRow}>
-              <Ionicons name="star" size={14} color={colors.gold} />
-              <Text style={styles.tmdbScore}>{Number(detail.voteAverage ?? 0).toFixed(1)}</Text>
-              <Text style={styles.tmdbLabel}>TMDB ({Number(detail.voteCount ?? 0).toLocaleString()})</Text>
-            </View>
-          </View>
-        </View>
+        <ContentDetailHero
+          title={detail.title}
+          imageUri={poster}
+          fallbackIcon="film-outline"
+          metadata={[`${year}  •  ${mediaType === 'movie' ? 'فيلم' : 'مسلسل'}`, ...(runtimeLabel ? [runtimeLabel] : [])]}
+          scoreText={Number(detail.voteAverage ?? 0).toFixed(1)}
+          scoreLabel={`TMDB · ${Number(detail.voteCount ?? 0).toLocaleString('ar')} تقييم`}
+        />
 
         <View style={styles.body}>
           <GenreChips names={detail.genres.map((g) => g.name)} />
@@ -268,6 +255,10 @@ export default function DetailScreen() {
             onReview={() => navigation.navigate('ReviewModal', { mediaType, mediaId: id, title: detail.title, posterPath: detail.posterPath, genreIds: detail.genreIds })}
             onToggleList={handleToggleWatchlist}
             onToggleCompleted={handleToggleWatched}
+            inProgress={watching}
+            inProgressLabel="أشاهده الآن"
+            startProgressLabel="بدء المشاهدة"
+            onToggleInProgress={handleSetWatching}
             rating={userRating}
             onRatingChange={handleRate}
           />
@@ -284,7 +275,7 @@ export default function DetailScreen() {
 
           {myReviewQuery.data && (
             <View style={styles.ownReviewCard}>
-              <View style={styles.ownReviewHeader}><Text style={styles.sectionTitle}>مراجعتك</Text><RatingStars rating={myReviewQuery.data.rating} size={15} /></View>
+              <View style={styles.ownReviewHeader}><Text style={styles.sectionTitle}>مراجعتك</Text><FiveStarRating rating={myReviewQuery.data.rating} size={15} /></View>
               {!!myReviewQuery.data.review && <Text style={styles.ownReviewBody}>{myReviewQuery.data.review}</Text>}
             </View>
           )}
@@ -443,7 +434,7 @@ export default function DetailScreen() {
                   </Text>
                   {entry.rewatch && <Text style={styles.rewatchTag}>إعادة المشاهدة</Text>}
                 </View>
-                {!!entry.rating && <RatingStars rating={entry.rating} size={15} />}
+                {!!entry.rating && <FiveStarRating rating={entry.rating} size={15} />}
                 {!!entry.review && <Text style={styles.reviewText} numberOfLines={4}>{entry.review}</Text>}
               </Pressable>
             ))}

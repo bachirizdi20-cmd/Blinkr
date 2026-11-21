@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import RatingStars from '../components/RatingStars';
+import FiveStarRating from '../components/FiveStarRating';
 import EmptyState from '../components/EmptyState';
 import { ContentStackParamList } from '../navigation/types';
 import { useLibrary, DiaryEntry } from '../context/LibraryContext';
@@ -38,7 +38,7 @@ export default function DiaryScreen() {
       <View style={{ flex: 1 }}>
         <Text style={styles.title} numberOfLines={1}>{item.title}</Text>
         <Text style={styles.date}>{item.watchedDate}{item.rewatch ? (item.mediaType === 'book' ? '  •  إعادة قراءة' : '  •  إعادة مشاهدة') : ''}</Text>
-        {!!item.rating && <RatingStars rating={item.rating} size={14} />}
+        {!!item.rating && <FiveStarRating rating={item.rating} size={14} />}
         {!!item.review && <Text numberOfLines={2} style={styles.review}>{item.review}</Text>}
       </View>
       <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />

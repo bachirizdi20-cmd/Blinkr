@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import AppRefreshControl from '../components/AppRefreshControl';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -17,6 +16,8 @@ import ApiErrorState from '../components/ApiErrorState';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
 import BookCard from '../components/BookCard';
 import DetailActionBar from '../components/DetailActionBar';
+import FiveStarRating from '../components/FiveStarRating';
+import ContentDetailHero from '../components/ContentDetailHero';
 import LoadingView from '../components/LoadingView';
 import { readPersistentCache, writePersistentCache } from '../lib/persistent-cache';
 
@@ -136,18 +137,16 @@ export default function BookDetailScreen() {
         <Pressable onPress={() => navigation.navigate('People', { shareMedia: { mediaType: 'book', mediaId: workId, mediaSource, title: book.title, posterPath: book.coverUrl, rating, overview: book.description } })} style={styles.iconButton} accessibilityLabel="مشاركة الكتاب"><Ionicons name="share-social-outline" size={19} color={colors.text} /></Pressable>
       </View>
       <ScrollView refreshControl={<AppRefreshControl />} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.hero}>
-          <View style={styles.coverFrame}>
-            {book.coverUrl ? <Image source={{ uri: book.coverUrl }} style={styles.cover} contentFit="cover" transition={180} /> : <View style={[styles.cover, styles.coverFallback]}><Ionicons name="book-outline" size={42} color={colors.textFaint} /><Text style={styles.muted}>لا يتوفر غلاف</Text></View>}
-          </View>
-          <View style={styles.heroCopy}>
-            <Text style={styles.title}>{book.title}</Text>
-            {book.authorNames.length > 0 ? <View style={styles.authorRow}>{book.authorNames.map((author) => <Pressable key={author} onPress={() => navigation.navigate('AuthorBooks', { authorName: author, excludeWorkId: workId })} accessibilityRole="button" accessibilityLabel={`عرض كتب ${author}`}><Text style={styles.authors}>{author}</Text></Pressable>)}</View> : <Text style={styles.muted}>المؤلف غير محدد</Text>}
-            {info.map((line) => <Text key={line} style={styles.meta}>{line}</Text>)}
-            {book.ratingsAverage != null && book.ratingsCount > 0 ? <View style={styles.ratingRow}><Ionicons name="star" size={16} color={colors.gold} /><Text style={styles.rating}>{book.ratingsAverage.toFixed(1)} / 5</Text><Text style={styles.muted}>({book.ratingsCount.toLocaleString('ar')}) · Hardcover</Text></View> : null}
-            {rating > 0 ? <Text style={styles.yourRating}>تقييمك: {rating}/10</Text> : null}
-          </View>
-        </View>
+        <ContentDetailHero
+          title={book.title}
+          imageUri={book.coverUrl}
+          fallbackIcon="book-outline"
+          metadata={info}
+          scoreText={book.ratingsAverage != null && book.ratingsCount > 0 ? `${book.ratingsAverage.toFixed(1)} / 5` : null}
+          scoreLabel={book.ratingsCount > 0 ? `Hardcover · ${book.ratingsCount.toLocaleString('ar')} تقييم` : undefined}
+        >
+          {book.authorNames.length > 0 ? <View style={styles.authorRow}>{book.authorNames.map((author) => <Pressable key={author} onPress={() => navigation.navigate('AuthorBooks', { authorName: author, excludeWorkId: workId })} accessibilityRole="button" accessibilityLabel={`عرض كتب ${author}`}><Text style={styles.authors}>{author}</Text></Pressable>)}</View> : <Text style={styles.muted}>المؤلف غير محدد</Text>}
+        </ContentDetailHero>
 
         <DetailActionBar
           completed={isRead}
@@ -157,11 +156,17 @@ export default function BookDetailScreen() {
           onReview={openReview}
           onToggleList={() => void handleWatchlistToggle()}
           onToggleCompleted={() => void handleReadToggle()}
+          inProgress={isReading}
+          inProgressLabel="أقرأ الآن"
+          startProgressLabel="بدء القراءة"
+          onToggleInProgress={() => void handleReadingToggle()}
           rating={rating}
           onRatingChange={(value) => { lib.setQuickRating(mediaRef, value); if (user) void saveReviewMutation.mutateAsync({ mediaType: 'book', mediaId: workId, mediaSource, title: book.title, posterPath: book.coverUrl, rating: value, review: myReviewQuery.data?.review ?? '', spoiler: false, watchedDate: myReviewQuery.data?.watchedDate ? new Date(myReviewQuery.data.watchedDate).toISOString() : new Date().toISOString() }).then(() => myReviewQuery.refetch()).catch((error) => Alert.alert('تعذر حفظ التقييم', error instanceof Error ? error.message : 'حاول مرة أخرى.')); }}
         />
 
-        <View style={styles.section}><Text style={styles.sectionTitle}>عن الكتاب</Text><Text style={styles.description}>{book.description || 'لا يتوفر وصف لهذا الكتاب بعد.'}</Text></View>
+        {myReviewQuery.data ? <Pressable style={styles.ownReviewCard} onPress={openReview} accessibilityRole="button"><View style={styles.ownReviewHeader}><Text style={styles.sectionTitle}>مراجعتك</Text><FiveStarRating rating={myReviewQuery.data.rating} size={15} /></View>{!!myReviewQuery.data.review ? <Text style={styles.ownReviewText}>{myReviewQuery.data.review}</Text> : <Text style={styles.muted}>اضغط لتعديل تقييمك.</Text>}</Pressable> : null}
+
+        <View style={styles.section}><Text style={styles.sectionTitle}>نبذة</Text><Text style={styles.description}>{book.description || 'لا يتوفر وصف لهذا الكتاب بعد.'}</Text></View>
         {book.subjects.length ? <View style={styles.section}><Text style={styles.sectionTitle}>التصنيفات</Text><View style={styles.subjects}>{book.subjects.slice(0, 8).map((subject) => <View key={subject} style={styles.subject}><Text style={styles.subjectText}>{subject}</Text></View>)}</View></View> : null}
         <View style={styles.similarSection}>
           <Text style={styles.sectionTitle}>كتب مشابهة</Text>
@@ -205,6 +210,9 @@ const styles = StyleSheet.create({
   addList: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 48, marginTop: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   addListText: { flex: 1, color: colors.text, fontSize: fontSizes.sm, fontWeight: '700' },
   section: { marginTop: spacing.xl },
+  ownReviewCard: { marginTop: spacing.lg, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  ownReviewHeader: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  ownReviewText: { color: colors.textDim, fontSize: fontSizes.sm, lineHeight: 22, marginTop: spacing.sm, textAlign: 'right' },
   similarSection: { marginTop: spacing.xl },
   similarList: { paddingLeft: spacing.sm },
   sectionTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '900', marginBottom: spacing.sm },
