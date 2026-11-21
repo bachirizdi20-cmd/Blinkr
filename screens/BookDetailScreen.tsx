@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import AppRefreshControl from '../components/AppRefreshControl';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -18,6 +17,7 @@ import { PlatformAlert as Alert } from '../lib/platform-alert';
 import BookCard from '../components/BookCard';
 import DetailActionBar from '../components/DetailActionBar';
 import FiveStarRating from '../components/FiveStarRating';
+import ContentDetailHero from '../components/ContentDetailHero';
 import LoadingView from '../components/LoadingView';
 import { readPersistentCache, writePersistentCache } from '../lib/persistent-cache';
 
@@ -137,18 +137,16 @@ export default function BookDetailScreen() {
         <Pressable onPress={() => navigation.navigate('People', { shareMedia: { mediaType: 'book', mediaId: workId, mediaSource, title: book.title, posterPath: book.coverUrl, rating, overview: book.description } })} style={styles.iconButton} accessibilityLabel="مشاركة الكتاب"><Ionicons name="share-social-outline" size={19} color={colors.text} /></Pressable>
       </View>
       <ScrollView refreshControl={<AppRefreshControl />} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.hero}>
-          <View style={styles.coverFrame}>
-            {book.coverUrl ? <Image source={{ uri: book.coverUrl }} style={styles.cover} contentFit="cover" transition={180} /> : <View style={[styles.cover, styles.coverFallback]}><Ionicons name="book-outline" size={42} color={colors.textFaint} /><Text style={styles.muted}>لا يتوفر غلاف</Text></View>}
-          </View>
-          <View style={styles.heroCopy}>
-            <Text style={styles.title}>{book.title}</Text>
-            {book.authorNames.length > 0 ? <View style={styles.authorRow}>{book.authorNames.map((author) => <Pressable key={author} onPress={() => navigation.navigate('AuthorBooks', { authorName: author, excludeWorkId: workId })} accessibilityRole="button" accessibilityLabel={`عرض كتب ${author}`}><Text style={styles.authors}>{author}</Text></Pressable>)}</View> : <Text style={styles.muted}>المؤلف غير محدد</Text>}
-            {info.map((line) => <Text key={line} style={styles.meta}>{line}</Text>)}
-            {book.ratingsAverage != null && book.ratingsCount > 0 ? <View style={styles.ratingRow}><Ionicons name="star" size={16} color={colors.gold} /><Text style={styles.rating}>{book.ratingsAverage.toFixed(1)} / 5</Text><Text style={styles.muted}>({book.ratingsCount.toLocaleString('ar')}) · Hardcover</Text></View> : null}
-
-          </View>
-        </View>
+        <ContentDetailHero
+          title={book.title}
+          imageUri={book.coverUrl}
+          fallbackIcon="book-outline"
+          metadata={info}
+          scoreText={book.ratingsAverage != null && book.ratingsCount > 0 ? `${book.ratingsAverage.toFixed(1)} / 5` : null}
+          scoreLabel={book.ratingsCount > 0 ? `Hardcover · ${book.ratingsCount.toLocaleString('ar')} تقييم` : undefined}
+        >
+          {book.authorNames.length > 0 ? <View style={styles.authorRow}>{book.authorNames.map((author) => <Pressable key={author} onPress={() => navigation.navigate('AuthorBooks', { authorName: author, excludeWorkId: workId })} accessibilityRole="button" accessibilityLabel={`عرض كتب ${author}`}><Text style={styles.authors}>{author}</Text></Pressable>)}</View> : <Text style={styles.muted}>المؤلف غير محدد</Text>}
+        </ContentDetailHero>
 
         <DetailActionBar
           completed={isRead}
