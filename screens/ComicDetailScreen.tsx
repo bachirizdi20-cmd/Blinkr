@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import AppRefreshControl from '../components/AppRefreshControl';
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Image } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -13,6 +12,7 @@ import ComicCard from '../components/ComicCard';
 import ApiErrorState from '../components/ApiErrorState';
 import DetailActionBar from '../components/DetailActionBar';
 import FiveStarRating from '../components/FiveStarRating';
+import ContentDetailHero from '../components/ContentDetailHero';
 import { useAuth } from '../hooks/use-auth';
 import { useLibrary } from '../context/LibraryContext';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
@@ -90,7 +90,10 @@ export default function ComicDetailScreen() {
   };
 
   return <View style={styles.safe}><View style={styles.topBar}><Pressable onPress={() => navigation.goBack()} style={styles.iconButton}><Ionicons name="chevron-back" size={22} color={colors.text} /></Pressable><Text style={styles.topTitle}>تفاصيل الكوميك</Text><View style={styles.iconButton} /></View><ScrollView refreshControl={<AppRefreshControl />} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-    <View style={styles.hero}><View style={styles.coverFrame}>{comic.coverUrl ? <Image source={{ uri: comic.coverUrl }} style={styles.cover} contentFit="cover" /> : <View style={[styles.cover, styles.fallback]}><Ionicons name="color-wand-outline" size={42} color={colors.textFaint} /></View>}</View><View style={styles.heroCopy}><Text style={styles.title}>{comic.title}</Text>{comic.volumeName ? <Text style={styles.volume}>{comic.volumeName}</Text> : null}{comic.creators.length ? <View style={styles.creatorRow}>{comic.creators.map((creator) => <Pressable key={creator} onPress={() => navigation.navigate('ComicCreator', { creatorName: creator, excludeId: id })}><Text style={styles.creators}>{creator}</Text></Pressable>)}</View> : null}{info.map((line) => <Text key={line} style={styles.meta}>{line}</Text>)}{comic.rating != null ? <Text style={styles.rating}>★ {comic.rating.toFixed(1)}</Text> : null}</View></View>
+    <ContentDetailHero title={comic.title} imageUri={comic.coverUrl} fallbackIcon="book-outline" metadata={info} scoreText={comic.rating != null ? comic.rating.toFixed(1) : null} scoreLabel={comic.rating != null ? 'Comic Vine' : undefined}>
+      {comic.volumeName ? <Text style={styles.volume}>{comic.volumeName}</Text> : null}
+      {comic.creators.length ? <View style={styles.creatorRow}>{comic.creators.map((creator) => <Pressable key={creator} onPress={() => navigation.navigate('ComicCreator', { creatorName: creator, excludeId: id })}><Text style={styles.creators}>{creator}</Text></Pressable>)}</View> : null}
+    </ContentDetailHero>
 
     <DetailActionBar completed={completed} inList={inList} completionLabel="تمت قراءته" listLabel="قائمة القراءة" onReview={() => navigation.navigate('ReviewModal', { mediaType: 'comic', mediaId: id, title: comic.title, posterPath: comic.coverUrl })} onToggleList={() => void syncStatus(inList ? null : 'watchlist')} onToggleCompleted={() => { lib.toggleWatchedQuick(mediaRef); void syncStatus(completed ? null : 'watched'); }} inProgress={isReading} inProgressLabel="أقرأ الآن" startProgressLabel="بدء القراءة" onToggleInProgress={() => void syncStatus(isReading ? null : 'watching')} rating={rating} onRatingChange={(value) => { lib.setQuickRating(mediaRef, value); if (user) void saveReviewMutation.mutateAsync({ mediaType: 'comic', mediaId: id, title: comic.title, posterPath: comic.coverUrl, rating: value, review: myReviewQuery.data?.review ?? '', spoiler: false, watchedDate: myReviewQuery.data?.watchedDate ? new Date(myReviewQuery.data.watchedDate).toISOString() : new Date().toISOString() }).then(() => myReviewQuery.refetch()).catch((error) => Alert.alert('تعذر حفظ التقييم', error instanceof Error ? error.message : 'حاول مرة أخرى.')); }} />
     {myReviewQuery.data ? <Pressable style={styles.ownReviewCard} onPress={() => navigation.navigate('ReviewModal', { mediaType: 'comic', mediaId: id, title: comic.title, posterPath: comic.coverUrl })} accessibilityRole="button"><View style={styles.ownReviewHeader}><Text style={styles.sectionTitle}>مراجعتك</Text><FiveStarRating rating={myReviewQuery.data.rating} size={15} /></View>{myReviewQuery.data.review ? <Text style={styles.description}>{myReviewQuery.data.review}</Text> : <Text style={styles.muted}>اضغط لتعديل تقييمك.</Text>}</Pressable> : null}
