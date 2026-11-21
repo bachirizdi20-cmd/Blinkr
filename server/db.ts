@@ -554,10 +554,9 @@ export async function listSocialFeed(userId: number) {
   const db = await getDb();
   if (!db) return [];
   const followingIds = await listFollowingIds(userId);
-  if (!followingIds.length) return [];
   const blocked = await db.select({ userId: blocks.userId, blockedUserId: blocks.blockedUserId }).from(blocks).where(or(eq(blocks.userId, userId), eq(blocks.blockedUserId, userId)));
   const blockedIds = blocked.map((row) => row.userId === userId ? row.blockedUserId : row.userId);
-  const allowedIds = followingIds.filter((id) => !blockedIds.includes(id));
+  const allowedIds = Array.from(new Set([userId, ...followingIds])).filter((id) => !blockedIds.includes(id));
   if (!allowedIds.length) return [];
   const rows = await db.select({ review: reviews, username: userData.username, displayName: users.name, avatarUrl: userData.avatarUrl }).from(reviews).innerJoin(users, eq(users.id, reviews.userId)).leftJoin(userData, eq(userData.userId, reviews.userId)).where(inArray(reviews.userId, allowedIds)).orderBy(desc(reviews.updatedAt)).limit(50);
   if (!rows.length) return [];
@@ -616,6 +615,25 @@ export async function addReviewComment(userId: number, reviewId: number, text: s
 
   await db.insert(reviewComments).values({ reviewId, userId, text, parentCommentId: parentCommentId ?? null });
   if (notifyUserId !== userId) await db.insert(notifications).values({ userId: notifyUserId, actorId: userId, kind: "comment", reviewId });
+  return { success: true } as const;
+}
+
+export async function updateReviewComment(userId: number, commentId: number, text: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const comment = (await db.select().from(reviewComments).where(and(eq(reviewComments.id, commentId), eq(reviewComments.userId, userId))).limit(1))[0];
+  if (!comment) throw new Error("Comment not found or not owned by this user");
+  await db.update(reviewComments).set({ text: text.trim() }).where(eq(reviewComments.id, commentId));
+  return { success: true } as const;
+}
+
+export async function deleteReviewComment(userId: number, commentId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const comment = (await db.select().from(reviewComments).where(and(eq(reviewComments.id, commentId), eq(reviewComments.userId, userId))).limit(1))[0];
+  if (!comment) throw new Error("Comment not found or not owned by this user");
+  await db.delete(reviewComments).where(eq(reviewComments.parentCommentId, commentId));
+  await db.delete(reviewComments).where(eq(reviewComments.id, commentId));
   return { success: true } as const;
 }
 
