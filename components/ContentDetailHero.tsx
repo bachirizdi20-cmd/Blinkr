@@ -8,7 +8,7 @@ type Props = {
   title: string;
   imageUri?: string | null;
   fallbackIcon: React.ComponentProps<typeof Ionicons>['name'];
-  metadata?: string[];
+  metadata?: Array<string | null | undefined>;
   scoreText?: string | null;
   scoreLabel?: string;
   children?: ReactNode;
@@ -23,7 +23,7 @@ export default function ContentDetailHero({ title, imageUri, fallbackIcon, metad
       <View style={styles.copy}>
         <Text style={styles.title} numberOfLines={3}>{title}</Text>
         {children}
-        {metadata.filter(Boolean).map((item, index) => <Text key={`${index}-${item}`} style={styles.meta} numberOfLines={2}>{item}</Text>)}
+        {metadata.filter((item): item is string => Boolean(item)).map((item, index) => <Text key={`${index}-${item}`} style={styles.meta} numberOfLines={2}>{item}</Text>)}
         {scoreText ? <View style={styles.scoreRow}><Ionicons name="star" size={15} color={colors.gold} /><Text style={styles.score}>{scoreText}</Text>{scoreLabel ? <Text style={styles.scoreLabel}>{scoreLabel}</Text> : null}</View> : null}
       </View>
     </View>
