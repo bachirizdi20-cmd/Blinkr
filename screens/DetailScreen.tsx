@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AppRefreshControl from '../components/AppRefreshControl';
 import {
   View,
@@ -54,7 +54,8 @@ function formatRuntime(mins: number | null) {
 export default function DetailScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<RouteT>();
-  const { mediaType, id } = route.params;
+  const { mediaType } = route.params;
+  const id = Number(route.params.id);
   const lib = useLibrary();
   const { user } = useAuth();
   const setStatusMutation = trpc.library.setStatus.useMutation();
@@ -66,30 +67,49 @@ export default function DetailScreen() {
   const [detail, setDetail] = useState<DetailResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const loadVersion = useRef(0);
 
   const load = useCallback(async () => {
+    const version = ++loadVersion.current;
     let hasCached = false;
     setLoading(true);
     setError(null);
-    const cached = await readCachedDetail(mediaType, id);
-    if (cached) {
-      hasCached = true;
-      setDetail(cached);
+    if (!Number.isInteger(id) || id <= 0) {
       setLoading(false);
+      setError('معرّف هذا العنوان غير صالح. أعد فتحه من القائمة.');
+      return;
     }
     try {
-      const data = await fetchDetail(mediaType, id);
+      const cached = await Promise.race([
+        readCachedDetail(mediaType, id),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500)),
+      ]);
+      if (version !== loadVersion.current) return;
+      if (cached) {
+        hasCached = true;
+        setDetail(cached);
+        setLoading(false);
+      }
+    } catch {
+      // Cache failures must never block the live request.
+    }
+    try {
+      const data = await Promise.race([
+        fetchDetail(mediaType, id),
+        new Promise<DetailResult>((_, reject) => setTimeout(() => reject(new Error('TMDB detail request timed out')), 15000)),
+      ]);
+      if (version !== loadVersion.current) return;
       setDetail(data);
     } catch (err) {
       console.warn(err);
-      if (!hasCached) setError('تعذر تحميل بيانات هذا العنوان. تحقق من الاتصال وحاول مجددًا.');
+      if (!hasCached && version === loadVersion.current) setError('تعذر تحميل بيانات هذا العنوان. تحقق من الاتصال وحاول مجددًا.');
     } finally {
-      setLoading(false);
+      if (version === loadVersion.current) setLoading(false);
     }
   }, [mediaType, id]);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   const key = mediaKey(mediaType, id);

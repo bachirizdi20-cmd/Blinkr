@@ -26,12 +26,14 @@ type RouteT = RouteProp<ContentStackParamList, 'BookDetail'>;
 export default function BookDetailScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<RouteT>();
-  const { workId, book: fallback } = route.params;
+  const workId = Number(route.params.workId);
+  const { book: fallback } = route.params;
   const { user } = useAuth();
   const lib = useLibrary();
   const [cachedBook, setCachedBook] = useState<Partial<BookSummary> | undefined>(fallback);
   const mediaSource = 'hardcover' as const;
-  const detailQuery = trpc.books.detail.useQuery({ workId }, { retry: 1 });
+  const validWorkId = Number.isInteger(workId) && workId > 0;
+  const detailQuery = trpc.books.detail.useQuery({ workId }, { enabled: validWorkId, retry: 1 });
   useEffect(() => {
     void readPersistentCache<Partial<BookSummary>>(`book-detail:${workId}`).then((value) => { if (value) setCachedBook((current) => current ?? value); });
   }, [workId]);
@@ -49,7 +51,7 @@ export default function BookDetailScreen() {
   const book = useMemo(() => mergeBookDetails(workId, fallbackBook, detailCompatible ? detailQuery.data : null), [workId, fallbackBook, detailQuery.data, detailCompatible]);
   const similarQuery = trpc.books.similar.useQuery(
     { workId, subjects: book.subjects.slice(0, 5), authorName: book.authorNames[0], limit: 20 },
-    { enabled: Boolean(book.coverUrl), retry: 1 },
+    { enabled: validWorkId && Boolean(book.coverUrl), retry: 1 },
   );
 
   const localRead = lib.isWatched('book', workId);
@@ -113,6 +115,7 @@ export default function BookDetailScreen() {
     posterPath: book.coverUrl,
   });
 
+  if (!validWorkId) return <SafeAreaView style={styles.safe}><ApiErrorState message="معرّف الكتاب غير صالح. أعد فتحه من القائمة." onRetry={() => navigation.goBack()} /></SafeAreaView>;
   if (detailQuery.isLoading && !fallbackBook) return <LoadingView />;
 
   if (detailQuery.isError && !fallbackBook) {

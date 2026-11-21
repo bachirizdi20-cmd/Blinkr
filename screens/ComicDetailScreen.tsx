@@ -44,11 +44,13 @@ function normalizeComic(value?: Partial<ComicSummary> | null): ComicSummary | nu
 export default function ComicDetailScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<RouteT>();
-  const { id, comic: fallback } = route.params;
+  const id = Number(route.params.id);
+  const { comic: fallback } = route.params;
   const { user } = useAuth();
   const lib = useLibrary();
   const [cachedComic, setCachedComic] = useState<Partial<ComicSummary> | undefined>(fallback);
-  const detailQuery = trpc.comics.detail.useQuery({ id }, { retry: 1 });
+  const validId = Number.isInteger(id) && id > 0;
+  const detailQuery = trpc.comics.detail.useQuery({ id }, { enabled: validId, retry: 1 });
   useEffect(() => {
     void readPersistentCache<Partial<ComicSummary>>(`comic-detail:${id}`).then((value) => { if (value) setCachedComic((current) => current ?? value); });
   }, [id]);
@@ -61,9 +63,10 @@ export default function ComicDetailScreen() {
   const removeStatusMutation = trpc.library.removeStatus.useMutation();
   const saveReviewMutation = trpc.reviews.save.useMutation();
   const myReviewQuery = trpc.reviews.getMine.useQuery({ mediaType: 'comic', mediaId: id }, { enabled: Boolean(user), retry: false });
-  const similarQuery = trpc.comics.similar.useQuery({ id, title: comic?.title ?? '', publisher: comic?.publisher ?? null, limit: 8 }, { enabled: Boolean(comic), retry: 1 });
+  const similarQuery = trpc.comics.similar.useQuery({ id, title: comic?.title ?? '', publisher: comic?.publisher ?? null, limit: 8 }, { enabled: validId && Boolean(comic), retry: 1 });
   const info = useMemo(() => [comic?.issueNumber ? `العدد ${comic.issueNumber}` : null, comic?.publishDate, comic?.publisher].filter(Boolean), [comic]);
 
+  if (!validId) return <View style={styles.safe}><ApiErrorState message="معرّف الكوميك غير صالح. أعد فتحه من القائمة." onRetry={() => navigation.goBack()} /></View>;
   if (detailQuery.isLoading && !comic) return <View style={styles.center}><ActivityIndicator color={colors.accent} size="large" /></View>;
   if (detailQuery.isError && !comic) return <View style={styles.safe}><ApiErrorState message="تعذر تحميل تفاصيل الكوميك من Comic Vine." onRetry={() => void detailQuery.refetch()} /></View>;
   if (!comic) return <View style={styles.safe}><ApiErrorState message="بيانات الكوميك غير مكتملة. أعد المحاولة." onRetry={() => void detailQuery.refetch()} /></View>;
