@@ -374,13 +374,22 @@ function FeedReviewCard({
   onChanged: () => void;
 }) {
   const { review, username, displayName, avatarUrl, likeCount, commentCount, likedByMe } = row;
+  const { user } = useAuth();
   const [commentOpen, setCommentOpen] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [replyTarget, setReplyTarget] = useState<{ id: number; name: string } | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+  const [editingCommentText, setEditingCommentText] = useState('');
   const commentsQuery = trpc.social.comments.useQuery({ reviewId: review.id }, { enabled: commentOpen });
   const toggleLikeMutation = trpc.social.toggleLike.useMutation({ onSuccess: onChanged });
   const addCommentMutation = trpc.social.addComment.useMutation({
     onSuccess: () => { setCommentText(''); setReplyTarget(null); commentsQuery.refetch(); onChanged(); },
+  });
+  const updateCommentMutation = trpc.social.updateComment.useMutation({
+    onSuccess: () => { setEditingCommentId(null); setEditingCommentText(''); void commentsQuery.refetch(); },
+  });
+  const deleteCommentMutation = trpc.social.deleteComment.useMutation({
+    onSuccess: () => { void commentsQuery.refetch(); onChanged(); },
   });
   const reportMutation = trpc.social.report.useMutation({ onSuccess: () => Alert.alert('تم إرسال البلاغ', 'شكرًا، سيراجع فريق Blinkr البلاغ.') });
 
@@ -395,6 +404,23 @@ function FeedReviewCard({
     { text: 'إبلاغ', onPress: () => reportMutation.mutate({ targetType: 'review', targetId: review.id, reason: 'other' }) },
     { text: 'إلغاء', style: 'cancel' },
   ]);
+  const openCommentMenu = (item: any) => {
+    if (item.comment.userId === user?.id) {
+      Alert.alert('خيارات التعليق', 'اختر إجراءً', [
+        { text: 'تعديل التعليق', onPress: () => { setEditingCommentId(item.comment.id); setEditingCommentText(item.comment.text); } },
+        { text: 'حذف التعليق', style: 'destructive', onPress: () => Alert.alert('حذف التعليق', 'هل تريد حذف هذا التعليق؟', [
+          { text: 'إلغاء', style: 'cancel' },
+          { text: 'حذف', style: 'destructive', onPress: () => deleteCommentMutation.mutate({ commentId: item.comment.id }) },
+        ]) },
+        { text: 'إلغاء', style: 'cancel' },
+      ]);
+    } else {
+      Alert.alert('خيارات التعليق', 'اختر إجراءً', [
+        { text: 'إبلاغ', onPress: () => reportMutation.mutate({ targetType: 'comment', targetId: item.comment.id, reason: 'other' }) },
+        { text: 'إلغاء', style: 'cancel' },
+      ]);
+    }
+  };
 
   return (
     <Animated.View
@@ -435,6 +461,15 @@ function FeedReviewCard({
       {commentOpen && (commentsQuery.data ?? []).filter((item) => !item.comment.parentCommentId).map((item) => {
         const authorName = item.name ?? item.username ?? 'مستخدم';
         const replies = (commentsQuery.data ?? []).filter((reply) => reply.comment.parentCommentId === item.comment.id);
+        const renderCommentBody = (comment: any) => editingCommentId === comment.comment.id ? (
+          <View>
+            <TextInput value={editingCommentText} onChangeText={setEditingCommentText} style={styles.commentEditInput} multiline maxLength={1000} textAlign="right" />
+            <View style={styles.commentInlineActions}>
+              <Pressable onPress={() => { setEditingCommentId(null); setEditingCommentText(''); }}><Text style={styles.replyAction}>إلغاء</Text></Pressable>
+              <Pressable disabled={!editingCommentText.trim() || updateCommentMutation.isPending} onPress={() => updateCommentMutation.mutate({ commentId: comment.comment.id, text: editingCommentText.trim() })}><Text style={styles.replyAction}>{updateCommentMutation.isPending ? 'جارٍ الحفظ…' : 'حفظ'}</Text></Pressable>
+            </View>
+          </View>
+        ) : <Text style={styles.commentBody}>{comment.comment.text}</Text>;
         return (
           <View key={item.comment.id} style={styles.commentThread}>
             <View style={styles.commentRow}>
@@ -442,14 +477,15 @@ function FeedReviewCard({
                 {resolveMediaUrl(item.avatarUrl) ? <Image source={{ uri: resolveMediaUrl(item.avatarUrl) }} style={StyleSheet.absoluteFillObject} contentFit="cover" /> : <Text style={styles.commentAvatarText}>{authorName.slice(0, 1)}</Text>}
               </View>
               <View style={styles.commentContent}>
-                <Text style={styles.commentAuthor}>{authorName}</Text>
-                <Text style={styles.commentBody}>{item.comment.text}</Text>
-                <Pressable onPress={() => setReplyTarget({ id: item.comment.id, name: authorName })} accessibilityRole="button">
-                  <Text style={styles.replyAction}>رد</Text>
-                </Pressable>
+                <View style={styles.commentHeaderLine}>
+                  <Text style={styles.commentAuthor}>{authorName}</Text>
+                  <Pressable onPress={() => openCommentMenu(item)} hitSlop={8} accessibilityLabel="خيارات التعليق"><Ionicons name="ellipsis-horizontal" size={16} color={colors.textFaint} /></Pressable>
+                </View>
+                {renderCommentBody(item)}
+                {editingCommentId !== item.comment.id ? <Pressable onPress={() => setReplyTarget({ id: item.comment.id, name: authorName })} accessibilityRole="button"><Text style={styles.replyAction}>رد</Text></Pressable> : null}
               </View>
             </View>
-            {replies.map((reply) => {
+            {replies.map((reply: any) => {
               const replyName = reply.name ?? reply.username ?? 'مستخدم';
               return (
                 <View key={reply.comment.id} style={styles.replyRow}>
@@ -457,8 +493,11 @@ function FeedReviewCard({
                     {resolveMediaUrl(reply.avatarUrl) ? <Image source={{ uri: resolveMediaUrl(reply.avatarUrl) }} style={StyleSheet.absoluteFillObject} contentFit="cover" /> : <Text style={styles.commentAvatarText}>{replyName.slice(0, 1)}</Text>}
                   </View>
                   <View style={styles.commentContent}>
-                    <Text style={styles.commentAuthor}>{replyName}</Text>
-                    <Text style={styles.commentBody}>{reply.comment.text}</Text>
+                    <View style={styles.commentHeaderLine}>
+                      <Text style={styles.commentAuthor}>{replyName}</Text>
+                      <Pressable onPress={() => openCommentMenu(reply)} hitSlop={8} accessibilityLabel="خيارات الرد"><Ionicons name="ellipsis-horizontal" size={16} color={colors.textFaint} /></Pressable>
+                    </View>
+                    {renderCommentBody(reply)}
                   </View>
                 </View>
               );
@@ -623,6 +662,9 @@ const styles = StyleSheet.create({
   commentAvatar: { width: 30, height: 30, borderRadius: 15, overflow: 'hidden', backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   commentAvatarText: { color: colors.bg, fontSize: 12, fontWeight: '800' },
   commentContent: { flex: 1, gap: 3 },
+  commentHeaderLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.xs },
+  commentEditInput: { minHeight: 54, color: colors.text, backgroundColor: colors.bg, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, padding: spacing.sm, marginTop: spacing.xs, textAlignVertical: 'top' },
+  commentInlineActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: spacing.md, marginTop: spacing.xs },
   commentAuthor: { color: colors.text, fontSize: 11, fontWeight: '800' },
   commentBody: { color: colors.textDim, fontSize: 11, lineHeight: 17 },
   commentComposer: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
