@@ -19,6 +19,7 @@ import CastRow from '../components/CastRow';
 import SectionRow from '../components/SectionRow';
 import GenreChips from '../components/GenreChips';
 import FiveStarRating from '../components/FiveStarRating';
+import ContentDetailHero from '../components/ContentDetailHero';
 import DetailActionBar from '../components/DetailActionBar';
 import LoadingView from '../components/LoadingView';
 import EmptyState from '../components/EmptyState';
@@ -232,28 +233,14 @@ export default function DetailScreen() {
           </SafeAreaView>
         </View>
 
-        <View style={styles.headerRow}>
-          <View style={styles.posterWrap}>
-            {poster ? (
-              <Image source={{ uri: poster }} style={styles.poster} contentFit="cover" />
-            ) : (
-              <View style={[styles.poster, styles.posterFallback]}>
-                <Ionicons name="film-outline" size={30} color={colors.textFaint} />
-              </View>
-            )}
-          </View>
-          <View style={styles.headerInfo}>
-            <Text style={styles.title} numberOfLines={3}>{detail.title}</Text>
-            <Text style={styles.metaLine}>
-              {year}{runtimeLabel ? `  •  ${runtimeLabel}` : ''}{'  •  '}{mediaType === 'movie' ? 'فيلم' : 'مسلسل'}
-            </Text>
-            <View style={styles.tmdbRow}>
-              <Ionicons name="star" size={14} color={colors.gold} />
-              <Text style={styles.tmdbScore}>{Number(detail.voteAverage ?? 0).toFixed(1)}</Text>
-              <Text style={styles.tmdbLabel}>TMDB ({Number(detail.voteCount ?? 0).toLocaleString()})</Text>
-            </View>
-          </View>
-        </View>
+        <ContentDetailHero
+          title={detail.title}
+          imageUri={poster}
+          fallbackIcon="film-outline"
+          metadata={[`${year}  •  ${mediaType === 'movie' ? 'فيلم' : 'مسلسل'}`, ...(runtimeLabel ? [runtimeLabel] : [])]}
+          scoreText={Number(detail.voteAverage ?? 0).toFixed(1)}
+          scoreLabel={`TMDB · ${Number(detail.voteCount ?? 0).toLocaleString('ar')} تقييم`}
+        />
 
         <View style={styles.body}>
           <GenreChips names={detail.genres.map((g) => g.name)} />
