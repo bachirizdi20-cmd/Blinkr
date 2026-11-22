@@ -368,6 +368,7 @@ export function FeedReviewCard({
   onOpenDetail,
   onChanged,
   isOwn = false,
+  fullWidth = false,
   onEdit,
   onDelete,
 }: {
@@ -376,6 +377,7 @@ export function FeedReviewCard({
   onOpenDetail: (review: { mediaType: ReviewMediaType; mediaId: number; title: string; posterPath: string | null }) => void;
   onChanged: () => void;
   isOwn?: boolean;
+  fullWidth?: boolean;
   onEdit?: (review: FeedRow['review']) => void;
   onDelete?: (review: FeedRow['review']) => void;
 }) {
@@ -436,7 +438,7 @@ export function FeedReviewCard({
 
   return (
     <Animated.View
-      style={styles.socialCard}
+      style={[styles.socialCard, fullWidth && styles.socialCardFullWidth]}
       entering={index >= 3 ? FadeInDown.duration(240).withInitialValues({ opacity: 0, transform: [{ translateY: 14 }] }) : undefined}
       exiting={index >= 3 ? FadeOutUp.duration(180) : undefined}
     >
@@ -646,6 +648,7 @@ const styles = StyleSheet.create({
   socialEmptyTitle: { color: colors.text, fontSize: fontSizes.sm, fontWeight: '800', marginTop: spacing.sm },
   socialEmptyText: { color: colors.textDim, fontSize: fontSizes.xs, textAlign: 'center', marginTop: 4 },
   socialCard: { width: SCREEN_W - spacing.lg * 2 - spacing.sm, backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginRight: spacing.sm },
+  socialCardFullWidth: { width: '100%', marginRight: 0 },
   socialCardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   socialAvatar: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   socialAvatarText: { color: colors.bg, fontSize: fontSizes.md, fontWeight: '800' },
