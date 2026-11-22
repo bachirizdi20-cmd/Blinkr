@@ -3,12 +3,11 @@ import type { CookieOptions, Request } from "express";
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
 // Only share cookies across the known preview subdomains. Never derive a
-// registrable parent domain from arbitrary production hosts (for example,
-// doing so for *.onrender.com would target a public shared hosting domain).
+// registrable parent domain from arbitrary production hosts such as *.onrender.com.
 const SHARED_COOKIE_PARENT_DOMAINS = ["manuspre.computer", "manus.computer"];
 
 function isIpAddress(host: string) {
-  if (/^\\d{1,3}(\\.\\d{1,3}){3}$/.test(host)) return true;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true;
   return host.includes(":");
 }
 
@@ -23,16 +22,16 @@ function isSecureRequest(req: Request) {
 }
 
 function getParentDomain(hostname: string): string | undefined {
-  const normalizedHost = hostname.toLowerCase().replace(/\\.$/, "");
+  const normalizedHost = hostname.toLowerCase().replace(/\.$/, "");
   if (!normalizedHost || LOCAL_HOSTS.has(normalizedHost) || isIpAddress(normalizedHost)) {
     return undefined;
   }
 
   const matchedDomain = SHARED_COOKIE_PARENT_DOMAINS.find(
-    (domain) => normalizedHost.endsWith(`.${domain}`),
+    (domain) => normalizedHost.endsWith(\`.\${domain}\`),
   );
 
-  return matchedDomain ? `.${matchedDomain}` : undefined;
+  return matchedDomain ? \`.\${matchedDomain}\` : undefined;
 }
 
 export function getSessionCookieOptions(
@@ -45,7 +44,6 @@ export function getSessionCookieOptions(
     domain: getParentDomain(hostname),
     httpOnly: true,
     path: "/",
-    // SameSite=None is rejected by browsers unless Secure is also enabled.
     sameSite: secure ? "none" : "lax",
     secure,
   };
