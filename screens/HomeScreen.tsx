@@ -278,7 +278,7 @@ export default function HomeScreen() {
 
         <View style={styles.bookSection}>
           <View style={styles.bookSectionHeader}>
-            <View><Text style={styles.bookSectionTitle}>الكتب الرائجة</Text></View>
+            <View><Text style={styles.bookSectionTitle}>الكتب الرائجة</Text><Text style={styles.bookSectionSubtitle}>{bookItems.length.toLocaleString('ar')} كتاب</Text></View>
             <Pressable onPress={() => navigation.navigate('Search', { booksTrending: true })}><Text style={styles.bookSectionMore}>عرض الكل</Text></Pressable>
           </View>
           {bookTrendingQuery.isLoading && bookItems.length === 0 ? <View style={styles.bookLoading}><ActivityIndicator color={colors.accent} size="large" /></View>
@@ -307,8 +307,8 @@ export default function HomeScreen() {
 }
 
 
-type FeedRow = {
-  review: { id: number; userId: number; mediaType: ReviewMediaType; mediaId: number; title: string; posterPath: string | null; rating: number; review: string; createdAt: string | Date };
+export type FeedRow = {
+  review: { id: number; userId: number; mediaType: ReviewMediaType; mediaId: number; mediaSource?: string | null; title: string; posterPath: string | null; rating: number; review: string; createdAt: string | Date };
   username: string | null;
   displayName: string | null;
   avatarUrl: string | null;
@@ -362,16 +362,22 @@ function SocialReviewFeed({ onOpenDetail, enabled, refreshToken }: { onOpenDetai
   );
 }
 
-function FeedReviewCard({
+export function FeedReviewCard({
   row,
   index,
   onOpenDetail,
   onChanged,
+  isOwn = false,
+  onEdit,
+  onDelete,
 }: {
   row: FeedRow;
   index: number;
-    onOpenDetail: (review: { mediaType: ReviewMediaType; mediaId: number; title: string; posterPath: string | null }) => void;
+  onOpenDetail: (review: { mediaType: ReviewMediaType; mediaId: number; title: string; posterPath: string | null }) => void;
   onChanged: () => void;
+  isOwn?: boolean;
+  onEdit?: (review: FeedRow['review']) => void;
+  onDelete?: (review: FeedRow['review']) => void;
 }) {
   const { review, username, displayName, avatarUrl, likeCount, commentCount, likedByMe } = row;
   const { user } = useAuth();
@@ -400,10 +406,16 @@ function FeedReviewCard({
 
   const poster = catalogPosterUrl(review.mediaType, review.posterPath, 'w342');
   const createdAtMs = new Date(review.createdAt).getTime();
-  const openReviewMenu = () => Alert.alert('خيارات المراجعة', 'اختر إجراءً', [
-    { text: 'إبلاغ', onPress: () => reportMutation.mutate({ targetType: 'review', targetId: review.id, reason: 'other' }) },
-    { text: 'إلغاء', style: 'cancel' },
-  ]);
+  const openReviewMenu = () => isOwn
+    ? Alert.alert('خيارات المراجعة', 'اختر إجراءً', [
+        { text: 'تعديل', onPress: () => onEdit?.(review) },
+        { text: 'حذف', style: 'destructive', onPress: () => onDelete?.(review) },
+        { text: 'إلغاء', style: 'cancel' },
+      ])
+    : Alert.alert('خيارات المراجعة', 'اختر إجراءً', [
+        { text: 'إبلاغ', onPress: () => reportMutation.mutate({ targetType: 'review', targetId: review.id, reason: 'other' }) },
+        { text: 'إلغاء', style: 'cancel' },
+      ]);
   const openCommentMenu = (item: any) => {
     if (item.comment.userId === user?.id) {
       Alert.alert('خيارات التعليق', 'اختر إجراءً', [

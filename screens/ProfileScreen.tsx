@@ -25,6 +25,7 @@ import { animateProfileTabChange, ProfileSectionTabs, ProfileSectionTab } from '
 import { mergeProfileMediaItems } from '../lib/profile-media';
 import { catalogPosterUrl, normalizeReviewMediaType, openCatalogItem } from '../lib/catalog-navigation';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
+import { FeedReviewCard, type FeedRow } from './HomeScreen';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 
@@ -162,7 +163,7 @@ export default function ProfileScreen() {
       <View style={styles.topNav}>
         <Pressable onPress={() => navigation.goBack()} style={styles.topNavButton} accessibilityLabel="رجوع"><Ionicons name="chevron-back" size={24} color={colors.text} /></Pressable>
         <Text style={styles.topNavTitle}>الملف الشخصي</Text>
-        <Pressable onPress={() => setMenuVisible(true)} style={styles.topNavButton} accessibilityLabel="فتح قائمة الحساب"><Ionicons name="menu" size={25} color={colors.text} /></Pressable>
+        <Pressable onPress={() => setMenuVisible(true)} style={styles.topNavButton} accessibilityLabel="فتح قائمة الحساب"><Ionicons name="ellipsis-horizontal" size={25} color={colors.text} /></Pressable>
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.profileScrollContent} refreshControl={<RefreshControl refreshing={accountQuery.isRefetching || remoteReviewsQuery.isRefetching || remoteStatusesQuery.isRefetching} onRefresh={() => { void Promise.all([accountQuery.refetch(), remoteReviewsQuery.refetch(), remoteStatusesQuery.refetch()]); }} tintColor={colors.accent} />}>
         <View style={styles.commonProfileContent}>
@@ -213,24 +214,60 @@ export default function ProfileScreen() {
                 <View style={styles.publishedReviewsEmpty}><Text style={styles.publishedReviewsHint}>تعذر تحميل المراجعات.</Text><Pressable onPress={() => void remoteReviewsQuery.refetch()}><Text style={styles.verifyText}>إعادة المحاولة</Text></Pressable></View>
               ) : publishedReviews.length === 0 ? (
                 <EmptyState icon="chatbox-ellipses-outline" title="لا توجد مراجعات منشورة بعد" message="ستظهر هنا المراجعات التي تنشرها." />
-              ) : publishedReviews.map((review) => {
+              ) : publishedReviews.map((item, index) => {
+                const review = item.review;
                 const mediaType = normalizeReviewMediaType(review.mediaType);
-                const poster = catalogPosterUrl(mediaType, review.posterPath, 'w200');
+                const row: FeedRow = {
+                  review: {
+                    id: review.id,
+                    userId: review.userId,
+                    mediaType,
+                    mediaId: review.mediaId,
+                    mediaSource: review.mediaSource,
+                    title: review.title,
+                    posterPath: review.posterPath,
+                    rating: review.rating,
+                    review: review.review,
+                    createdAt: review.createdAt,
+                  },
+                  username: remoteProfile?.username ?? null,
+                  displayName,
+                  avatarUrl: displayedAvatar ?? null,
+                  likeCount: item.likeCount,
+                  commentCount: item.commentCount,
+                  likedByMe: item.likedByMe,
+                };
                 return (
-                  <View key={review.id} style={styles.publishedReviewCard}>
-                    <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md }}>
-                      <Pressable style={{ flex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md }} onPress={() => openCatalogItem(navigation, { mediaType, mediaId: review.mediaId, title: review.title, posterPath: review.posterPath })}>
-                        {poster ? <Image source={{ uri: poster }} style={styles.publishedReviewPoster} contentFit="cover" /> : <View style={[styles.publishedReviewPoster, styles.publishedPosterFallback]}><Ionicons name={mediaType === 'book' ? 'book-outline' : 'film-outline'} size={22} color={colors.textFaint} /></View>}
-                        <View style={styles.publishedReviewInfo}>
-                          <Text style={styles.publishedReviewTitle} numberOfLines={2}>{review.title}</Text>
-                          {review.rating != null ? <View style={styles.publishedRating}><Ionicons name="star" size={12} color={colors.gold} /><Text style={styles.publishedRatingText}>{review.rating}/10</Text></View> : null}
-                          <Text style={styles.publishedReviewDate}>{formatProfileDate(review.updatedAt)}</Text>
-                        </View>
-                      </Pressable>
-                      <Pressable onPress={() => Alert.alert('خيارات المراجعة', 'اختر إجراءً', [{ text: 'تعديل', onPress: () => navigation.navigate('ReviewModal', { mediaType, mediaId: review.mediaId, ...(review.mediaSource === 'hardcover' ? { mediaSource: 'hardcover' as const } : {}), title: review.title, posterPath: review.posterPath }) }, { text: 'حذف', style: 'destructive', onPress: () => Alert.alert('حذف المراجعة؟', 'سيتم حذفها نهائيًا.', [{ text: 'إلغاء', style: 'cancel' }, { text: 'حذف', style: 'destructive', onPress: async () => { await deleteReviewMutation.mutateAsync({ mediaType, mediaId: review.mediaId, ...(review.mediaSource === 'hardcover' ? { mediaSource: 'hardcover' as const } : {}) }); await remoteReviewsQuery.refetch(); } }]) }, { text: 'إلغاء', style: 'cancel' }])} hitSlop={8} accessibilityLabel="خيارات المراجعة"><Ionicons name="ellipsis-vertical" size={20} color={colors.textDim} /></Pressable>
-                    </View>
-                    <Text style={styles.publishedReviewBody} numberOfLines={5}>{review.review || 'قيّمت هذا العنوان دون إضافة تعليق مكتوب.'}</Text>
-                  </View>
+                  <FeedReviewCard
+                    key={review.id}
+                    row={row}
+                    index={index}
+                    isOwn
+                    onOpenDetail={(media) => openCatalogItem(navigation, media)}
+                    onChanged={() => remoteReviewsQuery.refetch()}
+                    onEdit={(entry) => navigation.navigate('ReviewModal', {
+                      mediaType: normalizeReviewMediaType(entry.mediaType),
+                      mediaId: entry.mediaId,
+                      ...(entry.mediaSource === 'hardcover' ? { mediaSource: 'hardcover' as const } : {}),
+                      title: entry.title,
+                      posterPath: entry.posterPath,
+                    })}
+                    onDelete={(entry) => Alert.alert('حذف المراجعة؟', 'سيتم حذفها نهائيًا.', [
+                      { text: 'إلغاء', style: 'cancel' },
+                      { text: 'حذف', style: 'destructive', onPress: async () => {
+                        try {
+                          await deleteReviewMutation.mutateAsync({
+                            mediaType: normalizeReviewMediaType(entry.mediaType),
+                            mediaId: entry.mediaId,
+                            ...(entry.mediaSource === 'hardcover' ? { mediaSource: 'hardcover' as const } : {}),
+                          });
+                          await remoteReviewsQuery.refetch();
+                        } catch (error) {
+                          Alert.alert('تعذر حذف المراجعة', error instanceof Error ? error.message : 'حاول مرة أخرى.');
+                        }
+                      } },
+                    ])}
+                  />
                 );
               })}
             </View>

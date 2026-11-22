@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import FiveStarRating from './FiveStarRating';
+import RatingStepper from './RatingStepper';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 
 type Props = {
@@ -29,7 +29,7 @@ export default function DetailActionBar({ completed, inList, completionLabel, li
         <Action icon={completed ? 'checkmark-circle' : 'checkmark-circle-outline'} label={completionLabel} active={completed} onPress={onToggleCompleted} />
       </View>
       <View style={styles.ratingRow}>
-        <View style={styles.ratingHeading}><Text style={styles.ratingCaption}>تقييمك</Text><FiveStarRating rating={rating} onChange={onRatingChange} size={22} /></View>
+        <RatingStepper rating={rating} onChange={onRatingChange} />
       </View>
       {onToggleInProgress && inProgressLabel ? <Pressable style={[styles.progressButton, inProgress && styles.progressButtonActive]} onPress={onToggleInProgress} accessibilityRole="button" accessibilityLabel={inProgress ? inProgressLabel : (startProgressLabel ?? inProgressLabel)}><Ionicons name={inProgress ? 'play-circle' : 'play-circle-outline'} size={18} color={inProgress ? colors.accent : colors.textDim} /><Text style={[styles.progressText, inProgress && styles.progressTextActive]}>{inProgress ? inProgressLabel : (startProgressLabel ?? inProgressLabel)}</Text></Pressable> : null}
     </View>
@@ -48,8 +48,6 @@ const styles = StyleSheet.create({
   actionLabel: { color: colors.textDim, fontSize: 11, lineHeight: 16, textAlign: 'center', fontWeight: '800', writingDirection: 'rtl' },
   actionLabelActive: { color: colors.accent },
   ratingRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
-  ratingHeading: { alignItems: 'center', gap: spacing.sm },
-  ratingCaption: { color: colors.textDim, fontSize: fontSizes.sm, fontWeight: '800' },
   progressButton: { minHeight: 42, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, marginTop: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.borderLight },
   progressButtonActive: { borderColor: colors.accent, backgroundColor: 'rgba(51,214,166,0.08)' },
   progressText: { color: colors.textDim, fontSize: fontSizes.sm, fontWeight: '800' },

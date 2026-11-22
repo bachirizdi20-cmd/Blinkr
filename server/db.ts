@@ -791,10 +791,32 @@ export async function getUserReview(userId: number, mediaType: string, mediaId: 
   return result[0];
 }
 
-export async function listUserReviews(userId: number): Promise<Review[]> {
+export async function listUserReviews(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(reviews).where(eq(reviews.userId, userId)).orderBy(desc(reviews.updatedAt));
+  const rows = await db.select({ review: reviews }).from(reviews)
+    .where(eq(reviews.userId, userId))
+    .orderBy(desc(reviews.updatedAt));
+  if (!rows.length) return [];
+
+  const reviewIds = rows.map(({ review }) => review.id);
+  const [likeRows, commentRows, myLikeRows] = await Promise.all([
+    db.select({ reviewId: reviewLikes.reviewId }).from(reviewLikes).where(inArray(reviewLikes.reviewId, reviewIds)),
+    db.select({ reviewId: reviewComments.reviewId }).from(reviewComments).where(inArray(reviewComments.reviewId, reviewIds)),
+    db.select({ reviewId: reviewLikes.reviewId }).from(reviewLikes).where(and(inArray(reviewLikes.reviewId, reviewIds), eq(reviewLikes.userId, userId))),
+  ]);
+  const likeCounts = new Map<number, number>();
+  const commentCounts = new Map<number, number>();
+  for (const row of likeRows) likeCounts.set(row.reviewId, (likeCounts.get(row.reviewId) ?? 0) + 1);
+  for (const row of commentRows) commentCounts.set(row.reviewId, (commentCounts.get(row.reviewId) ?? 0) + 1);
+  const likedByMe = new Set(myLikeRows.map((row) => row.reviewId));
+
+  return rows.map(({ review }) => ({
+    review,
+    likeCount: likeCounts.get(review.id) ?? 0,
+    commentCount: commentCounts.get(review.id) ?? 0,
+    likedByMe: likedByMe.has(review.id),
+  }));
 }
 
 export async function upsertReview(input: Omit<InsertReview, 'id' | 'createdAt' | 'updatedAt'>) {
