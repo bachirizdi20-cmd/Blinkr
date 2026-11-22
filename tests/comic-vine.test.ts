@@ -22,14 +22,14 @@ describe("Comic Vine integration", () => {
       number_of_total_results: 2,
       results: [
         { id: 4001, name: "No cover", image: null },
-        { id: 4002, name: "Has cover", image: { original_url: "https://comicvine.gamespot.com/cover.jpg" }, publisher: { name: "Publisher" } },
+        { id: 4002, resource_type: "issue", name: "Has cover", image: { original_url: "https://comicvine.gamespot.com/cover.jpg" }, publisher: { name: "Publisher" } },
       ],
     }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await searchComicVine(query, 1, 20);
     expect(result.results).toHaveLength(1);
-    expect(result.results[0]).toMatchObject({ id: 4002, title: "Has cover", coverUrl: "https://comicvine.gamespot.com/cover.jpg" });
+    expect(result.results[0]).toMatchObject({ id: 4002, resourceType: 'issue', title: "Has cover", coverUrl: "https://comicvine.gamespot.com/cover.jpg" });
     const request = fetchMock.mock.calls[0] as unknown as [URL, RequestInit];
     expect(String(request[0])).toContain("api_key=test-comicvine-key");
   });
