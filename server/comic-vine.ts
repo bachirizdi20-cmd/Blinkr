@@ -82,9 +82,9 @@ function normalize(value: unknown, defaultResourceType: 'issue' | 'volume' = 'is
   if (!id || !title) return null;
   const detailUrl = text(item.api_detail_url) ?? '';
   const declaredType = text(item.resource_type)?.toLowerCase();
-  const resourceType: 'issue' | 'volume' = declaredType?.includes('volume') || /\\/volume\\//i.test(detailUrl)
+  const resourceType: 'issue' | 'volume' = declaredType?.includes('volume') || /\/volume\//i.test(detailUrl)
     ? 'volume'
-    : declaredType?.includes('issue') || /\\/issue\\//i.test(detailUrl)
+    : declaredType?.includes('issue') || /\/issue\//i.test(detailUrl)
       ? 'issue'
       : defaultResourceType;
   const volume = item.volume && typeof item.volume === "object" ? item.volume as Record<string, unknown> : null;
@@ -103,7 +103,7 @@ function normalize(value: unknown, defaultResourceType: 'issue' | 'volume' = 'is
     publishDate: text(item.cover_date) ?? text(item.date_added),
     creators: names(item.person_credits ?? item.character_credits),
     rating: typeof item.rating === "number" ? item.rating : null,
-    sourceUrl: text(item.site_detail_url) ?? `https://comicvine.gamespot.com/issue/${id}/`,
+    sourceUrl: text(item.site_detail_url) ?? `https://comicvine.gamespot.com/${resourceType}/${resourceType === 'volume' ? '4050' : '4000'}-${id}/`,
   };
 }
 
