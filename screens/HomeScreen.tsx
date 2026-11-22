@@ -278,7 +278,7 @@ export default function HomeScreen() {
 
         <View style={styles.bookSection}>
           <View style={styles.bookSectionHeader}>
-            <View><Text style={styles.bookSectionTitle}>الكتب الرائجة</Text></View>
+            <View><Text style={styles.bookSectionTitle}>الكتب الرائجة</Text><Text style={styles.bookSectionSubtitle}>{bookItems.length.toLocaleString('ar')} كتاب</Text></View>
             <Pressable onPress={() => navigation.navigate('Search', { booksTrending: true })}><Text style={styles.bookSectionMore}>عرض الكل</Text></Pressable>
           </View>
           {bookTrendingQuery.isLoading && bookItems.length === 0 ? <View style={styles.bookLoading}><ActivityIndicator color={colors.accent} size="large" /></View>
