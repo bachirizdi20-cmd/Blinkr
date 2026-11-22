@@ -159,11 +159,33 @@ export async function consumeAuthToken(raw: string, kind: "verify_email" | "rese
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const tokenHash = createHash("sha256").update(raw).digest("hex");
-  const rows = await db.select().from(authTokens).where(and(eq(authTokens.tokenHash, tokenHash), eq(authTokens.kind, kind), isNull(authTokens.consumedAt), gt(authTokens.expiresAt, new Date()))).limit(1);
-  const token = rows[0];
-  if (!token) return undefined;
-  await db.update(authTokens).set({ consumedAt: new Date() }).where(eq(authTokens.id, token.id));
-  return token;
+  const now = new Date();
+
+  // Lock the matching row until consumption is committed. This makes token
+  // validation and consumption a single-use operation under concurrent requests.
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(authTokens)
+      .where(
+        and(
+          eq(authTokens.tokenHash, tokenHash),
+          eq(authTokens.kind, kind),
+          isNull(authTokens.consumedAt),
+          gt(authTokens.expiresAt, now),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    const token = rows[0];
+    if (!token) return undefined;
+
+    await tx
+      .update(authTokens)
+      .set({ consumedAt: now })
+      .where(and(eq(authTokens.id, token.id), isNull(authTokens.consumedAt)));
+    return token;
+  });
 }
 
 export async function markEmailVerified(userId: number) {
