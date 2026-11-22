@@ -104,6 +104,7 @@ export default function DetailScreen() {
   const load = useCallback(async () => {
     const version = ++loadVersion.current;
     let hasCached = false;
+    setDetail(fallbackDetail);
     setLoading(true);
     setError(null);
     if (!Number.isInteger(id) || id <= 0) {
