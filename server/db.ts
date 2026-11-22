@@ -212,16 +212,7 @@ export async function getUserByEmail(email: string) {
   }
 }
 
-export async function getLoginFailureRecord(email: string) {
-  const database = await getDb();
-  if (!database) throw new Error("Database not available");
-  const emailHash = createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
-  const rows = await database.select({ attemptCount: loginAttempts.attemptCount, windowStartedAt: loginAttempts.windowStartedAt })
-    .from(loginAttempts).where(eq(loginAttempts.emailHash, emailHash)).limit(1);
-  return rows[0] ?? null;
-}
-
-export async function recordLoginFailureAttempt(email: string, windowMs: number) {
+export async function registerLoginAttempt(email: string, windowMs: number) {
   const database = await getDb();
   if (!database) throw new Error("Database not available");
   const now = new Date();
@@ -235,7 +226,9 @@ export async function recordLoginFailureAttempt(email: string, windowMs: number)
   });
   // Keep the table bounded without storing raw email addresses.
   await database.delete(loginAttempts).where(lt(loginAttempts.windowStartedAt, new Date(now.getTime() - 24 * 60 * 60 * 1000)));
-  return getLoginFailureRecord(email);
+  const rows = await database.select({ attemptCount: loginAttempts.attemptCount })
+    .from(loginAttempts).where(eq(loginAttempts.emailHash, emailHash)).limit(1);
+  return rows[0]?.attemptCount ?? 1;
 }
 
 export async function clearLoginFailureAttempts(email: string) {
