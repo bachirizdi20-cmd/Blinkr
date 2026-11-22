@@ -1,6 +1,6 @@
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { ContentStackParamList } from "../navigation/types";
-import type { ReviewMediaType } from "../types/tmdb";
+import type { ReviewMediaType, NormalizedItem } from "../types/tmdb";
 import type { BookSummary } from "../types/books";
 import type { ComicSummary } from "../types/comics";
 import { posterUrl } from "./tmdb";
@@ -24,6 +24,12 @@ export interface CatalogItemLink {
   posterPath?: string | null;
   date?: string | null;
   voteAverage?: number | null;
+  overview?: string | null;
+  backdropPath?: string | null;
+  voteCount?: number | null;
+  genreIds?: number[];
+  originalLanguage?: string;
+  isAnime?: boolean;
   book?: Partial<BookSummary>;
   comic?: Partial<ComicSummary>;
 }
@@ -66,5 +72,19 @@ export function openCatalogItem(
     return;
   }
 
-  navigation.navigate("Detail", { mediaType: item.mediaType, id: item.mediaId });
+  const fallback: Partial<NormalizedItem> = {
+    id: item.mediaId,
+    mediaType: item.mediaType,
+    title: item.title ?? "عنوان",
+    overview: item.overview ?? "",
+    posterPath: item.posterPath ?? null,
+    backdropPath: item.backdropPath ?? null,
+    date: item.date ?? "",
+    voteAverage: item.voteAverage ?? 0,
+    voteCount: item.voteCount ?? 0,
+    genreIds: item.genreIds ?? [],
+    originalLanguage: item.originalLanguage ?? "",
+    isAnime: item.isAnime ?? false,
+  };
+  navigation.navigate("Detail", { mediaType: item.mediaType, id: item.mediaId, fallback });
 }
