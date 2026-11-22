@@ -27,7 +27,7 @@ import ApiErrorState from '../components/ApiErrorState';
 import { ContentStackParamList } from '../navigation/types';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
 import { fetchDetail, readCachedDetail, posterUrl, backdropUrl, profileUrl } from '../lib/tmdb';
-import { DetailResult } from '../types/tmdb';
+import { DetailResult, MediaType, NormalizedItem } from '../types/tmdb';
 import { useLibrary, mediaKey } from '../context/LibraryContext';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { trpc } from '../lib/trpc';
@@ -38,6 +38,36 @@ type RouteT = RouteProp<ContentStackParamList, 'Detail'>;
 
 const { width, height } = Dimensions.get('window');
 const BACKDROP_HEIGHT = height * 0.36;
+
+function makeFallbackDetail(mediaType: MediaType, id: number, fallback?: Partial<NormalizedItem>): DetailResult | null {
+  if (!fallback || typeof fallback.title !== 'string' || !fallback.title.trim()) return null;
+  return {
+    id,
+    mediaType,
+    title: fallback.title.trim(),
+    overview: typeof fallback.overview === 'string' ? fallback.overview : '',
+    posterPath: fallback.posterPath ?? null,
+    backdropPath: fallback.backdropPath ?? null,
+    date: typeof fallback.date === 'string' ? fallback.date : '',
+    voteAverage: typeof fallback.voteAverage === 'number' ? fallback.voteAverage : 0,
+    voteCount: typeof fallback.voteCount === 'number' ? fallback.voteCount : 0,
+    genreIds: Array.isArray(fallback.genreIds) ? fallback.genreIds : [],
+    originalLanguage: typeof fallback.originalLanguage === 'string' ? fallback.originalLanguage : '',
+    isAnime: Boolean(fallback.isAnime),
+    genres: [],
+    runtimeMinutes: null,
+    tagline: '',
+    status: '',
+    cast: [],
+    crew: [],
+    videos: [],
+    similar: [],
+    seasons: [],
+    numberOfSeasons: 0,
+    numberOfEpisodes: 0,
+    reviews: [],
+  };
+}
 
 function formatReviewDate(value: string) {
   if (!value) return 'مراجعة من TMDB';
@@ -65,7 +95,8 @@ export default function DetailScreen() {
   const myReviewQuery = trpc.reviews.getMine.useQuery({ mediaType, mediaId: id }, { enabled: !!user, retry: false });
   const myStatusQuery = trpc.library.getStatus.useQuery({ mediaType, mediaId: id }, { enabled: !!user, retry: false });
 
-  const [detail, setDetail] = useState<DetailResult | null>(null);
+  const fallbackDetail = useMemo(() => makeFallbackDetail(mediaType, id, route.params.fallback), [mediaType, id, route.params.fallback]);
+  const [detail, setDetail] = useState<DetailResult | null>(() => fallbackDetail);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const loadVersion = useRef(0);
@@ -103,11 +134,11 @@ export default function DetailScreen() {
       setDetail(data);
     } catch (err) {
       console.warn(err);
-      if (!hasCached && version === loadVersion.current) setError('تعذر تحميل بيانات هذا العنوان. تحقق من الاتصال وحاول مجددًا.');
+      if (!hasCached && !fallbackDetail && version === loadVersion.current) setError('تعذر تحميل بيانات هذا العنوان. تحقق من الاتصال وحاول مجددًا.');
     } finally {
       if (version === loadVersion.current) setLoading(false);
     }
-  }, [mediaType, id]);
+  }, [mediaType, id, fallbackDetail]);
 
   useEffect(() => {
     void load();
@@ -137,7 +168,7 @@ export default function DetailScreen() {
     [detail, mediaType, id]
   );
 
-  if (loading) return <LoadingView />;
+  if (loading && !detail) return <LoadingView />;
   if (error || !detail) {
     return (
       <View style={styles.stateScreen}>
