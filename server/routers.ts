@@ -10,7 +10,7 @@ import { sdk } from "./_core/sdk";
 import { hashPassword, normalizeEmail, verifyPassword } from "./password";
 import { storagePut, storageDelete, storageKeyFromUrl, isStorageConfigured, isStorageDeletionSupported } from "./storage";
 import { AvatarImageInputError, normalizeAvatarDataUri } from "./avatar-image";
-import { assertLoginAllowed, clearLoginFailures, recordLoginFailure, LoginRateLimitError } from "./rate-limit";
+import { assertLoginAllowed, clearLoginFailures, LoginRateLimitError } from "./rate-limit";
 import { createAuthToken, consumeAuthToken, markEmailVerified, updateUserPassword } from "./db";
 import { sendAuthEmail } from "./email";
 import { verifyFirebaseIdToken } from "./_core/firebase-auth";
@@ -132,7 +132,6 @@ export const appRouter = router({
         const user = await db.getUserByEmail(email);
         const valid = Boolean(user?.passwordHash && await verifyPassword(input.password, user.passwordHash));
         if (!user || !valid) {
-          await recordLoginFailure(email);
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Email or password is incorrect" });
         }
         await clearLoginFailures(email);
