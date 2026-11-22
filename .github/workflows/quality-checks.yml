@@ -24,5 +24,9 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: TypeScript check
         run: pnpm check
+      - name: Lint
+        run: pnpm lint
+      - name: Build server
+        run: pnpm build
       - name: Tests
         run: pnpm test
