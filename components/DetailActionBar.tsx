@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import FiveStarRating from './FiveStarRating';
+import RatingStepper from './RatingStepper';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 
 type Props = {
@@ -48,8 +48,6 @@ const styles = StyleSheet.create({
   actionLabel: { color: colors.textDim, fontSize: 11, lineHeight: 16, textAlign: 'center', fontWeight: '800', writingDirection: 'rtl' },
   actionLabelActive: { color: colors.accent },
   ratingRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
-  ratingHeading: { alignItems: 'center', gap: spacing.sm },
-  ratingCaption: { color: colors.textDim, fontSize: fontSizes.sm, fontWeight: '800' },
   progressButton: { minHeight: 42, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, marginTop: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.borderLight },
   progressButtonActive: { borderColor: colors.accent, backgroundColor: 'rgba(51,214,166,0.08)' },
   progressText: { color: colors.textDim, fontSize: fontSizes.sm, fontWeight: '800' },
