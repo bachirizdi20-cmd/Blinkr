@@ -10,7 +10,7 @@ import { sdk } from "./_core/sdk";
 import { hashPassword, normalizeEmail, verifyPassword } from "./password";
 import { storagePut, storageDelete, storageKeyFromUrl, isStorageConfigured, isStorageDeletionSupported } from "./storage";
 import { AvatarImageInputError, normalizeAvatarDataUri } from "./avatar-image";
-import { assertLoginAllowed, clearLoginFailures, recordLoginFailure } from "./rate-limit";
+import { assertLoginAllowed, clearLoginFailures, recordLoginFailure, LoginRateLimitError } from "./rate-limit";
 import { createAuthToken, consumeAuthToken, markEmailVerified, updateUserPassword } from "./db";
 import { sendAuthEmail } from "./email";
 import { verifyFirebaseIdToken } from "./_core/firebase-auth";
@@ -122,17 +122,20 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const email = normalizeEmail(input.email);
         try {
-          assertLoginAllowed(email);
-        } catch {
-          throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many failed attempts. Please wait and try again." });
+          await assertLoginAllowed(email);
+        } catch (error) {
+          if (error instanceof LoginRateLimitError) {
+            throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many failed attempts. Please wait and try again." });
+          }
+          throw error;
         }
         const user = await db.getUserByEmail(email);
         const valid = Boolean(user?.passwordHash && await verifyPassword(input.password, user.passwordHash));
         if (!user || !valid) {
-          recordLoginFailure(email);
+          await recordLoginFailure(email);
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Email or password is incorrect" });
         }
-        clearLoginFailures(email);
+        await clearLoginFailures(email);
 
         await db.upsertUser({ openId: user.openId, lastSignedIn: new Date() });
         const sessionToken = await sdk.createSessionToken(user.openId, { name: user.name ?? email });
