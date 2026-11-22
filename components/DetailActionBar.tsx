@@ -29,7 +29,7 @@ export default function DetailActionBar({ completed, inList, completionLabel, li
         <Action icon={completed ? 'checkmark-circle' : 'checkmark-circle-outline'} label={completionLabel} active={completed} onPress={onToggleCompleted} />
       </View>
       <View style={styles.ratingRow}>
-        <View style={styles.ratingHeading}><Text style={styles.ratingCaption}>تقييمك</Text><FiveStarRating rating={rating} onChange={onRatingChange} size={22} /></View>
+        <RatingStepper rating={rating} onChange={onRatingChange} />
       </View>
       {onToggleInProgress && inProgressLabel ? <Pressable style={[styles.progressButton, inProgress && styles.progressButtonActive]} onPress={onToggleInProgress} accessibilityRole="button" accessibilityLabel={inProgress ? inProgressLabel : (startProgressLabel ?? inProgressLabel)}><Ionicons name={inProgress ? 'play-circle' : 'play-circle-outline'} size={18} color={inProgress ? colors.accent : colors.textDim} /><Text style={[styles.progressText, inProgress && styles.progressTextActive]}>{inProgress ? inProgressLabel : (startProgressLabel ?? inProgressLabel)}</Text></Pressable> : null}
     </View>
