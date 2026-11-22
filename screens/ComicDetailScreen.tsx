@@ -28,6 +28,7 @@ function normalizeComic(value?: Partial<ComicSummary> | null): ComicSummary | nu
   if (!Number.isInteger(id) || id <= 0 || !title) return null;
   return {
     id,
+    resourceType: value.resourceType === 'volume' ? 'volume' : value.resourceType === 'issue' ? 'issue' : undefined,
     title,
     issueNumber: typeof value.issueNumber === 'string' ? value.issueNumber : null,
     volumeName: typeof value.volumeName === 'string' ? value.volumeName : null,
@@ -51,7 +52,7 @@ export default function ComicDetailScreen() {
   const lib = useLibrary();
   const [cachedComic, setCachedComic] = useState<Partial<ComicSummary> | undefined>(fallback);
   const validId = Number.isInteger(id) && id > 0;
-  const detailQuery = trpc.comics.detail.useQuery({ id }, { enabled: validId, retry: 1 });
+  const detailQuery = trpc.comics.detail.useQuery({ id, ...(fallback?.resourceType ? { resourceType: fallback.resourceType } : {}) }, { enabled: validId, retry: 1 });
   useEffect(() => {
     void readPersistentCache<Partial<ComicSummary>>(`comic-detail:${id}`).then((value) => { if (value) setCachedComic((current) => current ?? value); });
   }, [id]);
