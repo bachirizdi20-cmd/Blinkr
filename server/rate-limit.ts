@@ -10,15 +10,11 @@ export class LoginRateLimitError extends Error {
   }
 }
 
+// Reserve attempts atomically before password verification so concurrent requests
+// cannot all pass the same pre-check and exceed the configured limit.
 export async function assertLoginAllowed(email: string) {
-  const record = await db.getLoginFailureRecord(email);
-  if (!record) return;
-  if (Date.now() - record.windowStartedAt.getTime() >= WINDOW_MS) return;
-  if (record.attemptCount >= MAX_FAILURES) throw new LoginRateLimitError();
-}
-
-export async function recordLoginFailure(email: string) {
-  await db.recordLoginFailureAttempt(email, WINDOW_MS);
+  const attemptCount = await db.registerLoginAttempt(email, WINDOW_MS);
+  if (attemptCount > MAX_FAILURES) throw new LoginRateLimitError();
 }
 
 export async function clearLoginFailures(email: string) {
