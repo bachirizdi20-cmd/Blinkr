@@ -161,7 +161,7 @@ export default function HomeScreen() {
   };
 
   const openDetail = (item: NormalizedItem) => {
-    navigation.navigate('Detail', { mediaType: item.mediaType, id: item.id });
+    navigation.navigate('Detail', { mediaType: item.mediaType, id: item.id, fallback: item });
   };
 
   const visibleTrending = trending.length ? trending : cachedTrending;

@@ -87,7 +87,7 @@ export default function CategoryListScreen() {
             <PosterCard
               item={item}
               width={CARD_WIDTH}
-              onPress={() => navigation.navigate('Detail', { mediaType: item.mediaType, id: item.id })}
+              onPress={() => navigation.navigate('Detail', { mediaType: item.mediaType, id: item.id, fallback: item })}
             />
           )}
           onEndReachedThreshold={0.5}
