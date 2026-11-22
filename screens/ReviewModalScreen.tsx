@@ -21,7 +21,7 @@ import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { trpc } from '../lib/trpc';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
 import { catalogPosterUrl } from '../lib/catalog-navigation';
-import FiveStarRating from '../components/FiveStarRating';
+import RatingStepper from '../components/RatingStepper';
 
 type RouteT = RouteProp<ContentStackParamList, 'ReviewModal'>;
 
@@ -148,9 +148,7 @@ export default function ReviewModalScreen() {
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>تقييمك</Text>
-            <View style={styles.ratingControls}><FiveStarRating rating={rating} onChange={(value) => { setRating(value); setEdited(true); }} size={30} showValue /></View>
-            {rating > 0 ? <Pressable onPress={() => { setRating(0); setEdited(true); }} style={{ alignSelf: 'center', marginTop: spacing.sm }}><Text style={styles.clearRatingText}>إزالة التقييم</Text></Pressable> : null}
+            <RatingStepper rating={rating} onChange={(value) => { setRating(value); setEdited(true); }} />
           </View>
 
           <View style={styles.section}>
