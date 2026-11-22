@@ -21,6 +21,23 @@ describe('Hardcover book images and navigation', () => {
     openCatalogItem(nav, { mediaType: 'book', mediaId: 123 });
     expect(navigate).toHaveBeenLastCalledWith('BookDetail', { workId: 123, book: undefined });
     openCatalogItem(nav, { mediaType: 'movie', mediaId: 42 });
-    expect(navigate).toHaveBeenLastCalledWith('Detail', { mediaType: 'movie', id: 42 });
+    expect(navigate).toHaveBeenLastCalledWith('Detail', {
+      mediaType: 'movie',
+      id: 42,
+      fallback: {
+        id: 42,
+        mediaType: 'movie',
+        title: 'عنوان',
+        overview: '',
+        posterPath: null,
+        backdropPath: null,
+        date: '',
+        voteAverage: 0,
+        voteCount: 0,
+        genreIds: [],
+        originalLanguage: '',
+        isAnime: false,
+      },
+    });
   });
 });
