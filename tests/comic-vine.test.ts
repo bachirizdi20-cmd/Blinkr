@@ -33,8 +33,6 @@ describe("Comic Vine integration", () => {
     const request = fetchMock.mock.calls[0] as unknown as [URL, RequestInit];
     expect(String(request[0])).toContain("api_key=test-comicvine-key");
   });
-});
-
 
   it("preserves volume identity and requests the volume endpoint instead of an issue with the same numeric suffix", async () => {
     const id = 987654321;
@@ -58,3 +56,4 @@ describe("Comic Vine integration", () => {
     expect(result).toMatchObject({ id, resourceType: "volume", title: "Volume identity test" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+});
