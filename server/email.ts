@@ -23,5 +23,36 @@ export async function sendAuthEmail(input: { to: string; subject: string; title:
 }
 
 export function getPublicApiBaseUrl() {
-  return process.env.PUBLIC_API_BASE_URL || "http://localhost:3000";
+  const configuredUrl = process.env.PUBLIC_API_BASE_URL?.trim();
+
+  if (!configuredUrl) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("PUBLIC_API_BASE_URL must be configured in production");
+    }
+    return "http://localhost:3000";
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(configuredUrl);
+  } catch {
+    throw new Error("PUBLIC_API_BASE_URL must be a valid absolute URL");
+  }
+
+  if (
+    (parsed.protocol !== "https:" && parsed.protocol !== "http:") ||
+    parsed.username ||
+    parsed.password ||
+    parsed.search ||
+    parsed.hash ||
+    (parsed.pathname !== "/" && parsed.pathname !== "")
+  ) {
+    throw new Error("PUBLIC_API_BASE_URL must be an HTTP(S) origin without credentials, path, query, or fragment");
+  }
+
+  if (process.env.NODE_ENV === "production" && parsed.protocol !== "https:") {
+    throw new Error("PUBLIC_API_BASE_URL must use HTTPS in production");
+  }
+
+  return parsed.origin;
 }
