@@ -28,10 +28,10 @@ function getParentDomain(hostname: string): string | undefined {
   }
 
   const matchedDomain = SHARED_COOKIE_PARENT_DOMAINS.find(
-    (domain) => normalizedHost.endsWith(\`.\${domain}\`),
+    (domain) => normalizedHost.endsWith("." + domain),
   );
 
-  return matchedDomain ? \`.\${matchedDomain}\` : undefined;
+  return matchedDomain ? "." + matchedDomain : undefined;
 }
 
 export function getSessionCookieOptions(
