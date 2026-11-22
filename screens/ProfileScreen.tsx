@@ -243,6 +243,7 @@ export default function ProfileScreen() {
                     row={row}
                     index={index}
                     isOwn
+                    fullWidth
                     onOpenDetail={(media) => openCatalogItem(navigation, media)}
                     onChanged={() => remoteReviewsQuery.refetch()}
                     onEdit={(entry) => navigation.navigate('ReviewModal', {
