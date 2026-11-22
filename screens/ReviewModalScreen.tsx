@@ -143,7 +143,7 @@ export default function ReviewModalScreen() {
             <View style={styles.mediaCopy}>
               <Text style={styles.mediaTitle} numberOfLines={3}>{title}</Text>
               <Text style={styles.mediaMeta}>{mediaLabel}</Text>
-              <View style={styles.mediaRating}><Ionicons name="star" size={17} color={colors.accent} /><Text style={styles.mediaRatingText}>{rating > 0 ? `${String(rating / 2).replace('.', ',')} / 5` : '— / 5'}</Text></View>
+              <View style={styles.mediaRating}><Ionicons name="star" size={17} color={colors.accent} /><Text style={styles.mediaRatingText}>{rating > 0 ? `${rating.toFixed(1).replace(/\.0$/, '')}/10` : '—/10'}</Text></View>
             </View>
           </View>
 
