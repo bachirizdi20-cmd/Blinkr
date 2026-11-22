@@ -218,3 +218,10 @@ export const chatMessages = mysqlTable("chat_messages", {
 export type Conversation = typeof conversations.$inferSelect;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type InsertChatMessage = typeof chatMessages.$inferInsert;
+
+
+export const loginAttempts = mysqlTable("login_attempts", {
+  emailHash: varchar("emailHash", { length: 64 }).primaryKey(),
+  attemptCount: int("attemptCount").notNull().default(0),
+  windowStartedAt: timestamp("windowStartedAt").notNull(),
+}, (table) => ({ windowIdx: index("login_attempts_window_idx").on(table.windowStartedAt) }));
