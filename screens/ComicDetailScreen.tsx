@@ -28,6 +28,7 @@ function normalizeComic(value?: Partial<ComicSummary> | null): ComicSummary | nu
   if (!Number.isInteger(id) || id <= 0 || !title) return null;
   return {
     id,
+    resourceType: value.resourceType === 'volume' ? 'volume' : value.resourceType === 'issue' ? 'issue' : undefined,
     title,
     issueNumber: typeof value.issueNumber === 'string' ? value.issueNumber : null,
     volumeName: typeof value.volumeName === 'string' ? value.volumeName : null,
@@ -51,13 +52,20 @@ export default function ComicDetailScreen() {
   const lib = useLibrary();
   const [cachedComic, setCachedComic] = useState<Partial<ComicSummary> | undefined>(fallback);
   const validId = Number.isInteger(id) && id > 0;
-  const detailQuery = trpc.comics.detail.useQuery({ id }, { enabled: validId, retry: 1 });
+  const detailCacheKey = `comic-detail:${fallback?.resourceType ?? 'legacy'}:${id}`;
+  const detailQuery = trpc.comics.detail.useQuery({ id, ...(fallback?.resourceType ? { resourceType: fallback.resourceType } : {}) }, { enabled: validId, retry: 1 });
   useEffect(() => {
-    void readPersistentCache<Partial<ComicSummary>>(`comic-detail:${id}`).then((value) => { if (value) setCachedComic((current) => current ?? value); });
-  }, [id]);
+    let active = true;
+    void readPersistentCache<Partial<ComicSummary>>(detailCacheKey).then(async (value) => {
+      if (!active) return;
+      const legacy = value ?? (fallback?.resourceType ? null : await readPersistentCache<Partial<ComicSummary>>(`comic-detail:${id}`));
+      if (active && legacy) setCachedComic((current) => current ?? legacy);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [detailCacheKey, fallback?.resourceType, id]);
   useEffect(() => {
-    if (detailQuery.data) void writePersistentCache(`comic-detail:${id}`, detailQuery.data);
-  }, [id, detailQuery.data]);
+    if (detailQuery.data) void writePersistentCache(detailCacheKey, detailQuery.data);
+  }, [detailCacheKey, detailQuery.data]);
   const comic = useMemo(() => normalizeComic(detailQuery.data ?? cachedComic), [detailQuery.data, cachedComic]);
   const statusQuery = trpc.library.getStatus.useQuery({ mediaType: 'comic', mediaId: id }, { enabled: Boolean(user), retry: false });
   const setStatusMutation = trpc.library.setStatus.useMutation();

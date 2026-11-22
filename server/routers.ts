@@ -445,8 +445,8 @@ export const appRouter = router({
       try { return await searchComicVine(input.query, input.page, input.limit); }
       catch (error) { throw new TRPCError({ code: "BAD_GATEWAY", message: error instanceof ComicVineError ? error.message : "تعذر البحث في Comic Vine." }); }
     }),
-    detail: publicProcedure.input(z.object({ id: z.number().int().positive() })).query(async ({ input }) => {
-      try { return await getComicVineComic(input.id); }
+    detail: publicProcedure.input(z.object({ id: z.number().int().positive(), resourceType: z.enum(["issue", "volume"]).optional() })).query(async ({ input }) => {
+      try { return await getComicVineComic(input.id, input.resourceType); }
       catch (error) { throw new TRPCError({ code: error instanceof ComicVineError && error.status === 404 ? "NOT_FOUND" : "BAD_GATEWAY", message: error instanceof ComicVineError ? error.message : "تعذر جلب تفاصيل الكوميك." }); }
     }),
     similar: publicProcedure.input(z.object({ id: z.number().int().positive(), title: z.string().min(1), publisher: z.string().nullable().optional(), limit: z.number().int().min(1).max(12).default(8) })).query(async ({ input }) => {
