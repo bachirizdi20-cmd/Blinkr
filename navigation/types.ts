@@ -1,4 +1,4 @@
-import { MediaType, ReviewMediaType } from '../types/tmdb';
+import { MediaType, ReviewMediaType, NormalizedItem } from '../types/tmdb';
 import { FeedDescriptor } from '../lib/tmdb';
 import { PeopleFilter } from '../types/social';
 import { BookSummary } from '../types/books';
@@ -10,7 +10,7 @@ export type ContentStackParamList = {
   WatchlistMain: undefined;
   CreateMain: undefined;
   ProfileMain: undefined;
-  Detail: { mediaType: MediaType; id: number };
+  Detail: { mediaType: MediaType; id: number; fallback?: Partial<NormalizedItem> };
   BookDetail: { workId: number; book?: Partial<BookSummary> };
   AuthorBooks: { authorName: string; excludeWorkId: number };
   ComicDetail: { id: number; comic?: Partial<ComicSummary> };
