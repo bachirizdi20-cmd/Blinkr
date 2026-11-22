@@ -1,35 +1,26 @@
+import * as db from "./db";
+
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_FAILURES = 8;
-const failures = new Map<string, { count: number; firstAt: number }>();
 
-function keyFor(email: string) {
-  return email.trim().toLowerCase();
+export class LoginRateLimitError extends Error {
+  constructor() {
+    super("Too many failed attempts. Please wait 15 minutes and try again.");
+    this.name = "LoginRateLimitError";
+  }
 }
 
-export function assertLoginAllowed(email: string) {
-  const key = keyFor(email);
-  const record = failures.get(key);
+export async function assertLoginAllowed(email: string) {
+  const record = await db.getLoginFailureRecord(email);
   if (!record) return;
-  if (Date.now() - record.firstAt >= WINDOW_MS) {
-    failures.delete(key);
-    return;
-  }
-  if (record.count >= MAX_FAILURES) {
-    throw new Error('Too many failed attempts. Please wait 15 minutes and try again.');
-  }
+  if (Date.now() - record.windowStartedAt.getTime() >= WINDOW_MS) return;
+  if (record.attemptCount >= MAX_FAILURES) throw new LoginRateLimitError();
 }
 
-export function recordLoginFailure(email: string) {
-  const key = keyFor(email);
-  const current = failures.get(key);
-  const now = Date.now();
-  if (!current || now - current.firstAt >= WINDOW_MS) {
-    failures.set(key, { count: 1, firstAt: now });
-  } else {
-    failures.set(key, { ...current, count: current.count + 1 });
-  }
+export async function recordLoginFailure(email: string) {
+  await db.recordLoginFailureAttempt(email, WINDOW_MS);
 }
 
-export function clearLoginFailures(email: string) {
-  failures.delete(keyFor(email));
+export async function clearLoginFailures(email: string) {
+  await db.clearLoginFailureAttempts(email);
 }
