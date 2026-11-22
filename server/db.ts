@@ -872,56 +872,71 @@ export async function deleteMediaStatus(userId: number, mediaType: string, media
 }
 
 export async function deleteUserAccount(userId: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
 
-  // Best-effort: remove the user's avatar from storage before wiping their data.
-  const profile = await db.select({ avatarUrl: userData.avatarUrl }).from(userData).where(eq(userData.userId, userId)).limit(1);
-  const avatarKey = storageKeyFromUrl(profile[0]?.avatarUrl ?? null);
-  if (avatarKey) {
-    try {
-      await storageDelete(avatarKey);
-    } catch (error) {
-      console.error("[Account] Failed to delete avatar during account deletion:", error);
-    }
-  }
-  try {
-    await deleteAvatarBlobsByUser(userId);
-  } catch (error) {
-    console.error("[Account] Failed to delete stored avatar blobs:", error);
-  }
-
-  // Conversations this user is part of, so we can also drop their messages.
-  const myConversations = await db.select({ id: conversations.id }).from(conversations).where(or(eq(conversations.participantAId, userId), eq(conversations.participantBId, userId)));
+  // Collect external object keys before the transaction; external storage cannot
+  // participate in the database transaction.
+  const [profileRows, myReviews, myConversations] = await Promise.all([
+    database.select({ avatarUrl: userData.avatarUrl }).from(userData).where(eq(userData.userId, userId)).limit(1),
+    database.select({ id: reviews.id }).from(reviews).where(eq(reviews.userId, userId)),
+    database.select({ id: conversations.id }).from(conversations).where(or(eq(conversations.participantAId, userId), eq(conversations.participantBId, userId))),
+  ]);
+  const reviewIds = myReviews.map((row) => row.id);
   const conversationIds = myConversations.map((row) => row.id);
+  const commentRows = reviewIds.length
+    ? await database.select({ id: reviewComments.id }).from(reviewComments)
+        .where(or(eq(reviewComments.userId, userId), inArray(reviewComments.reviewId, reviewIds)))
+    : await database.select({ id: reviewComments.id }).from(reviewComments).where(eq(reviewComments.userId, userId));
+  const commentIds = commentRows.map((row) => row.id);
+  const mediaRows = conversationIds.length
+    ? await database.select({ mediaKey: chatMessages.mediaKey }).from(chatMessages).where(inArray(chatMessages.conversationId, conversationIds))
+    : [];
+  const externalKeys = new Set<string>();
+  const avatarKey = storageKeyFromUrl(profileRows[0]?.avatarUrl ?? null);
+  if (avatarKey) externalKeys.add(avatarKey);
+  for (const row of mediaRows) if (row.mediaKey) externalKeys.add(row.mediaKey);
 
-  if (conversationIds.length) {
-    const mediaRows = await db.select({ mediaKey: chatMessages.mediaKey }).from(chatMessages).where(inArray(chatMessages.conversationId, conversationIds));
-    for (const row of mediaRows) {
-      if (!row.mediaKey) continue;
-      try {
-        await storageDelete(row.mediaKey);
-      } catch (error) {
-        console.error("[Account] Failed to delete chat media during account deletion:", error);
-      }
+  await database.transaction(async (tx) => {
+    if (reviewIds.length) {
+      await tx.delete(reviewLikes).where(inArray(reviewLikes.reviewId, reviewIds));
+      await tx.delete(reviewComments).where(inArray(reviewComments.reviewId, reviewIds));
+      await tx.delete(notifications).where(inArray(notifications.reviewId, reviewIds));
+      await tx.delete(reports).where(and(eq(reports.targetType, "review"), inArray(reports.targetId, reviewIds)));
     }
-    await db.delete(chatMessages).where(inArray(chatMessages.conversationId, conversationIds));
-    await db.delete(conversations).where(inArray(conversations.id, conversationIds));
+    if (commentIds.length) {
+      await tx.delete(reports).where(and(eq(reports.targetType, "comment"), inArray(reports.targetId, commentIds)));
+    }
+    if (conversationIds.length) {
+      await tx.delete(notifications).where(inArray(notifications.conversationId, conversationIds));
+      await tx.delete(chatMessages).where(inArray(chatMessages.conversationId, conversationIds));
+      await tx.delete(conversations).where(inArray(conversations.id, conversationIds));
+    }
+
+    await tx.delete(reviewLikes).where(eq(reviewLikes.userId, userId));
+    await tx.delete(reviewComments).where(eq(reviewComments.userId, userId));
+    await tx.delete(notifications).where(or(eq(notifications.userId, userId), eq(notifications.actorId, userId)));
+    await tx.delete(reports).where(eq(reports.reporterId, userId));
+    await tx.delete(reports).where(and(eq(reports.targetType, "user"), eq(reports.targetId, userId)));
+    await tx.delete(blocks).where(or(eq(blocks.userId, userId), eq(blocks.blockedUserId, userId)));
+    await tx.delete(followRequests).where(or(eq(followRequests.requesterId, userId), eq(followRequests.targetId, userId)));
+    await tx.delete(follows).where(or(eq(follows.followerId, userId), eq(follows.followingId, userId)));
+    await tx.delete(authTokens).where(eq(authTokens.userId, userId));
+    await tx.delete(reviews).where(eq(reviews.userId, userId));
+    await tx.delete(mediaStatuses).where(eq(mediaStatuses.userId, userId));
+    await tx.delete(avatarBlobs).where(eq(avatarBlobs.userId, userId));
+    await tx.delete(userData).where(eq(userData.userId, userId));
+    await tx.delete(users).where(eq(users.id, userId));
+  });
+
+  // Delete remote files only after the database commit succeeds.
+  for (const key of externalKeys) {
+    try {
+      await storageDelete(key);
+    } catch (error) {
+      console.error("[Account] Failed to delete stored media after account deletion:", error);
+    }
   }
-
-  await db.delete(reviewLikes).where(eq(reviewLikes.userId, userId));
-  await db.delete(reviewComments).where(eq(reviewComments.userId, userId));
-  await db.delete(notifications).where(or(eq(notifications.userId, userId), eq(notifications.actorId, userId)));
-  await db.delete(blocks).where(or(eq(blocks.userId, userId), eq(blocks.blockedUserId, userId)));
-  await db.delete(reports).where(eq(reports.reporterId, userId));
-  await db.delete(followRequests).where(or(eq(followRequests.requesterId, userId), eq(followRequests.targetId, userId)));
-  await db.delete(follows).where(or(eq(follows.followerId, userId), eq(follows.followingId, userId)));
-  await db.delete(authTokens).where(eq(authTokens.userId, userId));
-
-  await db.delete(reviews).where(eq(reviews.userId, userId));
-  await db.delete(mediaStatuses).where(eq(mediaStatuses.userId, userId));
-  await db.delete(userData).where(eq(userData.userId, userId));
-  await db.delete(users).where(eq(users.id, userId));
 }
 
 
