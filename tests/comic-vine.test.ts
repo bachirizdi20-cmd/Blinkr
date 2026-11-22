@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ENV } from "../server/_core/env";
-import { searchComicVine } from "../server/comic-vine";
+import { getComicVineComic, searchComicVine } from "../server/comic-vine";
 
 const originalKey = ENV.comicVineApiKey;
 
@@ -34,3 +34,27 @@ describe("Comic Vine integration", () => {
     expect(String(request[0])).toContain("api_key=test-comicvine-key");
   });
 });
+
+
+  it("preserves volume identity and requests the volume endpoint instead of an issue with the same numeric suffix", async () => {
+    const id = 987654321;
+    const fetchMock = vi.fn(async (input: URL | RequestInfo) => {
+      const url = String(input);
+      expect(url).toContain(`/volume/4050-${id}/`);
+      return jsonResponse({
+        status_code: 1,
+        results: {
+          id: `4050-${id}`,
+          resource_type: "volume",
+          api_detail_url: `https://comicvine.gamespot.com/api/volume/4050-${id}/`,
+          name: "Volume identity test",
+          image: { original_url: "https://comicvine.gamespot.com/volume-cover.jpg" },
+        },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getComicVineComic(id, "volume");
+    expect(result).toMatchObject({ id, resourceType: "volume", title: "Volume identity test" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
