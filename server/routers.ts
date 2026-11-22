@@ -437,7 +437,7 @@ export const appRouter = router({
       }),
   }),
   comics: router({
-    trending: publicProcedure.input(z.object({ limit: z.number().int().min(1).max(20).default(12) }).optional()).query(async ({ input }) => {
+    trending: publicProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(100) }).optional()).query(async ({ input }) => {
       try { return await getTrendingComicVine(input?.limit ?? 12); }
       catch (error) { throw new TRPCError({ code: error instanceof ComicVineError && (error.status === 401 || error.status === 403) ? "PRECONDITION_FAILED" : "BAD_GATEWAY", message: error instanceof ComicVineError ? error.message : "تعذر تحميل الكوميك الرائجة." }); }
     }),

@@ -59,7 +59,7 @@ interface SectionData {
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const { user } = useAuth();
-  const comicTrendingQuery = trpc.comics.trending.useQuery({ limit: 20 }, { retry: 1, staleTime: 10 * 60 * 1000 });
+  const comicTrendingQuery = trpc.comics.trending.useQuery({ limit: 100 }, { retry: 1, staleTime: 10 * 60 * 1000 });
   const bookTrendingQuery = trpc.books.trending.useQuery({ limit: 20 }, { retry: 1, staleTime: 10 * 60 * 1000 });
   const [refreshing, setRefreshing] = useState(false);
   const [feedRefreshToken, setFeedRefreshToken] = useState(0);

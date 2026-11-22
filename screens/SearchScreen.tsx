@@ -64,7 +64,7 @@ export default function SearchScreen() {
     { enabled: shouldSearch && !mediaOnly && !booksTrending && !comicsTrending && (tab === 'all' || tab === 'books'), retry: 1 },
   );
   const trendingBooksQuery = trpc.books.trending.useQuery({ limit: 100 }, { enabled: booksTrending, retry: 1 });
-  const trendingComicsQuery = trpc.comics.trending.useQuery({ limit: 20 }, { enabled: comicsTrending, retry: 1 });
+  const trendingComicsQuery = trpc.comics.trending.useQuery({ limit: 100 }, { enabled: comicsTrending, retry: 1 });
   const comicsQuery = trpc.comics.search.useQuery({ query: debouncedQuery, page: comicPage, limit: 20 }, { enabled: shouldSearch && !mediaOnly && !comicsTrending && (tab === 'all' || tab === 'comics'), retry: 1 });
   const recentStorageKey = authUser ? `@blinkr/recent-searches/${authUser.id}` : null;
   const visibleTabs = booksTrending ? tabs.filter((item) => item.key === 'books') : comicsTrending ? tabs.filter((item) => item.key === 'comics') : mediaOnly ? tabs.filter((item) => item.key === 'movies' || item.key === 'tv') : tabs;
