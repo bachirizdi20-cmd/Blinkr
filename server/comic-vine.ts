@@ -7,6 +7,7 @@ const cache = new Map<string, { expiresAt: number; value: unknown }>();
 
 export type ComicVineComic = {
   id: number;
+  resourceType: 'issue' | 'volume';
   title: string;
   issueNumber: string | null;
   volumeName: string | null;
@@ -73,17 +74,25 @@ function names(value: unknown): string[] {
   }).filter((item): item is string => Boolean(item)).slice(0, 8);
 }
 
-function normalize(value: unknown): ComicVineComic | null {
+function normalize(value: unknown, defaultResourceType: 'issue' | 'volume' = 'issue'): ComicVineComic | null {
   if (!value || typeof value !== "object") return null;
   const item = value as Record<string, unknown>;
   const id = idOf(item.id);
   const title = text(item.name) ?? text(item.volume_name);
   if (!id || !title) return null;
+  const detailUrl = text(item.api_detail_url) ?? '';
+  const declaredType = text(item.resource_type)?.toLowerCase();
+  const resourceType: 'issue' | 'volume' = declaredType?.includes('volume') || /\\/volume\\//i.test(detailUrl)
+    ? 'volume'
+    : declaredType?.includes('issue') || /\\/issue\\//i.test(detailUrl)
+      ? 'issue'
+      : defaultResourceType;
   const volume = item.volume && typeof item.volume === "object" ? item.volume as Record<string, unknown> : null;
   const publisher = item.publisher;
   const publisherName = publisher && typeof publisher === "object" ? text((publisher as Record<string, unknown>).name) : text(publisher);
   return {
     id,
+    resourceType,
     title,
     issueNumber: text(item.issue_number),
     volumeName: text(volume?.name) ?? text(item.volume_name),
@@ -104,7 +113,7 @@ async function request<T>(path: string, params: Record<string, string | number>)
   const url = new URL(`${API}/${path.replace(/^\//, "")}`);
   url.searchParams.set("api_key", key);
   url.searchParams.set("format", "json");
-  url.searchParams.set("field_list", "id,name,issue_number,volume,volume_name,image,description,deck,publisher,cover_date,site_detail_url,person_credits,character_credits,rating");
+  url.searchParams.set("field_list", "id,name,issue_number,volume,volume_name,image,description,deck,publisher,cover_date,site_detail_url,api_detail_url,resource_type,person_credits,character_credits,rating");
   Object.entries(params).forEach(([name, value]) => url.searchParams.set(name, String(value)));
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
@@ -128,7 +137,7 @@ export async function searchComicVine(query: string, page = 1, limit = 20): Prom
   if (hit) return hit;
   const payload = await request<{ number_of_total_results?: number; results?: unknown[] }>("search/", { query, resources: "issue,volume", page, limit });
   const results = (payload.results ?? [])
-    .map(normalize)
+    .map((item) => normalize(item, 'issue'))
     .filter((item): item is ComicVineComic => item !== null && Boolean(item.coverUrl));
   const totalResults = payload.number_of_total_results ?? results.length;
   const result = { results, page, limit, totalResults, totalPages: Math.max(1, Math.ceil(totalResults / limit)) };
@@ -142,26 +151,33 @@ export async function getTrendingComicVine(limit = 12): Promise<ComicVineComic[]
   if (hit) return hit;
   const payload = await request<{ results?: unknown[] }>("volumes/", { sort: "rating:desc", limit, page: 1 });
   const results = (payload.results ?? [])
-    .map(normalize)
+    .map((item) => normalize(item, 'volume'))
     .filter((item): item is ComicVineComic => item !== null && Boolean(item.coverUrl));
   put(key, results);
   return results;
 }
 
-export async function getComicVineComic(id: number): Promise<ComicVineComic> {
-  const key = `detail:${id}`;
+export async function getComicVineComic(id: number, resourceType?: 'issue' | 'volume'): Promise<ComicVineComic> {
+  const key = `detail:${resourceType ?? 'auto'}:${id}`;
   const hit = cached<ComicVineComic>(key);
   if (hit) return hit;
   let raw: unknown;
-  try {
-    const payload = await request<{ results?: unknown }>(`issue/4000-${id}/`, {});
+  if (resourceType) {
+    const prefix = resourceType === 'volume' ? '4050' : '4000';
+    const payload = await request<{ results?: unknown }>(`${resourceType}/${prefix}-${id}/`, {});
     raw = payload.results;
-  } catch (error) {
-    if (!(error instanceof ComicVineError) || error.status === 401 || error.status === 403) throw error;
-    const payload = await request<{ results?: unknown }>(`volume/4050-${id}/`, {});
-    raw = payload.results;
+  } else {
+    // Backward compatibility for old links that did not preserve the resource kind.
+    try {
+      const payload = await request<{ results?: unknown }>(`issue/4000-${id}/`, {});
+      raw = payload.results;
+    } catch (error) {
+      if (!(error instanceof ComicVineError) || error.status === 401 || error.status === 403) throw error;
+      const payload = await request<{ results?: unknown }>(`volume/4050-${id}/`, {});
+      raw = payload.results;
+    }
   }
-  const result = normalize(raw);
+  const result = normalize(raw, resourceType ?? 'issue');
   if (!result) throw new ComicVineError("لم يُعثر على الكوميك في Comic Vine.", 404);
   put(key, result, DETAIL_TTL);
   return result;
