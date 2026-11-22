@@ -12,6 +12,7 @@ import { isAnimeItem } from '../lib/media-categories';
 import { BookSummary } from '../types/books';
 import { ComicSummary } from '../types/comics';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
+import RatingStepper from '../components/RatingStepper';
 import { useAuth } from '../hooks/use-auth';
 import { useLibrary } from '../context/LibraryContext';
 
@@ -133,10 +134,6 @@ export default function CreateScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <View><Text style={styles.eyebrow}>إنشاء مراجعة</Text><Text style={styles.title}>شارك رأيك</Text></View>
-        <View style={styles.headerButton}><Ionicons name="create-outline" size={20} color={colors.accent} /></View>
-      </View>
       {!searchOpen ? <ScrollView refreshControl={<AppRefreshControl />} contentContainerStyle={styles.editor} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {selectedItem && selection ? <View style={styles.selectedCard}>
           <Pressable style={{ flex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md }} onPress={() => setSearchOpen(true)}>
@@ -145,7 +142,7 @@ export default function CreateScreen() {
           </Pressable>
           <View style={styles.selectedActions}><Pressable onPress={() => setSearchOpen(true)}><Text style={styles.changeText}>تغيير العنوان</Text></Pressable><Pressable onPress={() => setSelectedItem(null)}><Text style={styles.removeText}>إزالة</Text></Pressable></View>
         </View> : <Pressable style={styles.addCard} onPress={() => setSearchOpen(true)} accessibilityRole="button" accessibilityLabel="اختيار عنوان للمراجعة"><View style={styles.addIcon}><Ionicons name="add" size={27} color={colors.accent} /></View><Text style={styles.addTitle}>اختر عنوانًا</Text><Text style={styles.addHint}>لإضافة مراجعتك</Text></Pressable>}
-        <View style={styles.editorSection}><View style={styles.ratingHeader}><Text style={styles.editorLabel}>تقييمك</Text><View style={styles.ratingSummary}><Ionicons name="star" size={17} color={colors.accent} /><Text style={styles.ratingValue}>{rating > 0 ? rating.toFixed(0) : '—'}</Text><Text style={styles.ratingOutOf}>/ 10</Text></View></View><View style={styles.ratingChoices}>{Array.from({ length: 10 }, (_, index) => index + 1).map((value) => <Pressable key={value} onPress={() => setRating(value)} accessibilityRole="button" accessibilityLabel={`تقييم ${value} من 10`} accessibilityState={{ selected: rating === value }} style={[styles.ratingChoice, rating === value && styles.ratingChoiceActive]}><Text style={[styles.ratingChoiceText, rating === value && styles.ratingChoiceTextActive]}>{value}</Text></Pressable>)}</View></View>
+        <View style={styles.editorSection}><RatingStepper rating={rating} onChange={setRating} /></View>
         <View style={styles.editorSection}><View style={styles.reviewHeader}><Text style={styles.editorLabel}>مراجعتك</Text><Text style={styles.counter}>{review.length}/1000</Text></View><TextInput style={styles.reviewInput} value={review} onChangeText={(value) => setReview(value.slice(0, 1000))} placeholder="اكتب مراجعتك هنا… ما الذي أعجبك أو لم يعجبك؟" placeholderTextColor={colors.textFaint} multiline textAlignVertical="top" /><Text style={styles.reviewHint}>شارك أفكارك وانطباعاتك حول هذا العمل...</Text></View>
         <Pressable onPress={publishReview} disabled={saving} style={({ pressed }) => [styles.publishButton, pressed && styles.pressed, saving && styles.disabled]}>{saving ? <ActivityIndicator color={colors.bg} /> : <Ionicons name="send" size={18} color={colors.bg} />}<Text style={styles.publishText}>{saving ? 'جارٍ النشر…' : 'نشر المراجعة'}</Text></Pressable>
       </ScrollView> : null}
