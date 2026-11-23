@@ -1,35 +1,22 @@
+import * as db from "./db";
+
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_FAILURES = 8;
-const failures = new Map<string, { count: number; firstAt: number }>();
 
-function keyFor(email: string) {
-  return email.trim().toLowerCase();
-}
-
-export function assertLoginAllowed(email: string) {
-  const key = keyFor(email);
-  const record = failures.get(key);
-  if (!record) return;
-  if (Date.now() - record.firstAt >= WINDOW_MS) {
-    failures.delete(key);
-    return;
-  }
-  if (record.count >= MAX_FAILURES) {
-    throw new Error('Too many failed attempts. Please wait 15 minutes and try again.');
+export class LoginRateLimitError extends Error {
+  constructor() {
+    super("Too many failed attempts. Please wait 15 minutes and try again.");
+    this.name = "LoginRateLimitError";
   }
 }
 
-export function recordLoginFailure(email: string) {
-  const key = keyFor(email);
-  const current = failures.get(key);
-  const now = Date.now();
-  if (!current || now - current.firstAt >= WINDOW_MS) {
-    failures.set(key, { count: 1, firstAt: now });
-  } else {
-    failures.set(key, { ...current, count: current.count + 1 });
-  }
+// Reserve attempts atomically before password verification so concurrent requests
+// cannot all pass the same pre-check and exceed the configured limit.
+export async function assertLoginAllowed(email: string) {
+  const attemptCount = await db.registerLoginAttempt(email, WINDOW_MS);
+  if (attemptCount > MAX_FAILURES) throw new LoginRateLimitError();
 }
 
-export function clearLoginFailures(email: string) {
-  failures.delete(keyFor(email));
+export async function clearLoginFailures(email: string) {
+  await db.clearLoginFailureAttempts(email);
 }

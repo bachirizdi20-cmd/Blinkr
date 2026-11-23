@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { and, avg, count, eq, desc, isNull, gt, or, not, inArray, like } from "drizzle-orm";
+import { and, avg, count, eq, desc, isNull, gt, or, not, inArray, like, lt, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertMediaStatus, InsertReview, InsertUser, InsertUserData, MediaStatus, Review, authTokens, avatarBlobs, blocks, follows, followRequests, notifications, reports, reviewComments, reviewLikes, mediaStatuses, reviews, UserData, userData, users, conversations, chatMessages, InsertChatMessage } from "../drizzle/schema";
+import { InsertMediaStatus, InsertReview, InsertUser, InsertUserData, MediaStatus, Review, authTokens, avatarBlobs, blocks, follows, followRequests, notifications, reports, reviewComments, reviewLikes, mediaStatuses, reviews, UserData, userData, users, conversations, chatMessages, InsertChatMessage, loginAttempts } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { randomBytes, createHash } from "node:crypto";
 import { storageDelete, storageKeyFromUrl } from "./storage";
@@ -232,6 +232,32 @@ export async function getUserByEmail(email: string) {
     console.error("[Database] User lookup failed", { errorChain });
     throw error;
   }
+}
+
+export async function registerLoginAttempt(email: string, windowMs: number) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - windowMs);
+  const emailHash = createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
+  await database.insert(loginAttempts).values({ emailHash, attemptCount: 1, windowStartedAt: now }).onDuplicateKeyUpdate({
+    set: {
+      attemptCount: sql`IF(${loginAttempts.windowStartedAt} <= ${cutoff}, 1, ${loginAttempts.attemptCount} + 1)`,
+      windowStartedAt: sql`IF(${loginAttempts.windowStartedAt} <= ${cutoff}, ${now}, ${loginAttempts.windowStartedAt})`,
+    },
+  });
+  // Keep the table bounded without storing raw email addresses.
+  await database.delete(loginAttempts).where(lt(loginAttempts.windowStartedAt, new Date(now.getTime() - 24 * 60 * 60 * 1000)));
+  const rows = await database.select({ attemptCount: loginAttempts.attemptCount })
+    .from(loginAttempts).where(eq(loginAttempts.emailHash, emailHash)).limit(1);
+  return rows[0]?.attemptCount ?? 1;
+}
+
+export async function clearLoginFailureAttempts(email: string) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+  const emailHash = createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
+  await database.delete(loginAttempts).where(eq(loginAttempts.emailHash, emailHash));
 }
 
 export async function createEmailUser(input: {
