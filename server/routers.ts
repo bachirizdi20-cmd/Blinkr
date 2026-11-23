@@ -12,7 +12,7 @@ import { storagePut, storageDelete, storageKeyFromUrl, isStorageConfigured, isSt
 import { AvatarImageInputError, normalizeAvatarDataUri } from "./avatar-image";
 import { assertLoginAllowed, clearLoginFailures, recordLoginFailure } from "./rate-limit";
 import { createAuthToken, consumeAuthToken, markEmailVerified, updateUserPassword } from "./db";
-import { sendAuthEmail } from "./email";
+import { getPublicApiBaseUrl, sendAuthEmail } from "./email";
 import { verifyFirebaseIdToken } from "./_core/firebase-auth";
 import { HardcoverError, getHardcoverAuthorBooks, getHardcoverBook, getHardcoverSimilarBooks, getHardcoverTrendingBooks, searchHardcoverBooks } from "./hardcover";
 import { ComicVineError, getComicVineComic, getSimilarComicVine, getTrendingComicVine, searchComicVine } from "./comic-vine";
@@ -23,13 +23,6 @@ const tmdbPathSchema = z.string().regex(
 );
 
 const tmdbParamsSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]));
-
-function requestBaseUrl(req: { protocol?: string; headers: Record<string, unknown>; get?: (name: string) => string | undefined }) {
-  const forwarded = req.headers["x-forwarded-proto"];
-  const protocol = typeof forwarded === "string" ? forwarded.split(",")[0] : req.protocol ?? "http";
-  const host = req.get?.("host") ?? "localhost:3000";
-  return `${protocol}://${host}`;
-}
 
 function toPublicUser(user: { id: number; openId: string; name: string | null; email: string | null; loginMethod: string | null; lastSignedIn: Date; emailVerifiedAt?: Date | null }) {
   return { id: user.id, openId: user.openId, name: user.name, email: user.email, loginMethod: user.loginMethod, lastSignedIn: user.lastSignedIn, emailVerifiedAt: user.emailVerifiedAt ?? null };
@@ -106,7 +99,7 @@ export const appRouter = router({
             subject: "Verify your Reelog email",
             title: "Verify your email",
             body: "Confirm your email address to secure your Reelog account.",
-            actionUrl: `${requestBaseUrl(ctx.req)}/api/auth/verify?token=${encodeURIComponent(verificationToken)}`,
+            actionUrl: `${getPublicApiBaseUrl()}/api/auth/verify?token=${encodeURIComponent(verificationToken)}`,
           });
         } catch (error) {
           console.error("[Auth] Verification email failed", error);
@@ -156,7 +149,7 @@ export const appRouter = router({
     requestVerification: protectedProcedure.mutation(async ({ ctx }) => {
       if (!ctx.user.email) throw new TRPCError({ code: "BAD_REQUEST", message: "An email address is required" });
       const token = await createAuthToken({ userId: ctx.user.id, kind: "verify_email", ttlMs: 24 * 60 * 60 * 1000 });
-      await sendAuthEmail({ to: ctx.user.email, subject: "Verify your Reelog email", title: "Verify your email", body: "Confirm your email address to secure your Reelog account.", actionUrl: `${requestBaseUrl(ctx.req)}/api/auth/verify?token=${encodeURIComponent(token)}` });
+      await sendAuthEmail({ to: ctx.user.email, subject: "Verify your Reelog email", title: "Verify your email", body: "Confirm your email address to secure your Reelog account.", actionUrl: `${getPublicApiBaseUrl()}/api/auth/verify?token=${encodeURIComponent(token)}` });
       return { success: true } as const;
     }),
     verifyEmail: publicProcedure.input(z.object({ token: z.string().min(32).max(128) })).mutation(async ({ input }) => {
@@ -170,7 +163,7 @@ export const appRouter = router({
       if (user?.email && user.passwordHash) {
         const token = await createAuthToken({ userId: user.id, kind: "reset_password", ttlMs: 30 * 60 * 1000 });
         try {
-          await sendAuthEmail({ to: user.email, subject: "Reset your Reelog password", title: "Reset your password", body: "Use the secure link below to choose a new password. This link expires in 30 minutes.", actionUrl: `${requestBaseUrl(ctx.req)}/reset-password?token=${encodeURIComponent(token)}` });
+          await sendAuthEmail({ to: user.email, subject: "Reset your Reelog password", title: "Reset your password", body: "Use the secure link below to choose a new password. This link expires in 30 minutes.", actionUrl: `${getPublicApiBaseUrl()}/reset-password?token=${encodeURIComponent(token)}` });
         } catch (error) {
           console.error("[Auth] Reset email failed", error);
         }
