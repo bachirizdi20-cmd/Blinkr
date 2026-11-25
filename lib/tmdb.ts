@@ -222,9 +222,26 @@ export async function fetchDetail(mediaType: MediaType, id: number): Promise<Det
   }
   const base = mediaType === 'movie' ? normalizeMovie(data) : normalizeTV(data);
   const cast = (data.credits?.cast ?? []).slice(0, 20);
-  const crew = (data.credits?.crew ?? []).filter((c: any) =>
-    ['Director', 'Creator', 'Executive Producer', 'Writer'].includes(c.job)
-  );
+  const crewJobs = ['Director', 'Creator', 'Executive Producer', 'Writer', 'Screenplay'];
+  // TMDB lists a series' creators in `created_by`, not in the credits crew, so
+  // without this the "Creator" line never appeared on TV pages.
+  const creators = mediaType === 'tv'
+    ? (Array.isArray(data.created_by) ? data.created_by : []).map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        job: 'Creator',
+        department: 'Writing',
+        profile_path: c.profile_path ?? null,
+      }))
+    : [];
+  const crewSeen = new Set<string>();
+  const crew = [...creators, ...(data.credits?.crew ?? []).filter((c: any) => crewJobs.includes(c.job))].filter((c: any) => {
+    if (!c || typeof c.id !== 'number' || typeof c.name !== 'string') return false;
+    const key = `${c.id}-${c.job}`;
+    if (crewSeen.has(key)) return false;
+    crewSeen.add(key);
+    return true;
+  });
   const videos = (data.videos?.results ?? []).filter((v: any) => v.site === 'YouTube');
   const similar = (data.similar?.results ?? [])
     .map((s: any) => (mediaType === 'movie' ? normalizeMovie(s) : normalizeTV(s)))
@@ -241,7 +258,7 @@ export async function fetchDetail(mediaType: MediaType, id: number): Promise<Det
     crew,
     videos,
     similar,
-    seasons: mediaType === 'tv' ? data.seasons ?? [] : [],
+    seasons: mediaType === 'tv' && Array.isArray(data.seasons) ? data.seasons : [],
     numberOfSeasons: data.number_of_seasons ?? 0,
     numberOfEpisodes: data.number_of_episodes ?? 0,
     reviews,
@@ -264,6 +281,11 @@ export function readCachedDetail(mediaType: MediaType, id: number) {
       videos: Array.isArray(cached.videos) ? cached.videos : [],
       similar: Array.isArray(cached.similar) ? cached.similar : [],
       seasons: Array.isArray(cached.seasons) ? cached.seasons : [],
+      genreIds: Array.isArray(cached.genreIds) ? cached.genreIds : [],
+      numberOfSeasons: Number(cached.numberOfSeasons ?? 0) || 0,
+      numberOfEpisodes: Number(cached.numberOfEpisodes ?? 0) || 0,
+      overview: typeof cached.overview === 'string' ? cached.overview : '',
+      tagline: typeof cached.tagline === 'string' ? cached.tagline : '',
       reviews: Array.isArray(cached.reviews)
         ? cached.reviews.map((review) => ({
             ...review,
@@ -282,10 +304,14 @@ export async function fetchSeasonDetail(tvId: number, seasonNumber: number): Pro
 
 export async function fetchPersonCredits(personId: number) {
   const data = await tmdbGet(`/person/${personId}/combined_credits`);
-  const items = (data.cast ?? [])
-    .map((c: any) => normalizeAny({ ...c, media_type: c.media_type }))
-    .filter(Boolean) as NormalizedItem[];
-  return items;
+  // A person often appears several times in the same title (multiple roles or
+  // episodes); keep one card per title so list keys stay unique.
+  const unique = new Map<string, NormalizedItem>();
+  for (const credit of data.cast ?? []) {
+    const item = normalizeAny({ ...credit, media_type: credit.media_type });
+    if (item && !unique.has(`${item.mediaType}-${item.id}`)) unique.set(`${item.mediaType}-${item.id}`, item);
+  }
+  return [...unique.values()];
 }
 
 export async function fetchPersonDetail(personId: number) {
