@@ -57,7 +57,9 @@ export default function ChatsScreen() {
       convo: { unread: item.unreadCount },
       lastMessage: {
         sender: item.lastMessage?.senderId === Number(authUser?.id) ? 'me' : 'them',
-        text: item.lastMessage?.text ?? (item.lastMessage?.mediaType ? `أرسل ${item.lastMessage.mediaType}` : ''),
+        text: item.lastMessage?.text
+          || (item.lastMessage?.sharedMediaId ? `شارك ${item.lastMessage.sharedMediaType === 'book' ? 'كتابًا' : item.lastMessage.sharedMediaType === 'comic' ? 'كوميك' : item.lastMessage.sharedMediaType === 'tv' ? 'مسلسلًا' : 'فيلمًا'}` : '')
+          || (item.lastMessage?.mediaType === 'audio' ? 'رسالة صوتية' : item.lastMessage?.mediaType === 'gif' ? 'GIF' : item.lastMessage?.mediaType ? '📷 صورة' : ''),
         createdAt: item.lastMessage ? new Date(item.lastMessage.createdAt).getTime() : new Date(item.updatedAt).getTime(),
       },
     })),
@@ -105,6 +107,13 @@ export default function ChatsScreen() {
           </Pressable>
         )}
       </View>
+
+      {conversationsQuery.isError && !conversationsQuery.data ? (
+        <Pressable onPress={() => void conversationsQuery.refetch()} style={styles.errorBanner} accessibilityRole="button">
+          <Ionicons name="cloud-offline-outline" size={16} color={colors.danger} />
+          <Text style={styles.errorBannerText}>تعذر تحميل المحادثات. اضغط لإعادة المحاولة.</Text>
+        </Pressable>
+      ) : null}
 
       <FlatList
         data={filteredRows}
@@ -158,7 +167,7 @@ export default function ChatsScreen() {
           </View>
         }
         ListEmptyComponent={
-          newFollowers.length === 0 && filteredStartable.length === 0 ? (
+          newFollowers.length === 0 && filteredStartable.length === 0 && !conversationsQuery.isLoading && !remoteUsersQuery.isLoading ? (
             <EmptyState
               icon="chatbubbles-outline"
               title="لا توجد محادثات بعد"
@@ -214,6 +223,8 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, color: colors.text, fontSize: fontSizes.sm },
   listContent: { paddingBottom: spacing.xxl },
+  errorBanner: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, marginHorizontal: spacing.lg, marginBottom: spacing.md, padding: spacing.sm, borderRadius: radius.md, backgroundColor: 'rgba(255,92,122,0.12)' },
+  errorBannerText: { flex: 1, color: colors.textDim, fontSize: fontSizes.xs, textAlign: 'right', writingDirection: 'rtl' },
   section: { marginBottom: spacing.xl, paddingHorizontal: spacing.lg },
   sectionTitle: { color: colors.textDim, fontSize: fontSizes.sm, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: spacing.md },
   followerCard: { alignItems: 'center', width: 78 },
