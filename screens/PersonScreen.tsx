@@ -8,10 +8,11 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import PosterCard from '../components/PosterCard';
 import EmptyState from '../components/EmptyState';
+import ApiErrorState from '../components/ApiErrorState';
 import { ContentStackParamList } from '../navigation/types';
 import { fetchPersonCredits, fetchPersonDetail, profileUrl } from '../lib/tmdb';
 import { NormalizedItem } from '../types/tmdb';
-import { colors, fontSizes, radius, spacing } from '../lib/theme';
+import { colors, fontSizes, spacing } from '../lib/theme';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type RouteT = RouteProp<ContentStackParamList, 'Person'>;
@@ -30,16 +31,18 @@ export default function PersonScreen() {
   const [bio, setBio] = useState('');
   const [photo, setPhoto] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   const reloadPerson = useCallback(async () => {
     setLoading(true);
+    setError(false);
     try {
       const [creditsData, personData] = await Promise.all([fetchPersonCredits(personId), fetchPersonDetail(personId)]);
       const sorted = creditsData.sort((a, b) => (b.voteAverage * b.voteCount) - (a.voteAverage * a.voteCount));
       setCredits(sorted);
       setBio(personData.biography ?? '');
       setPhoto(personData.profile_path ? profileUrl(personData.profile_path) : null);
-    } catch (e) { console.warn(e); }
+    } catch (e) { console.warn(e); setError(true); }
     finally { setLoading(false); }
   }, [personId]);
 
@@ -53,6 +56,10 @@ export default function PersonScreen() {
         </View>
       </SafeAreaView>
     );
+  }
+
+  if (error && credits.length === 0 && !bio) {
+    return <SafeAreaView style={styles.safe}><ApiErrorState message="تعذر تحميل بيانات هذا الشخص. تحقق من الاتصال وحاول مجددًا." onRetry={() => void reloadPerson()} /></SafeAreaView>;
   }
 
   return (
@@ -77,10 +84,10 @@ export default function PersonScreen() {
             </View>
             <Text style={styles.name}>{name}</Text>
             {!!bio && <Text style={styles.bio} numberOfLines={6}>{bio}</Text>}
-            <Text style={styles.sectionTitle}>Known For</Text>
+            <Text style={styles.sectionTitle}>أشهر أعماله</Text>
           </View>
         }
-        ListEmptyComponent={<EmptyState icon="film-outline" title="No filmography" />}
+        ListEmptyComponent={<EmptyState icon="film-outline" title="لا توجد أعمال لعرضها" />}
         renderItem={({ item }) => (
           <PosterCard
             item={item}
