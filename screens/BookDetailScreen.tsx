@@ -52,7 +52,9 @@ export default function BookDetailScreen() {
   const book = useMemo(() => mergeBookDetails(workId, fallbackBook, detailCompatible ? detailQuery.data : null), [workId, fallbackBook, detailQuery.data, detailCompatible]);
   const similarQuery = trpc.books.similar.useQuery(
     { workId, subjects: book.subjects.slice(0, 5), authorName: book.authorNames[0], limit: 20 },
-    { enabled: validWorkId && Boolean(book.coverUrl), retry: 1 },
+    // Wait until we know an author or subject; otherwise the request is empty
+    // and a cover-less book would never show similar titles.
+    { enabled: validWorkId && (book.authorNames.length > 0 || book.subjects.length > 0), retry: 1 },
   );
 
   const localRead = lib.isWatched('book', workId);
@@ -116,11 +118,12 @@ export default function BookDetailScreen() {
     posterPath: book.coverUrl,
   });
 
-  if (!validWorkId) return <SafeAreaView style={styles.safe}><ApiErrorState message="معرّف الكتاب غير صالح. أعد فتحه من القائمة." onRetry={() => navigation.goBack()} /></SafeAreaView>;
-  if (detailQuery.isLoading && !fallbackBook) return <LoadingView />;
+  const backBar = <View style={styles.topBar}><Pressable onPress={() => navigation.goBack()} style={styles.iconButton} accessibilityLabel="رجوع"><Ionicons name="chevron-back" size={22} color={colors.text} /></Pressable><Text style={styles.topTitle}>تفاصيل الكتاب</Text><View style={styles.iconButton} /></View>;
+  if (!validWorkId) return <SafeAreaView style={styles.safe}>{backBar}<ApiErrorState message="معرّف الكتاب غير صالح. أعد فتحه من القائمة." onRetry={() => navigation.goBack()} /></SafeAreaView>;
+  if (detailQuery.isLoading && !fallbackBook) return <SafeAreaView style={styles.safe}>{backBar}<LoadingView /></SafeAreaView>;
 
   if (detailQuery.isError && !fallbackBook) {
-    return <SafeAreaView style={styles.safe}><View style={styles.topBar}><Pressable onPress={() => navigation.goBack()} style={styles.iconButton}><Ionicons name="chevron-back" size={22} color={colors.text} /></Pressable></View><ApiErrorState message="تعذر تحميل تفاصيل الكتاب من Hardcover." onRetry={() => void detailQuery.refetch()} /></SafeAreaView>;
+    return <SafeAreaView style={styles.safe}>{backBar}<ApiErrorState message={detailQuery.error?.message || 'تعذر تحميل تفاصيل الكتاب من Hardcover.'} onRetry={() => void detailQuery.refetch()} /></SafeAreaView>;
   }
 
   const info = [
@@ -172,7 +175,7 @@ export default function BookDetailScreen() {
           <Text style={styles.sectionTitle}>كتب مشابهة</Text>
           {similarQuery.isLoading ? <Text style={styles.muted}>جارٍ تحميل الكتب المشابهة…</Text> : similarQuery.isError ? <Pressable onPress={() => void similarQuery.refetch()}><Text style={styles.muted}>تعذر تحميل الكتب المشابهة — اضغط لإعادة المحاولة.</Text></Pressable> : similarQuery.data?.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.similarList}>{similarQuery.data.filter((item) => Boolean(item.coverUrl)).map((item) => <BookCard key={item.workId} book={item} width={112} onPress={() => navigation.push('BookDetail', { workId: item.workId, book: item })} />)}</ScrollView> : <Text style={styles.muted}>لا توجد كتب مشابهة بأغلفة متاحة حاليًا.</Text>}
         </View>
-        {book.sourceUrl ? <Pressable onPress={() => Linking.openURL(book.sourceUrl!)} style={styles.sourceLink}><Text style={styles.sourceText}>عرض المصدر على Hardcover</Text><Ionicons name="open-outline" size={15} color={colors.accent} /></Pressable> : null}
+        {book.sourceUrl ? <Pressable onPress={() => { void Linking.openURL(book.sourceUrl!).catch(() => Alert.alert('تعذر فتح الرابط', 'حاول مرة أخرى لاحقًا.')); }} style={styles.sourceLink}><Text style={styles.sourceText}>عرض المصدر على Hardcover</Text><Ionicons name="open-outline" size={15} color={colors.accent} /></Pressable> : null}
         {!detailCompatible ? <Text style={styles.muted}>تعذر التحقق من مصدر الكتاب المحفوظ؛ نعرض بياناته المحفوظة فقط.</Text> : null}
         {detailQuery.isError ? <Pressable onPress={() => void detailQuery.refetch()} accessibilityRole="button"><Text style={styles.muted}>تعذر جلب التفاصيل؛ نعرض البيانات المتاحة. اضغط لإعادة المحاولة.</Text></Pressable> : null}
       </ScrollView>
