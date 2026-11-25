@@ -48,6 +48,7 @@ function friendlyAuthError(error: unknown, stage?: GoogleFailureStage) {
   if (code === "auth/web-storage-unsupported" || code === "auth/operation-not-supported-in-this-environment") return "هذا المتصفح لا يسمح بإكمال تسجيل Google بهذه الطريقة. افتح Blinkr في Chrome أو Safari العادي.";
   if (code === "auth/popup-blocked") return "منع المتصفح نافذة Google. استخدم خيار التسجيل بصفحة كاملة أدناه أو افتح Blinkr في Chrome.";
   if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return "أُغلقت نافذة Google قبل إعادة نتيجة تسجيل الدخول. جرّب خيار التسجيل بصفحة كاملة أدناه.";
+  if (normalized.includes("without returning an id token") || normalized.includes("did not return a successful sign-in")) return "لم يُرجع Google رمز الدخول. غالبًا بصمة SHA-1 لمفتاح توقيع التطبيق غير مضافة في Firebase لتطبيق Android. أضفها ثم أعد تنزيل google-services.json. (G-SHA)";
   if (code === googleStatusCodes.DEVELOPER_ERROR) return "إعداد Google Android غير متطابق. تأكد من package name وبصمة SHA-1 ثم أعد تنزيل google-services.json.";
   if (code === googleStatusCodes.PLAY_SERVICES_NOT_AVAILABLE) return "خدمات Google Play غير متاحة أو قديمة على هذا الجهاز.";
   if (code === googleStatusCodes.SIGN_IN_CANCELLED) return "أُغلقت نافذة اختيار حساب Google قبل إكمال تسجيل الدخول.";
@@ -76,7 +77,10 @@ function friendlyAuthError(error: unknown, stage?: GoogleFailureStage) {
   if (normalized.includes("invalid") || normalized.includes("incorrect") || normalized.includes("password") || normalized.includes("credential") || normalized.includes("unauthorized")) {
     return "البريد أو كلمة المرور غير صحيحين. إذا كان هذا حساب Blinkr قديمًا، اختر إنشاء حساب بالبريد نفسه وأكّد البريد لربط بياناتك القديمة.";
   }
-  if (stage === "session") return "تم اختيار حساب Google، لكن تعذر إكمال جلسة Blinkr. أعد تحميل الصفحة ثم حاول مرة أخرى. (G-SESSION)";
+  if (stage === "session") {
+    const detail = (code || trpcCode || message).slice(0, 60);
+    return `تم اختيار حساب Google، لكن تعذر إكمال جلسة Blinkr. أعد تحميل الصفحة ثم حاول مرة أخرى. (G-SESSION: ${detail})`;
+  }
   if (stage === "popup" && code.startsWith("auth/")) return `تعذر إكمال تسجيل Google. رمز الخطأ: ${code}`;
   return "تعذّر إكمال العملية. حاول مرة أخرى بعد قليل.";
 }
@@ -179,6 +183,9 @@ export function AuthPanel({ onAuthenticated }: Props) {
     if (Platform.OS !== "web") {
       setIsSubmitting(true);
       setIsGoogleSubmitting(true);
+      // Track the real step so a Google/Firebase failure is no longer reported
+      // as a Blinkr session failure.
+      let nativeStage: GoogleFailureStage = "popup";
       try {
         const idToken = await signInWithGoogleNative();
         if (!idToken) {
@@ -187,12 +194,15 @@ export function AuthPanel({ onAuthenticated }: Props) {
         }
         const credential = GoogleAuthProvider.credential(idToken);
         const result = await signInWithCredential(firebaseAuth, credential);
+        nativeStage = "session";
         await completeFederatedSignIn(result.user);
       } catch (nativeGoogleError) {
         console.warn("[Auth] Native Google sign-in failed", {
+          stage: nativeStage,
           code: typeof nativeGoogleError === "object" && nativeGoogleError !== null && "code" in nativeGoogleError ? String(nativeGoogleError.code) : "unknown",
+          message: nativeGoogleError instanceof Error ? nativeGoogleError.message : String(nativeGoogleError),
         });
-        setError(friendlyAuthError(nativeGoogleError, "session"));
+        setError(friendlyAuthError(nativeGoogleError, nativeStage));
       } finally {
         setIsSubmitting(false);
         setIsGoogleSubmitting(false);
