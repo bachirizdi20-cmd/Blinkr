@@ -13,7 +13,7 @@ export async function sendAuthEmail(input: { to: string; subject: string; title:
   const response = await fetch(RESEND_ENDPOINT, {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: `Reelog <${getFromEmail()}>`, to: [input.to], subject: input.subject, html, text: `${input.body}\n\n${input.actionUrl}` }),
+    body: JSON.stringify({ from: `Blinkr <${getFromEmail()}>`, to: [input.to], subject: input.subject, html, text: `${input.body}\n\n${input.actionUrl}` }),
   });
   if (!response.ok) {
     const details = await response.text().catch(() => "");
