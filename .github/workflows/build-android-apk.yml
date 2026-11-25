@@ -135,6 +135,11 @@ jobs:
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | grep -F "package: name='com.blinkr.space'"
           ls -lh "$APK"
 
+      - name: Print signing SHA-1 for Firebase Google sign-in
+        run: |
+          echo "Add these fingerprints to Firebase > Project settings > Android app com.blinkr.space, then re-download google-services.json:"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "android/app/build/outputs/apk/release/app-release.apk" | grep -E "SHA-(1|256) digest"
+
       - name: Upload APK for phone download
         uses: actions/upload-artifact@v4
         with:
