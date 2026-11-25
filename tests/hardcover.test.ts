@@ -117,7 +117,13 @@ describe("Hardcover integration", () => {
       .mockResolvedValueOnce(jsonResponse({ data: { books: [{ id: 901237, title: "Unsafe", image: { url: "https://127.0.0.1/private" } }] } }));
     vi.stubGlobal("fetch", fetchMock);
     await expect(getHardcoverBook(901236)).rejects.toThrow("غير مكتملة");
-    await expect(getHardcoverBook(901237)).rejects.toThrow("لم يُعثر على الكتاب في Hardcover.");
+    // The unsafe cover is discarded, but the book page must still open.
+    expect(await getHardcoverBook(901237)).toMatchObject({ workId: 901237, title: "Unsafe", coverUrl: null });
+  });
+
+  it("opens a book detail page even when the catalogue has no cover for it", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ data: { books: [{ id: 901239, title: "No cover book", description: "A &amp; B<br>Second line" }] } })));
+    expect(await getHardcoverBook(901239)).toMatchObject({ workId: 901239, title: "No cover book", coverUrl: null, description: "A & B\nSecond line" });
   });
 
   it("coalesces simultaneous identical requests", async () => {

@@ -13,10 +13,10 @@ import ApiErrorState from '../components/ApiErrorState';
 import UserAvatar from '../components/UserAvatar';
 import { ContentStackParamList } from '../navigation/types';
 import { searchMulti } from '../lib/tmdb';
-import { NormalizedItem, ReviewMediaType } from '../types/tmdb';
+import { NormalizedItem } from '../types/tmdb';
 import { BookSummary } from '../types/books';
 import { ComicSummary } from '../types/comics';
-import { openCatalogItem } from '../lib/catalog-navigation';
+import { normalizeReviewMediaType, openCatalogItem } from '../lib/catalog-navigation';
 import { colors, fontSizes, radius, spacing } from '../lib/theme';
 import { trpc } from '../lib/trpc';
 import { useAuth } from '../hooks/use-auth';
@@ -200,7 +200,7 @@ export default function SearchScreen() {
           {tab === 'comics' && comicsQuery.data && comicPage < comicsQuery.data.totalPages ? <Pressable disabled={comicsQuery.isFetching} style={styles.loadMore} onPress={() => setComicPage((page) => page + 1)}>{comicsQuery.isFetching ? <ActivityIndicator color={colors.accent} /> : <Text style={styles.loadMoreText}>عرض المزيد من الكوميك</Text>}</Pressable> : null}
           {tab === 'books' && booksQuery.isFetching && !booksQuery.data && books.length > 0 ? <ActivityIndicator color={colors.accent} /> : null}
           {tab === 'books' && booksQuery.isError && books.length > 0 ? <Pressable onPress={() => void booksQuery.refetch()} accessibilityRole="button"><Text style={styles.inlineError}>تعذر تحميل المزيد من الكتب — اضغط لإعادة المحاولة.</Text></Pressable> : null}
-          {(tab === 'all' || tab === 'reviews') && reviews.length > 0 ? <Section title="المراجعات" action={() => setTab('reviews')}><View>{reviews.slice(0, tab === 'all' ? 5 : 50).map((row: any) => <Pressable key={row.review.id} style={styles.reviewRow} onPress={() => openCatalogItem(navigation, { mediaType: (row.review.mediaType === 'book' ? 'book' : row.review.mediaType === 'tv' ? 'tv' : 'movie') as ReviewMediaType, mediaId: row.review.mediaId, title: row.review.title, posterPath: row.review.posterPath })}><UserAvatar name={row.displayName || row.username} color={colors.accent} size={38} /><View style={styles.resultCopy}><Text style={styles.reviewAuthor}>{row.displayName || row.username} <Text style={styles.reviewMuted}>قيّم</Text></Text><Text style={styles.resultTitle} numberOfLines={1}>{row.review.title}</Text><Text style={styles.reviewText} numberOfLines={2}>{row.review.review}</Text><Text style={styles.rating}>★ {row.review.rating.toFixed(1)}</Text></View></Pressable>)}</View></Section> : null}
+          {(tab === 'all' || tab === 'reviews') && reviews.length > 0 ? <Section title="المراجعات" action={() => setTab('reviews')}><View>{reviews.slice(0, tab === 'all' ? 5 : 50).map((row: any) => <Pressable key={row.review.id} style={styles.reviewRow} onPress={() => openCatalogItem(navigation, { mediaType: normalizeReviewMediaType(row.review.mediaType), mediaId: row.review.mediaId, title: row.review.title, posterPath: row.review.posterPath })}><UserAvatar name={row.displayName || row.username} color={colors.accent} size={38} /><View style={styles.resultCopy}><Text style={styles.reviewAuthor}>{row.displayName || row.username} <Text style={styles.reviewMuted}>قيّم</Text></Text><Text style={styles.resultTitle} numberOfLines={1}>{row.review.title}</Text><Text style={styles.reviewText} numberOfLines={2}>{row.review.review}</Text><Text style={styles.rating}>★ {row.review.rating.toFixed(1)}</Text></View></Pressable>)}</View></Section> : null}
           {tab === 'all' && mediaError ? <Pressable onPress={() => setMediaRetry((attempt) => attempt + 1)} accessibilityRole="button"><Text style={styles.inlineError}>تعذر تحميل نتائج الأفلام والمسلسلات — اضغط لإعادة المحاولة.</Text></Pressable> : null}
           {tab === 'all' && booksQuery.error ? <Pressable onPress={() => void booksQuery.refetch()} accessibilityRole="button"><Text style={styles.inlineError}>تعذر تحميل نتائج الكتب — اضغط لإعادة المحاولة.</Text></Pressable> : null}
           {tab === 'all' && comicsQuery.error ? <Pressable onPress={() => void comicsQuery.refetch()} accessibilityRole="button"><Text style={styles.inlineError}>تعذر تحميل نتائج الكوميك — اضغط لإعادة المحاولة.</Text></Pressable> : null}

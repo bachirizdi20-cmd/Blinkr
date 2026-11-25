@@ -1017,7 +1017,7 @@ export async function listChatMessages(userId: number, otherUserId: number) {
   const db = await getDb();
   if (!db || !conversation) return [];
   await db.update(chatMessages).set({ readAt: new Date() }).where(and(eq(chatMessages.conversationId, conversation.id), not(eq(chatMessages.senderId, userId)), isNull(chatMessages.readAt)));
-  return db.select().from(chatMessages).where(and(eq(chatMessages.conversationId, conversation.id), isNull(chatMessages.deletedAt))).orderBy(desc(chatMessages.createdAt)).limit(100);
+  return db.select().from(chatMessages).where(and(eq(chatMessages.conversationId, conversation.id), isNull(chatMessages.deletedAt))).orderBy(desc(chatMessages.createdAt), desc(chatMessages.id)).limit(100);
 }
 
 export async function listConversations(userId: number) {
@@ -1032,10 +1032,12 @@ export async function listConversations(userId: number) {
     if (await isBlockedEitherWay(db, userId, otherUserId)) continue;
     const [person, lastRows, unreadRows] = await Promise.all([
       db.select({ id: users.id, name: users.name, username: userData.username, bio: userData.bio, avatarUrl: userData.avatarUrl }).from(users).leftJoin(userData, eq(userData.userId, users.id)).where(eq(users.id, otherUserId)).limit(1),
-      db.select().from(chatMessages).where(and(eq(chatMessages.conversationId, conversation.id), isNull(chatMessages.deletedAt))).orderBy(desc(chatMessages.createdAt)).limit(1),
+      db.select().from(chatMessages).where(and(eq(chatMessages.conversationId, conversation.id), isNull(chatMessages.deletedAt))).orderBy(desc(chatMessages.createdAt), desc(chatMessages.id)).limit(1),
       db.select({ id: chatMessages.id }).from(chatMessages).where(and(eq(chatMessages.conversationId, conversation.id), eq(chatMessages.senderId, otherUserId), isNull(chatMessages.readAt), isNull(chatMessages.deletedAt))),
     ]);
     if (!person[0]) continue;
+    // Opening a profile's chat creates the conversation row; do not list it until a message exists.
+    if (!lastRows[0]) continue;
     result.push({ conversationId: conversation.id, otherUserId, otherUser: person[0], lastMessage: lastRows[0] ?? null, unreadCount: unreadRows.length, updatedAt: conversation.updatedAt });
   }
   return result;
@@ -1050,9 +1052,12 @@ export async function createChatMessage(input: Omit<InsertChatMessage, "id" | "c
     const target = await db.select({ id: chatMessages.id }).from(chatMessages).where(and(eq(chatMessages.id, input.replyToId), eq(chatMessages.conversationId, input.conversationId), isNull(chatMessages.deletedAt))).limit(1);
     if (!target[0]) throw new Error("Reply target is unavailable");
   }
-  await db.insert(chatMessages).values(input);
+  const inserted = await db.insert(chatMessages).values(input);
   await db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, input.conversationId));
-  const message = await db.select().from(chatMessages).where(and(eq(chatMessages.conversationId, input.conversationId), eq(chatMessages.senderId, input.senderId))).orderBy(desc(chatMessages.createdAt)).limit(1);
+  const insertId = Number((inserted as any)?.[0]?.insertId ?? (inserted as any)?.insertId ?? 0);
+  const message = insertId > 0
+    ? await db.select().from(chatMessages).where(eq(chatMessages.id, insertId)).limit(1)
+    : await db.select().from(chatMessages).where(and(eq(chatMessages.conversationId, input.conversationId), eq(chatMessages.senderId, input.senderId))).orderBy(desc(chatMessages.createdAt), desc(chatMessages.id)).limit(1);
   return message[0];
 }
 

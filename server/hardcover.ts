@@ -9,6 +9,7 @@ const responseCache = new Map<string, { expiresAt: number; value: unknown }>();
 const pendingRequests = new Map<string, Promise<unknown>>();
 const requestTimes: number[] = [];
 const MAX_REQUESTS_PER_MINUTE = 45;
+const HARD_REQUESTS_PER_MINUTE = 58;
 const MAX_PENDING_REQUESTS = 8;
 
 export type HardcoverBook = {
@@ -112,9 +113,24 @@ function contributionNames(value: unknown, max = 8): string[] {
     .slice(0, max);
 }
 
+const HTML_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+
 function normalizeDescription(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  const text = value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  const text = value
+    .replace(/<\s*br\s*\/?>|<\/p>|<\/li>/gi, "\n")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&(#\d+|#x[0-9a-f]+|[a-z]+);/gi, (match, entity: string) => {
+      if (entity[0] === "#") {
+        const code = entity[1]?.toLowerCase() === "x" ? parseInt(entity.slice(2), 16) : parseInt(entity.slice(1), 10);
+        return Number.isFinite(code) && code > 0 && code < 0x110000 ? String.fromCodePoint(code) : match;
+      }
+      return HTML_ENTITIES[entity.toLowerCase()] ?? match;
+    })
+    .replace(/[ \t\f\v]+/g, " ")
+    .replace(/ ?\n ?/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   return text ? text.slice(0, 12_000) : null;
 }
 
@@ -168,7 +184,7 @@ function diversifyByAuthor(books: HardcoverBook[]): HardcoverBook[] {
 
 function normalizeBook(value: unknown, requireCover = true): HardcoverBook | null {
   if (typeof value === "string") {
-    try { return normalizeBook(JSON.parse(value)); } catch { return null; }
+    try { return normalizeBook(JSON.parse(value), requireCover); } catch { return null; }
   }
   if (!value || typeof value !== "object") return null;
   const book = value as Record<string, unknown>;
@@ -210,13 +226,18 @@ function normalizeBook(value: unknown, requireCover = true): HardcoverBook | nul
   };
 }
 
-async function fetchHardcover<T>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
+async function fetchHardcover<T>(query: string, variables: Record<string, unknown> = {}, options: { priority?: boolean } = {}): Promise<T> {
   const key = JSON.stringify([query, variables]);
   const pending = pendingRequests.get(key);
   if (pending) return pending as Promise<T>;
   const now = Date.now();
   while (requestTimes.length && requestTimes[0] <= now - 60_000) requestTimes.shift();
-  if (pendingRequests.size >= MAX_PENDING_REQUESTS || requestTimes.length >= MAX_REQUESTS_PER_MINUTE) {
+  // Opening a book must not fail just because background "similar books" or
+  // search traffic used up the local budget, so detail requests get headroom
+  // up to Hardcover's real limit (60 requests/minute).
+  const perMinuteLimit = options.priority ? HARD_REQUESTS_PER_MINUTE : MAX_REQUESTS_PER_MINUTE;
+  const pendingLimit = options.priority ? MAX_PENDING_REQUESTS * 2 : MAX_PENDING_REQUESTS;
+  if (pendingRequests.size >= pendingLimit || requestTimes.length >= perMinuteLimit) {
     throw new HardcoverError("طلبات الكتب كثيرة حاليًا، حاول لاحقًا.", 429);
   }
   requestTimes.push(now);
@@ -326,11 +347,12 @@ export async function getHardcoverAuthorBooks(author: string, excludeId: number,
 }
 
 export async function getHardcoverSimilarBooks(workId: number, subjects: string[], authorName?: string, limit = 20): Promise<HardcoverBook[]> {
-  const terms = [...subjects, authorName ?? ""].map((term) => term.trim()).filter(Boolean).slice(0, 3);
+  const terms = [authorName ?? "", ...subjects].map((term) => term.trim()).filter(Boolean).slice(0, 2);
   const cacheKey = `similar:${workId}:${terms.join("|").toLowerCase()}:${limit}`;
   const cached = getCached<HardcoverBook[]>(cacheKey);
   if (cached) return cached;
   const found = new Map<number, HardcoverBook>();
+  if (terms.length === 0) return [];
   for (const term of terms) {
     const result = await searchHardcoverBooks(term, 1, limit);
     for (const book of result.results) {
@@ -416,9 +438,11 @@ export async function getHardcoverBook(bookId: number): Promise<HardcoverBook> {
   const cacheKey = `book:${bookId}`;
   const cached = getCached<HardcoverBook>(cacheKey);
   if (cached) return cached;
-  const payload = await fetchHardcover<{ books?: unknown[] }>(DETAIL_QUERY, { id: bookId });
+  const payload = await fetchHardcover<{ books?: unknown[] }>(DETAIL_QUERY, { id: bookId }, { priority: true });
   if (!Array.isArray(payload.books)) throw new HardcoverError("استجاب Hardcover ببيانات كتاب غير مكتملة.");
-  const book = normalizeBook(payload.books?.[0]);
+  // A book page must open even when the catalogue has no cover for it; only
+  // lists and search results hide cover-less records.
+  const book = normalizeBook(payload.books[0], false);
   if (!book) throw new HardcoverError("لم يُعثر على الكتاب في Hardcover.", 404);
   setCached(cacheKey, book, BOOK_CACHE_TTL_MS);
   return book;

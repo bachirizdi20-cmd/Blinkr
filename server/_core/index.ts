@@ -13,6 +13,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { ENV } from "./env";
 import { getCsrfCookieOptions } from "./cookies";
+import { COOKIE_NAME } from "../../shared/const.js";
 import { isStorageConfigured, isStorageDeletionSupported } from "../storage";
 
 const CSRF_COOKIE_NAME = "blinkr_csrf";
@@ -105,7 +106,14 @@ async function startServer() {
       const csrfHeader = req.headers["x-csrf-token"];
       const validCsrfToken = Boolean(csrfCookie && typeof csrfHeader === "string" && csrfHeader === csrfCookie);
       const trustedBrowserOrigin = typeof origin === "string" && trustedOrigin;
-      if (!trustedBrowserOrigin && !validCsrfToken) {
+      // Native apps (Android/iOS) send neither an Origin header nor a Bearer
+      // token on the very first login request (auth.firebaseSession, login,
+      // register), so they were rejected with 403 and the app showed G-SESSION.
+      // Browsers always attach Origin to cross-site POSTs, so a request with no
+      // Origin and no session cookie cannot be a browser CSRF attempt.
+      const hasSessionCookie = Boolean(cookies[COOKIE_NAME]);
+      const nativeClientWithoutSession = typeof origin !== "string" && !hasSessionCookie;
+      if (!trustedBrowserOrigin && !validCsrfToken && !nativeClientWithoutSession) {
         res.status(403).json({ error: "CSRF validation failed" });
         return;
       }

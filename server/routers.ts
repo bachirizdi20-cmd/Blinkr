@@ -96,9 +96,9 @@ export const appRouter = router({
         try {
           await sendAuthEmail({
             to: email,
-            subject: "Verify your Reelog email",
+            subject: "Verify your Blinkr email",
             title: "Verify your email",
-            body: "Confirm your email address to secure your Reelog account.",
+            body: "Confirm your email address to secure your Blinkr account.",
             actionUrl: `${getPublicApiBaseUrl()}/api/auth/verify?token=${encodeURIComponent(verificationToken)}`,
           });
         } catch (error) {
@@ -151,7 +151,7 @@ export const appRouter = router({
     requestVerification: protectedProcedure.mutation(async ({ ctx }) => {
       if (!ctx.user.email) throw new TRPCError({ code: "BAD_REQUEST", message: "An email address is required" });
       const token = await createAuthToken({ userId: ctx.user.id, kind: "verify_email", ttlMs: 24 * 60 * 60 * 1000 });
-      await sendAuthEmail({ to: ctx.user.email, subject: "Verify your Reelog email", title: "Verify your email", body: "Confirm your email address to secure your Reelog account.", actionUrl: `${getPublicApiBaseUrl()}/api/auth/verify?token=${encodeURIComponent(token)}` });
+      await sendAuthEmail({ to: ctx.user.email, subject: "Verify your Blinkr email", title: "Verify your email", body: "Confirm your email address to secure your Blinkr account.", actionUrl: `${getPublicApiBaseUrl()}/api/auth/verify?token=${encodeURIComponent(token)}` });
       return { success: true } as const;
     }),
     verifyEmail: publicProcedure.input(z.object({ token: z.string().min(32).max(128) })).mutation(async ({ input }) => {
@@ -165,7 +165,7 @@ export const appRouter = router({
       if (user?.email && user.passwordHash) {
         const token = await createAuthToken({ userId: user.id, kind: "reset_password", ttlMs: 30 * 60 * 1000 });
         try {
-          await sendAuthEmail({ to: user.email, subject: "Reset your Reelog password", title: "Reset your password", body: "Use the secure link below to choose a new password. This link expires in 30 minutes.", actionUrl: `${getPublicApiBaseUrl()}/reset-password?token=${encodeURIComponent(token)}` });
+          await sendAuthEmail({ to: user.email, subject: "Reset your Blinkr password", title: "Reset your password", body: "Use the secure link below to choose a new password. This link expires in 30 minutes.", actionUrl: `${getPublicApiBaseUrl()}/reset-password?token=${encodeURIComponent(token)}` });
         } catch (error) {
           console.error("[Auth] Reset email failed", error);
         }
@@ -323,7 +323,7 @@ export const appRouter = router({
       if (!conversation) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Conversation unavailable' });
       return db.createChatMessage({ conversationId: conversation.id, senderId: ctx.user.id, text: null, sharedMediaType: input.mediaType, sharedMediaId: input.mediaId, sharedTitle: input.title, sharedPosterPath: input.posterPath ?? null, sharedRating: Math.round(input.rating * 10), sharedOverview: input.overview ?? null }, input.otherUserId);
     }),
-    sendAttachment: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive(), base64: z.string().max(14_000_000).optional(), externalUrl: z.string().url().max(2000).optional(), mediaType: z.enum(['image', 'gif', 'audio']), mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'audio/m4a', 'audio/mp4', 'audio/webm', 'audio/mpeg']), size: z.number().int().nonnegative().max(10_000_000), replyToId: z.number().int().positive().optional() }).refine((input) => Boolean(input.base64) !== Boolean(input.externalUrl), { message: 'Provide exactly one attachment source' })).mutation(async ({ ctx, input }) => {
+    sendAttachment: protectedProcedure.input(z.object({ otherUserId: z.number().int().positive(), base64: z.string().max(14_000_000).optional(), externalUrl: z.string().url().max(2000).optional(), mediaType: z.enum(['image', 'gif']), mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif']), size: z.number().int().nonnegative().max(10_000_000), replyToId: z.number().int().positive().optional() }).refine((input) => Boolean(input.base64) !== Boolean(input.externalUrl), { message: 'Provide exactly one attachment source' })).mutation(async ({ ctx, input }) => {
       const conversation = await db.getOrCreateConversation(ctx.user.id, input.otherUserId);
       if (!conversation) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Conversation unavailable' });
       if (input.externalUrl) {
@@ -336,7 +336,7 @@ export const appRouter = router({
       }
       const buffer = Buffer.from(input.base64!, 'base64');
       if (buffer.length > 10_000_000) throw new TRPCError({ code: 'PAYLOAD_TOO_LARGE', message: 'Attachment is too large' });
-      const extension = input.mediaType === 'audio' ? 'm4a' : input.mediaType === 'gif' ? 'gif' : input.mimeType.split('/')[1] ?? 'jpg';
+      const extension = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' } as Record<string, string>)[input.mimeType] ?? 'bin';
       const uploaded = await storagePut(`chat/${ctx.user.id}/${Date.now()}.${extension}`, buffer, input.mimeType);
       return db.createChatMessage({ conversationId: conversation.id, senderId: ctx.user.id, text: null, mediaType: input.mediaType, mediaUrl: uploaded.url, mediaKey: uploaded.key, mediaMimeType: input.mimeType, mediaSize: input.size, replyToId: input.replyToId ?? null }, input.otherUserId);
     }),
@@ -345,7 +345,7 @@ export const appRouter = router({
       if (!conversation) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Conversation unavailable' });
       const buffer = Buffer.from(input.base64, 'base64');
       if (buffer.length > 8_000_000) throw new TRPCError({ code: 'PAYLOAD_TOO_LARGE', message: 'Image is too large' });
-      const uploaded = await storagePut(`chat/${ctx.user.id}/${Date.now()}.jpg`, buffer, input.mimeType);
+      const uploaded = await storagePut(`chat/${ctx.user.id}/${Date.now()}.${input.mimeType === 'image/png' ? 'png' : input.mimeType === 'image/webp' ? 'webp' : 'jpg'}`, buffer, input.mimeType);
       return db.createChatMessage({ conversationId: conversation.id, senderId: ctx.user.id, text: null, mediaType: 'image', mediaUrl: uploaded.url, mediaKey: uploaded.key, mediaMimeType: input.mimeType, mediaSize: input.size, replyToId: input.replyToId ?? null }, input.otherUserId);
     }),
   }),
@@ -440,9 +440,9 @@ export const appRouter = router({
       try { return await searchComicVine(input.query, input.page, input.limit); }
       catch (error) { throw new TRPCError({ code: "BAD_GATEWAY", message: error instanceof ComicVineError ? error.message : "تعذر البحث في Comic Vine." }); }
     }),
-    detail: publicProcedure.input(z.object({ id: z.number().int().positive(), resourceType: z.enum(["issue", "volume"]).optional() })).query(async ({ input }) => {
+    detail: publicProcedure.input(z.object({ id: z.number().int().positive().max(2_147_483_647), resourceType: z.enum(["issue", "volume"]).optional() })).query(async ({ input }) => {
       try { return await getComicVineComic(input.id, input.resourceType); }
-      catch (error) { throw new TRPCError({ code: error instanceof ComicVineError && error.status === 404 ? "NOT_FOUND" : "BAD_GATEWAY", message: error instanceof ComicVineError ? error.message : "تعذر جلب تفاصيل الكوميك." }); }
+      catch (error) { const status = error instanceof ComicVineError ? error.status : null; throw new TRPCError({ code: status === 404 ? "NOT_FOUND" : status === 401 || status === 403 ? "PRECONDITION_FAILED" : "BAD_GATEWAY", message: error instanceof ComicVineError ? error.message : "تعذر جلب تفاصيل الكوميك." }); }
     }),
     similar: publicProcedure.input(z.object({ id: z.number().int().positive(), title: z.string().min(1), publisher: z.string().nullable().optional(), limit: z.number().int().min(1).max(12).default(8) })).query(async ({ input }) => {
       try { return await getSimilarComicVine(input.id, input.title, input.publisher ?? null, input.limit); }

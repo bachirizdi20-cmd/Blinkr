@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { searchGiphy, GiphyGif } from '../lib/giphy';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import UserAvatar from '../components/UserAvatar';
@@ -29,7 +29,6 @@ import { resolveMediaUrl } from '../lib/media-url';
 import { catalogPosterUrl, normalizeReviewMediaType, openCatalogItem } from '../lib/catalog-navigation';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import { createAudioPlayer, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
 import { trpc } from '../lib/trpc';
 import { useAuth } from '../hooks/use-auth';
 import { PlatformAlert as Alert } from '../lib/platform-alert';
@@ -37,7 +36,6 @@ import * as Clipboard from 'expo-clipboard';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type RouteT = RouteProp<ContentStackParamList, 'Conversation'>;
-type AudioDraft = { base64: string; mimeType: 'audio/m4a' | 'audio/mp4' | 'audio/webm' | 'audio/mpeg'; size: number };
 
 async function readUriAsBase64(uri: string): Promise<string> {
   if (Platform.OS !== 'web') {
@@ -62,8 +60,9 @@ export default function ConversationScreen() {
   const numericOtherUserId = Number.isInteger(parsedOtherUserId) && parsedOtherUserId > 0 ? parsedOtherUserId : 0;
   const isRemoteConversation = numericOtherUserId > 0 && String(userId).startsWith('remote-');
   const { user: authUser } = useAuth();
+  const isFocused = useIsFocused();
   const remoteProfileQuery = trpc.social.profile.useQuery({ userId: numericOtherUserId }, { enabled: Boolean(authUser && isRemoteConversation), retry: 1 });
-  const messagesQuery = trpc.social.messages.useQuery({ otherUserId: numericOtherUserId }, { enabled: Boolean(authUser && isRemoteConversation), retry: 1, refetchInterval: 3000 });
+  const messagesQuery = trpc.social.messages.useQuery({ otherUserId: numericOtherUserId }, { enabled: Boolean(authUser && isRemoteConversation), retry: 1, refetchInterval: isFocused ? 3000 : false });
   const sendMessageMutation = trpc.social.sendMessage.useMutation({ onSuccess: () => messagesQuery.refetch() });
   const updateMessageMutation = trpc.social.updateMessage.useMutation({ onSuccess: () => messagesQuery.refetch() });
   const deleteMessageMutation = trpc.social.deleteMessage.useMutation({ onSuccess: () => messagesQuery.refetch() });
@@ -84,7 +83,25 @@ export default function ConversationScreen() {
   const [messageSearchOpen, setMessageSearchOpen] = useState(false);
   const [messageSearch, setMessageSearch] = useState('');
   const [cardSearch, setCardSearch] = useState('');
-  const cardSearchQuery = trpc.tmdb.get.useQuery({ path: '/search/multi', params: { query: cardSearch, include_adult: false } }, { enabled: cardPickerOpen && cardSearch.trim().length >= 2, retry: 1 });
+  const [debouncedCardSearch, setDebouncedCardSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedCardSearch(cardSearch.trim()), 350);
+    return () => clearTimeout(timer);
+  }, [cardSearch]);
+  const cardSearchQuery = trpc.tmdb.get.useQuery({ path: '/search/multi', params: { query: debouncedCardSearch, include_adult: false } }, { enabled: cardPickerOpen && debouncedCardSearch.length >= 2, retry: 1 });
+  // TMDB returns snake_case fields and `name` for series; the share card needs
+  // normalized values (title, poster, rating) or series could not be shared.
+  const cardResults = useMemo(() => (((cardSearchQuery.data as any)?.results ?? []) as any[])
+    .filter((r) => (r.media_type === 'movie' || r.media_type === 'tv') && Number.isInteger(r.id))
+    .map((r) => ({
+      mediaType: r.media_type as 'movie' | 'tv',
+      mediaId: r.id as number,
+      title: String(r.title ?? r.name ?? '').trim(),
+      posterPath: (r.poster_path as string | null) ?? null,
+      voteAverage: Number(r.vote_average ?? 0) || 0,
+      overview: typeof r.overview === 'string' && r.overview ? String(r.overview).slice(0, 1200) : null,
+    }))
+    .filter((r) => r.title.length > 0), [cardSearchQuery.data]);
   const remoteUser = useMemo<MockUser | undefined>(() => {
     const item = remoteProfileQuery.data;
     if (!item) return undefined;
@@ -106,18 +123,15 @@ export default function ConversationScreen() {
   const [editingMessage, setEditingMessage] = useState<any>(null);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [pendingImage, setPendingImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
-  const [failedAudio, setFailedAudio] = useState<AudioDraft | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const recorderState = useAudioRecorderState(audioRecorder, 250);
-  const audioPlayerRef = useRef<any>(null);
 
   useFocusEffect(
     React.useCallback(() => {
       if (isRemoteConversation) void messagesQuery.refetch();
     }, [isRemoteConversation, messagesQuery.refetch])
   );
+
 
   if (!user) {
     return (
@@ -261,66 +275,16 @@ export default function ConversationScreen() {
     } catch { Alert.alert('تعذر إرسال GIF', 'حاول مرة أخرى.'); }
   };
 
-  const handleRecordToggle = async () => {
-    if (!authUser) { Alert.alert('يلزم تسجيل الدخول', 'سجّل الدخول لإرسال الرسائل الصوتية.'); return; }
-    if (!isRemoteConversation) { Alert.alert('اختر مستخدمًا من Blinkr', 'افتح المحادثة من صفحة اكتشاف الأشخاص لإرسال الرسائل الصوتية.'); return; }
-    try {
-      if (recorderState.isRecording) {
-        await audioRecorder.stop();
-        const uri = audioRecorder.uri;
-        if (!uri) return;
-        const base64 = await readUriAsBase64(uri);
-        const mimeType = Platform.OS === 'web' ? 'audio/webm' : 'audio/m4a';
-        const draft: AudioDraft = { base64, mimeType, size: base64.length };
-        setAttachmentError(null);
-        try {
-          await sendAttachmentMutation.mutateAsync({ otherUserId: numericOtherUserId, ...draft, mediaType: 'audio' });
-          setFailedAudio(null);
-        } catch {
-          setFailedAudio(draft);
-          setAttachmentError('تعذر إرسال الرسالة الصوتية. اضغط لإعادة المحاولة.');
-        }
-        return;
-      }
-      const permission = await requestRecordingPermissionsAsync();
-      if (!permission.granted) { Alert.alert('إذن الميكروفون مطلوب', 'اسمح باستخدام الميكروفون لتسجيل رسالة صوتية.'); return; }
-      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      await audioRecorder.prepareToRecordAsync();
-      audioRecorder.record();
-    } catch { Alert.alert('تعذر تسجيل الرسالة الصوتية', 'تحقق من إذن الميكروفون ثم حاول مرة أخرى.'); }
-  };
-
-  const handlePlayAudio = (url: string) => {
-    try {
-      const resolvedUrl = resolveMediaUrl(url);
-      if (!resolvedUrl) throw new Error('رابط الملف غير متاح');
-      audioPlayerRef.current?.remove?.();
-      const player = createAudioPlayer(resolvedUrl);
-      audioPlayerRef.current = player;
-      player.play();
-    } catch { Alert.alert('تعذر تشغيل الصوت', 'حاول مرة أخرى.'); }
-  };
-
   const handleSendImage = async () => {
     if (!pendingImage || !authUser || sendImageMutation.isPending) return;
     try {
       setAttachmentError(null);
-      const base64 = await FileSystem.readAsStringAsync(pendingImage.uri, { encoding: FileSystem.EncodingType.Base64 });
-      await sendImageMutation.mutateAsync({ otherUserId: numericOtherUserId, base64, mimeType: pendingImage.mimeType === 'image/png' ? 'image/png' : 'image/jpeg', size: pendingImage.fileSize ?? base64.length });
+      const base64 = await readUriAsBase64(pendingImage.uri);
+      const imageMime = pendingImage.mimeType === 'image/png' ? 'image/png' : pendingImage.mimeType === 'image/webp' ? 'image/webp' : 'image/jpeg';
+      await sendImageMutation.mutateAsync({ otherUserId: numericOtherUserId, base64, mimeType: imageMime, size: Math.max(1, Math.round(base64.length * 0.75)) });
       setPendingImage(null);
       setAttachmentError(null);
     } catch { setAttachmentError('تعذر إرسال الصورة. اضغط لإعادة المحاولة.'); }
-  };
-
-  const handleRetryAudio = async () => {
-    if (!failedAudio || !isRemoteConversation || sendAttachmentMutation.isPending) return;
-    try {
-      setAttachmentError(null);
-      await sendAttachmentMutation.mutateAsync({ otherUserId: numericOtherUserId, ...failedAudio, mediaType: 'audio' });
-      setFailedAudio(null);
-    } catch {
-      setAttachmentError('تعذر إرسال الرسالة الصوتية. اضغط لإعادة المحاولة.');
-    }
   };
 
   const handleDelete = () => {
@@ -365,7 +329,7 @@ export default function ConversationScreen() {
       </View>
       {messageSearchOpen ? <View style={styles.messageSearchBar}><Ionicons name="search-outline" size={17} color={colors.textFaint} /><TextInput autoFocus value={messageSearch} onChangeText={setMessageSearch} placeholder="ابحث في هذه المحادثة" placeholderTextColor={colors.textFaint} style={styles.messageSearchInput} returnKeyType="search" /><Pressable onPress={() => { setMessageSearch(''); setMessageSearchOpen(false); }} hitSlop={8}><Ionicons name="close" size={18} color={colors.textDim} /></Pressable></View> : null}
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={90}>
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
         {messagesQuery.isLoading ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm }}><ActivityIndicator color={colors.accent} /><Text style={{ color: colors.textDim, fontSize: fontSizes.sm }}>جارٍ تحميل الرسائل…</Text></View>
         ) : messagesQuery.isError && !messagesQuery.data ? (
@@ -387,8 +351,8 @@ export default function ConversationScreen() {
                 <View style={[styles.bubbleRow, mine ? styles.bubbleRowMine : styles.bubbleRowTheirs]}>
                   <Pressable onPress={() => setSelectedMessageId((current) => current === item.id ? null : item.id)} onLongPress={() => handleMessageLongPress(item)} delayLongPress={450} style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
                     {(item as any).replyToId ? <View style={styles.replyQuote}><Text style={styles.replyQuoteTitle}>رد على رسالة</Text><Text style={styles.replyQuoteText} numberOfLines={2}>{remoteMessages.find((message: any) => Number(message.id) === Number((item as any).replyToId))?.text ?? 'رسالة غير متاحة'}</Text></View> : null}
-                    {!!(item as any).sharedMediaId && <Pressable style={styles.mediaCard} onPress={() => openCatalogItem(navigation, { mediaType: normalizeReviewMediaType((item as any).sharedMediaType), mediaId: Number((item as any).sharedMediaId), title: (item as any).sharedTitle, posterPath: (item as any).sharedPosterPath })}><Image source={{ uri: catalogPosterUrl(normalizeReviewMediaType((item as any).sharedMediaType), (item as any).sharedPosterPath, 'w342') ?? undefined }} style={styles.cardPoster} resizeMode="cover" /><View style={styles.cardCopy}><Text style={styles.cardLabel}>{(item as any).sharedMediaType === 'book' ? 'كتاب' : 'عنوان من TMDB'}</Text><Text style={styles.cardTitle} numberOfLines={2}>{(item as any).sharedTitle}</Text><Text style={styles.cardRating}>★ {(((item as any).sharedRating ?? 0) / 10).toFixed(1)}</Text></View></Pressable>}
-                    {!!(item as any).mediaUrl && (item as any).mediaType === 'audio' ? <Pressable style={styles.audioMessage} onPress={() => handlePlayAudio((item as any).mediaUrl)}><Ionicons name="play" size={18} color={mine ? '#04120C' : colors.accent} /><View style={styles.audioWave}><View style={styles.audioLine} /><View style={[styles.audioLine, styles.audioLineLong]} /><View style={styles.audioLine} /></View><Text style={[styles.audioLabel, mine && styles.bubbleTextMine]}>رسالة صوتية</Text></Pressable> : null}
+                    {!!(item as any).sharedMediaId && <Pressable style={styles.mediaCard} onPress={() => openCatalogItem(navigation, { mediaType: normalizeReviewMediaType((item as any).sharedMediaType), mediaId: Number((item as any).sharedMediaId), title: (item as any).sharedTitle, posterPath: (item as any).sharedPosterPath })}><Image source={{ uri: catalogPosterUrl(normalizeReviewMediaType((item as any).sharedMediaType), (item as any).sharedPosterPath, 'w342') ?? undefined }} style={styles.cardPoster} resizeMode="cover" /><View style={styles.cardCopy}><Text style={styles.cardLabel}>{(item as any).sharedMediaType === 'book' ? 'كتاب' : (item as any).sharedMediaType === 'comic' ? 'كوميك' : (item as any).sharedMediaType === 'tv' ? 'مسلسل' : 'فيلم'}</Text><Text style={styles.cardTitle} numberOfLines={2}>{(item as any).sharedTitle}</Text><Text style={styles.cardRating}>★ {(((item as any).sharedRating ?? 0) / 10).toFixed(1)}</Text></View></Pressable>}
+                    {(item as any).mediaType === 'audio' ? <Text style={styles.legacyAudio}>رسالة صوتية (لم تعد مدعومة)</Text> : null}
                     {!!(item as any).mediaUrl && (item as any).mediaType === 'gif' && resolveMediaUrl((item as any).mediaUrl) ? <Image source={{ uri: resolveMediaUrl((item as any).mediaUrl) }} style={styles.messageGif} resizeMode="cover" /> : null}
                     {!!(item as any).mediaUrl && (item as any).mediaType !== 'audio' && (item as any).mediaType !== 'gif' && resolveMediaUrl((item as any).mediaUrl) ? <Image source={{ uri: resolveMediaUrl((item as any).mediaUrl) }} style={styles.messageImage} resizeMode="cover" /> : null}
                     {!!item.text && <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.text}</Text>}
@@ -418,7 +382,7 @@ export default function ConversationScreen() {
           />
         )}
 
-        {attachmentError ? <View style={styles.attachmentError}><Ionicons name="warning-outline" size={16} color="#FF8A4C" /><Text style={styles.attachmentErrorText}>{attachmentError}</Text><Pressable onPress={() => failedAudio ? handleRetryAudio() : pendingImage ? handleSendImage() : failedGif ? handleSelectGiphy(failedGif) : undefined} disabled={sendImageMutation.isPending || sendAttachmentMutation.isPending}><Text style={styles.retryAction}>إعادة المحاولة</Text></Pressable></View> : null}
+        {attachmentError ? <View style={styles.attachmentError}><Ionicons name="warning-outline" size={16} color="#FF8A4C" /><Text style={styles.attachmentErrorText}>{attachmentError}</Text><Pressable onPress={() => pendingImage ? handleSendImage() : failedGif ? handleSelectGiphy(failedGif) : undefined} disabled={sendImageMutation.isPending || sendAttachmentMutation.isPending}><Text style={styles.retryAction}>إعادة المحاولة</Text></Pressable></View> : null}
         {pendingImage ? <View style={styles.previewBar}><Image source={{ uri: pendingImage.uri }} style={styles.previewImage} /><View style={styles.previewCopy}><Text style={styles.previewTitle}>جاهزة للإرسال</Text><Text style={styles.previewMeta}>{pendingImage.width} × {pendingImage.height}</Text></View><Pressable onPress={() => { setPendingImage(null); setAttachmentError(null); }} style={styles.previewCancel}><Ionicons name="close" size={19} color={colors.textDim} /></Pressable><Pressable onPress={handleSendImage} style={styles.previewSend} disabled={sendImageMutation.isPending}><Ionicons name="send" size={16} color="#04120C" /></Pressable></View> : null}
         {(replyTarget || editingMessage) ? <View style={styles.replyComposer}><View style={{ flex: 1 }}><Text style={styles.replyComposerTitle}>{editingMessage ? 'تعديل الرسالة' : 'الرد على رسالة'}</Text><Text style={styles.replyComposerText} numberOfLines={1}>{editingMessage?.text ?? replyTarget?.text ?? 'رسالة'}</Text></View><Pressable onPress={() => { setReplyTarget(null); setEditingMessage(null); setText(''); }}><Ionicons name="close-circle" size={20} color={colors.textDim} /></Pressable></View> : null}
         <View style={styles.inputBar}>
@@ -437,16 +401,13 @@ export default function ConversationScreen() {
             returnKeyType="send"
             onSubmitEditing={handleSend}
           />
-          <Pressable style={({ pressed }) => [styles.emojiBtn, pressed && styles.iconBtnPressed]} onPress={() => setText((current) => `${current}${current ? ' ' : ''}😊`)} accessibilityLabel="إضافة رمز تعبيري">
-            <Ionicons name="happy-outline" size={20} color={colors.textDim} />
-          </Pressable>
           {text.trim() ? <Pressable style={({ pressed }) => [styles.sendBtn, pressed && styles.sendBtnPressed]} onPress={handleSend} accessibilityLabel={editingMessage ? 'حفظ تعديل الرسالة' : 'إرسال الرسالة'} disabled={sendMessageMutation.isPending || updateMessageMutation.isPending}>
             <Ionicons name={editingMessage ? 'checkmark' : 'arrow-up'} size={19} color="#04120C" />
           </Pressable> : null}
         </View>
       </KeyboardAvoidingView>
       <Modal visible={cardPickerOpen} animationType="slide" transparent onRequestClose={() => setCardPickerOpen(false)}>
-        <View style={styles.modalBackdrop}><View style={styles.cardPicker}><View style={styles.modalHeader}><Text style={styles.modalTitle}>مشاركة فيلم أو مسلسل</Text><Pressable onPress={() => setCardPickerOpen(false)}><Ionicons name="close" size={22} color={colors.text} /></Pressable></View><TextInput autoFocus selectionColor={colors.accent} cursorColor={colors.accent} value={cardSearch} onChangeText={setCardSearch} placeholder="ابحث في TMDB…" placeholderTextColor={colors.textFaint} style={styles.cardSearchInput} />{failedCard ? <View style={styles.retryRow}><Text style={styles.retryText}>تعذرت مشاركة العنوان.</Text><Pressable onPress={() => shareMediaMutation.mutate(failedCard)} disabled={shareMediaMutation.isPending}><Text style={styles.retryAction}>إعادة المحاولة</Text></Pressable></View> : null}{cardSearchQuery.isLoading ? <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.lg }} /> : <FlatList data={(((cardSearchQuery.data as any)?.results ?? [])).filter((r: any) => r.media_type === 'movie' || r.media_type === 'tv')} keyExtractor={(item: any) => `${item.media_type}-${item.id}`} contentContainerStyle={{ paddingBottom: spacing.lg }} ListEmptyComponent={cardSearch.length >= 2 ? <EmptyState icon="search-outline" title="لم نعثر على عناوين" message="جرّب عنوانًا آخر." /> : <EmptyState icon="film-outline" title="ابحث عن عنوان" message="اعثر على فيلم أو مسلسل لمشاركته." />} renderItem={({ item }: { item: any }) => <Pressable style={styles.cardResult} disabled={shareMediaMutation.isPending} onPress={() => shareMediaMutation.mutate({ otherUserId: numericOtherUserId, mediaType: item.media_type, mediaId: item.id, title: item.title, posterPath: item.posterPath, rating: item.voteAverage ?? 0, overview: item.overview ?? null })}><Image source={{ uri: item.posterPath ? `https://image.tmdb.org/t/p/w200${item.posterPath}` : undefined }} style={styles.resultPoster} /><View style={styles.resultCopy}><Text style={styles.resultTitle} numberOfLines={2}>{item.title}</Text><Text style={styles.resultMeta}>{item.media_type === 'tv' ? 'مسلسل' : 'فيلم'} · ★ {(item.voteAverage ?? 0).toFixed(1)}</Text></View>{shareMediaMutation.isPending ? <ActivityIndicator color={colors.accent} /> : <Ionicons name="paper-plane-outline" size={18} color={colors.accent} />}</Pressable>} />}</View></View>
+        <View style={styles.modalBackdrop}><View style={styles.cardPicker}><View style={styles.modalHeader}><Text style={styles.modalTitle}>مشاركة فيلم أو مسلسل</Text><Pressable onPress={() => setCardPickerOpen(false)}><Ionicons name="close" size={22} color={colors.text} /></Pressable></View><TextInput autoFocus selectionColor={colors.accent} cursorColor={colors.accent} value={cardSearch} onChangeText={setCardSearch} placeholder="ابحث عن فيلم أو مسلسل…" placeholderTextColor={colors.textFaint} style={styles.cardSearchInput} />{failedCard ? <View style={styles.retryRow}><Text style={styles.retryText}>تعذرت مشاركة العنوان.</Text><Pressable onPress={() => shareMediaMutation.mutate(failedCard)} disabled={shareMediaMutation.isPending}><Text style={styles.retryAction}>إعادة المحاولة</Text></Pressable></View> : null}{cardSearchQuery.isFetching && cardResults.length === 0 ? <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.lg }} /> : <FlatList data={cardResults} keyExtractor={(item) => `${item.mediaType}-${item.mediaId}`} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: spacing.lg }} ListEmptyComponent={cardSearchQuery.isError ? <ApiErrorState message="تعذر البحث الآن." onRetry={() => void cardSearchQuery.refetch()} /> : debouncedCardSearch.length >= 2 ? <EmptyState icon="search-outline" title="لم نعثر على عناوين" message="جرّب عنوانًا آخر." /> : <EmptyState icon="film-outline" title="ابحث عن عنوان" message="اعثر على فيلم أو مسلسل لمشاركته." />} renderItem={({ item }) => <Pressable style={styles.cardResult} disabled={shareMediaMutation.isPending} onPress={() => shareMediaMutation.mutate({ otherUserId: numericOtherUserId, mediaType: item.mediaType, mediaId: item.mediaId, title: item.title.slice(0, 255), posterPath: item.posterPath, rating: item.voteAverage, overview: item.overview })}><Image source={{ uri: item.posterPath ? `https://image.tmdb.org/t/p/w200${item.posterPath}` : undefined }} style={styles.resultPoster} /><View style={styles.resultCopy}><Text style={styles.resultTitle} numberOfLines={2}>{item.title}</Text><Text style={styles.resultMeta}>{item.mediaType === 'tv' ? 'مسلسل' : 'فيلم'} · ★ {item.voteAverage.toFixed(1)}</Text></View>{shareMediaMutation.isPending ? <ActivityIndicator color={colors.accent} /> : <Ionicons name="paper-plane-outline" size={18} color={colors.accent} />}</Pressable>} />}</View></View>
       </Modal>
       <Modal visible={gifPickerOpen} transparent animationType="slide" onRequestClose={() => setGifPickerOpen(false)}>
         <View style={styles.modalBackdrop}>
@@ -467,8 +428,11 @@ export default function ConversationScreen() {
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>شارك شيئًا</Text>
             <View style={styles.attachmentGrid}>
-              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); setCardPickerOpen(true); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(53, 211, 153, 0.16)' }]}><Ionicons name="film" size={22} color={colors.accent} /></View><Text style={styles.attachmentLabel}>مشاركة فيلم</Text></Pressable>
+              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); setCardPickerOpen(true); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(53, 211, 153, 0.16)' }]}><Ionicons name="film" size={22} color={colors.accent} /></View><Text style={styles.attachmentLabel}>مشاركة فيلم أو مسلسل</Text></Pressable>
 
+              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); void handlePickImage(false); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(78, 168, 222, 0.18)' }]}><Ionicons name="image" size={22} color={colors.accent3} /></View><Text style={styles.attachmentLabel}>صورة من المعرض</Text></Pressable>
+              {Platform.OS !== 'web' ? <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); void handlePickImage(true); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(255, 159, 67, 0.18)' }]}><Ionicons name="camera" size={22} color={colors.accent2} /></View><Text style={styles.attachmentLabel}>الكاميرا</Text></Pressable> : null}
+              <Pressable style={styles.attachmentItem} onPress={() => { setAttachmentOpen(false); void handlePickLocalGif(); }}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(146, 91, 255, 0.18)' }]}><Ionicons name="folder-open" size={22} color="#C9A2FF" /></View><Text style={styles.attachmentLabel}>GIF من الجهاز</Text></Pressable>
               <Pressable style={styles.attachmentItem} onPress={openGifPicker}><View style={[styles.attachmentIcon, { backgroundColor: 'rgba(146, 91, 255, 0.18)' }]}><Text style={styles.gifLabel}>GIF</Text></View><Text style={styles.attachmentLabel}>العثور على GIF</Text></Pressable>
 
             </View>
@@ -577,11 +541,7 @@ const styles = StyleSheet.create({
   cardRating: { color: colors.accent, fontSize: 12, fontWeight: '800', marginTop: 7 },
   messageImage: { width: 190, height: 190, borderRadius: radius.md, marginBottom: spacing.xs },
   messageGif: { width: 210, height: 160, borderRadius: radius.md, marginBottom: spacing.xs },
-  audioMessage: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minWidth: 190 },
-  audioWave: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 3, height: 24 },
-  audioLine: { width: 3, height: 10, borderRadius: 2, backgroundColor: colors.accent },
-  audioLineLong: { height: 19 },
-  audioLabel: { color: colors.textDim, fontSize: 11, fontWeight: '700' },
+  legacyAudio: { color: colors.textDim, fontSize: 12, fontStyle: 'italic' },
   input: {
     flex: 1,
     backgroundColor: colors.surface,
@@ -594,15 +554,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  emojiBtn: { width: 34, height: 38, alignItems: 'center', justifyContent: 'center' },
-  voiceBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   attachmentBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.64)' },
   attachmentDismiss: { flex: 1 },
   attachmentSheet: { backgroundColor: colors.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.xl, borderTopWidth: 1, borderColor: colors.border },
   sheetHandle: { width: 42, height: 4, borderRadius: 2, backgroundColor: colors.textFaint, alignSelf: 'center', marginBottom: spacing.md },
   sheetTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '900', marginBottom: spacing.lg },
   attachmentGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: spacing.lg },
-  attachmentItem: { width: '46%', alignItems: 'center', gap: spacing.xs },
+  attachmentItem: { width: '30%', alignItems: 'center', gap: spacing.xs },
   attachmentIcon: { width: 52, height: 52, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   attachmentLabel: { color: colors.textDim, fontSize: 10, lineHeight: 13, textAlign: 'center' },
   gifLabel: { color: '#C9A2FF', fontSize: 13, fontWeight: '900' },
