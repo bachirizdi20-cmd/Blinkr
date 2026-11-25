@@ -8,20 +8,20 @@ interface Props {
   onRetry: () => void;
 }
 
-export default function ApiErrorState({ message = "We couldn't load this right now.", onRetry }: Props) {
+export default function ApiErrorState({ message = "تعذر التحميل حاليًا. حاول مرة أخرى.", onRetry }: Props) {
   return (
     <View style={styles.container} accessibilityRole="alert">
       <Ionicons name="cloud-offline-outline" size={38} color={colors.textFaint} />
-      <Text style={styles.title}>Something went wrong</Text>
+      <Text style={styles.title}>حدث خطأ ما</Text>
       <Text style={styles.message}>{message}</Text>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Retry loading"
+        accessibilityLabel="إعادة المحاولة"
         onPress={onRetry}
         style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
       >
         <Ionicons name="refresh" size={16} color={colors.bg} />
-        <Text style={styles.buttonText}>Try again</Text>
+        <Text style={styles.buttonText}>إعادة المحاولة</Text>
       </Pressable>
     </View>
   );
