@@ -17,7 +17,7 @@ export function registerAuthLinkRoutes(app: Express) {
     const record = await consumeAuthToken(token, "verify_email");
     if (!record) return res.status(400).send(page("Link expired", "<p>This verification link is invalid or expired. Request a new one from your profile.</p>"));
     await markEmailVerified(record.userId);
-    return res.send(page("Email verified", "<p>Your Reelog email is verified. You can return to the app.</p>"));
+    return res.send(page("Email verified", "<p>Your Blinkr email is verified. You can return to the app.</p>"));
   });
 
   app.get("/reset-password", (req: Request, res: Response) => {
@@ -33,6 +33,6 @@ export function registerAuthLinkRoutes(app: Express) {
     const record = await consumeAuthToken(token, "reset_password");
     if (!record) return res.status(400).send(page("Link expired", "<p>This reset link is invalid or expired. Request a new one.</p>"));
     await updateUserPassword(record.userId, await hashPassword(password));
-    return res.send(page("Password updated", "<p>Your password has been changed. You can return to Reelog and sign in.</p>"));
+    return res.send(page("Password updated", "<p>Your password has been changed. You can return to Blinkr and sign in.</p>"));
   });
 }
