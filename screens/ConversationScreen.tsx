@@ -371,11 +371,17 @@ export default function ConversationScreen() {
         ) : messagesQuery.isError && !messagesQuery.data ? (
           <ApiErrorState message="تعذر تحميل الرسائل." onRetry={() => void messagesQuery.refetch()} />
         ) : data.length === 0 ? (
-          <View style={{ flex: 1 }}>
-            <EmptyState icon={messageSearch.trim() ? 'search-outline' : 'chatbubble-ellipses-outline'} title={messageSearch.trim() ? 'لا توجد رسائل مطابقة' : `ابدأ المحادثة مع ${user.displayName}`} message={messageSearch.trim() ? 'جرّب كلمات بحث مختلفة.' : user.bio || 'أرسل أول رسالة لبدء الحديث.'} />
+          <View style={styles.emptyMessages}>
+            <EmptyState
+              icon={messageSearch.trim() ? 'search-outline' : 'chatbubble-ellipses-outline'}
+              title={messageSearch.trim() ? 'لا توجد رسائل مطابقة' : `ابدأ المحادثة مع ${user.displayName}`}
+              message={messageSearch.trim() ? 'جرّب كلمات بحث مختلفة.' : user.bio || 'أرسل أول رسالة لبدء الحديث.'}
+            />
           </View>
         ) : (
-          <FlatList refreshControl={<AppRefreshControl />}
+          <FlatList
+            style={styles.messagesList}
+            refreshControl={<AppRefreshControl />}
             ref={listRef}
             data={data}
             inverted
@@ -496,7 +502,9 @@ const styles = StyleSheet.create({
   headerStatus: { color: colors.textFaint, fontSize: 11, marginTop: 1 },
   messageSearchBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginHorizontal: spacing.lg, marginTop: spacing.sm, paddingHorizontal: spacing.md, height: 42, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   messageSearchInput: { flex: 1, color: colors.text, fontSize: fontSizes.sm, paddingVertical: 0 },
-  messagesContent: { padding: spacing.lg, gap: spacing.sm },
+  messagesList: { flex: 1, minHeight: 0 },
+  messagesContent: { flexGrow: 1, padding: spacing.lg, gap: spacing.sm },
+  emptyMessages: { flex: 1, minHeight: 180, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.lg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
   loadingText: { color: colors.textDim, fontSize: fontSizes.sm },
   bubbleRow: { marginBottom: spacing.sm, maxWidth: '80%' },
