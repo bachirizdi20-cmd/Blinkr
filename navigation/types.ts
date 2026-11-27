@@ -11,6 +11,7 @@ export type ContentStackParamList = {
   CreateMain: undefined;
   ProfileMain: undefined;
   Detail: { mediaType: MediaType; id: number; fallback?: Partial<NormalizedItem> };
+  GameDetail: { id: number; game?: any };
   BookDetail: { workId: number; book?: Partial<BookSummary> };
   AuthorBooks: { authorName: string; excludeWorkId: number };
   ComicDetail: { id: number; comic?: Partial<ComicSummary> };
