@@ -17,6 +17,7 @@ export const ENV = {
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   tmdbApiReadToken: process.env.TMDB_API_READ_TOKEN ?? "",
+  rawgApiKey: process.env.RAWG_API ?? "",
   hardcoverApiToken: [process.env.Hardcover_API, process.env.HARDCOVER_API_TOKEN, process.env.HARDCOVER_API_KEY].find((value) => Boolean(value?.trim()))?.trim() ?? "",
   comicVineApiKey: process.env.COMICVIN_API ?? process.env.COMICVINE_API_KEY ?? process.env.COMIC_VINE_API_KEY ?? process.env.ComicVine_API ?? process.env.Comic_Vine_API ?? process.env.Comic_Vine ?? "",
   // This backend serves the Blinkr Firebase project configured in lib/firebaseApp.ts.
