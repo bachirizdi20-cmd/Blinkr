@@ -24,10 +24,10 @@ describe('profile media status merging', () => {
     ];
 
     const result = mergeProfileMediaItems(library, statuses, ['watchlist', 'watching']);
-    expect(result.map((item) => `${item.mediaType}:${item.mediaId}`)).toEqual(['tv:2', 'book:42']);
+    expect(result.map((item) => `${item.mediaType}:${item.mediaId}`)).toEqual(['tv:2', 'game:4', 'book:42']);
   });
 
-  it('adds watched books and films to completed items only once', () => {
+  it('adds watched books, films, and games to completed items only once', () => {
     const diary: ProfileMediaItem[] = [
       { mediaType: 'movie', mediaId: 1, title: 'فيلم', posterPath: null, createdAt: 10 },
     ];
@@ -35,9 +35,10 @@ describe('profile media status merging', () => {
       makeStatus({ mediaType: 'movie', mediaId: 1, title: 'فيلم', status: 'watched' }),
       makeStatus({ mediaType: 'book', mediaId: 42, title: 'رواية مقروءة', status: 'watched' }),
       makeStatus({ mediaType: 'tv', mediaId: 2, title: 'مسلسل قيد المشاهدة', status: 'watching' }),
+      makeStatus({ mediaType: 'game', mediaId: 5, title: 'لعبة مكتملة', status: 'watched' }),
     ];
 
     const result = mergeProfileMediaItems(diary, statuses, ['watched']);
-    expect(result.map((item) => `${item.mediaType}:${item.mediaId}`)).toEqual(['book:42', 'movie:1']);
+    expect(result.map((item) => `${item.mediaType}:${item.mediaId}`)).toEqual(['book:42', 'game:5', 'movie:1']);
   });
 });
