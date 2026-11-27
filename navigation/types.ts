@@ -19,7 +19,7 @@ export type ContentStackParamList = {
   Season: { tvId: number; seasonNumber: number; tvName: string };
   Person: { personId: number; name: string };
   CategoryList: { title: string; feed: FeedDescriptor };
-  Search: { mediaOnly?: boolean; booksTrending?: boolean; comicsTrending?: boolean } | undefined;
+  Search: { mediaOnly?: boolean; booksTrending?: boolean; comicsTrending?: boolean; gamesTrending?: boolean } | undefined;
   Lists: undefined;
   ListDetail: { listId: string };
   Diary: undefined;
