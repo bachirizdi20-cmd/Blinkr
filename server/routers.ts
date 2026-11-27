@@ -267,7 +267,7 @@ export const appRouter = router({
     mine: protectedProcedure.query(({ ctx }) => db.listUserReviews(ctx.user.id)),
     getMine: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book", "comic", "game"]), mediaId: z.number().int().positive(), mediaSource: z.literal("hardcover").optional() })).query(({ ctx, input }) => db.getUserReview(ctx.user.id, input.mediaType, input.mediaId, input.mediaSource)),
     save: protectedProcedure.input(z.object({
-      mediaType: z.enum(["movie", "tv", "book", "comic"]),
+      mediaType: z.enum(["movie", "tv", "book", "comic", "game"]),
       mediaId: z.number().int().positive(),
       mediaSource: z.literal("hardcover").optional(),
       title: z.string().trim().min(1).max(255),
@@ -288,7 +288,7 @@ export const appRouter = router({
       spoiler: input.spoiler,
       watchedDate: input.watchedDate ? new Date(input.watchedDate) : null,
     })),
-    delete: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book", "comic"]), mediaId: z.number().int().positive(), mediaSource: z.literal("hardcover").optional() })).mutation(async ({ ctx, input }) => {
+    delete: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book", "comic", "game"]), mediaId: z.number().int().positive(), mediaSource: z.literal("hardcover").optional() })).mutation(async ({ ctx, input }) => {
       await db.deleteUserReview(ctx.user.id, input.mediaType, input.mediaId, input.mediaSource);
       return { success: true } as const;
     }),
@@ -369,9 +369,9 @@ export const appRouter = router({
   }),
   library: router({
     mine: protectedProcedure.query(({ ctx }) => db.listUserMediaStatuses(ctx.user.id)),
-    getStatus: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book", "comic"]), mediaId: z.number().int().positive(), mediaSource: z.literal("hardcover").optional() })).query(({ ctx, input }) => db.getUserMediaStatus(ctx.user.id, input.mediaType, input.mediaId, input.mediaSource)),
+    getStatus: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book", "comic", "game"]), mediaId: z.number().int().positive(), mediaSource: z.literal("hardcover").optional() })).query(({ ctx, input }) => db.getUserMediaStatus(ctx.user.id, input.mediaType, input.mediaId, input.mediaSource)),
     setStatus: protectedProcedure.input(z.object({
-      mediaType: z.enum(["movie", "tv", "book", "comic"]),
+      mediaType: z.enum(["movie", "tv", "book", "comic", "game"]),
       mediaId: z.number().int().positive(),
       mediaSource: z.literal("hardcover").optional(),
       title: z.string().trim().min(1).max(255),
@@ -386,7 +386,7 @@ export const appRouter = router({
       posterPath: input.posterPath ?? null,
       status: input.status,
     })),
-    removeStatus: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book", "comic"]), mediaId: z.number().int().positive(), mediaSource: z.literal("hardcover").optional() })).mutation(async ({ ctx, input }) => {
+    removeStatus: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book", "comic", "game"]), mediaId: z.number().int().positive(), mediaSource: z.literal("hardcover").optional() })).mutation(async ({ ctx, input }) => {
       await db.deleteMediaStatus(ctx.user.id, input.mediaType, input.mediaId, input.mediaSource);
       return { success: true } as const;
     }),
