@@ -69,6 +69,24 @@ async function fetchTmdbResource(path: string, params: Record<string, string | n
   }
 }
 
+async function fetchRawgResource(path: string, params: Record<string, string | number> = {}) {
+  if (!ENV.rawgApiKey) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "RAWG is not configured on the server" });
+  const query = new URLSearchParams({ key: ENV.rawgApiKey, ...Object.fromEntries(Object.entries(params).map(([key, value]) => [key, String(value)])) });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const response = await fetch("https://api.rawg.io/api" + path + "?" + query, { headers: { Accept: "application/json" }, signal: controller.signal });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) throw new TRPCError({ code: response.status === 404 ? "NOT_FOUND" : response.status === 429 ? "TOO_MANY_REQUESTS" : "BAD_GATEWAY", message: response.status === 401 || response.status === 403 ? "مفتاح RAWG غير صالح أو غير مفعّل." : "تعذر تحميل بيانات الألعاب من RAWG." });
+    return body;
+  } catch (error) {
+    if (error instanceof TRPCError) throw error;
+    if (error instanceof Error && error.name === "AbortError") throw new TRPCError({ code: "TIMEOUT", message: "انتهت مهلة الاتصال بخدمة الألعاب." });
+    throw new TRPCError({ code: "BAD_GATEWAY", message: "خدمة الألعاب غير متاحة مؤقتًا." });
+  } finally { clearTimeout(timeout); }
+}
+async function fetchRawgGames(params: Record<string, string | number>) { return fetchRawgResource("/games", params); }
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -448,6 +466,12 @@ export const appRouter = router({
       try { return await getSimilarComicVine(input.id, input.title, input.publisher ?? null, input.limit); }
       catch (error) { throw new TRPCError({ code: "BAD_GATEWAY", message: error instanceof ComicVineError ? error.message : "تعذر تحميل الكوميك المشابهة." }); }
     }),
+  }),
+  games: router({
+    trending: publicProcedure.input(z.object({ page: z.number().int().min(1).max(100).default(1), limit: z.number().int().min(1).max(40).default(20) }).optional()).query(async ({ input }) => fetchRawgGames({ ordering: "-rating", page: input?.page ?? 1, page_size: input?.limit ?? 20 })),
+    search: publicProcedure.input(z.object({ query: z.string().trim().min(2).max(100), page: z.number().int().min(1).max(100).default(1), limit: z.number().int().min(1).max(40).default(20) })).query(async ({ input }) => fetchRawgGames({ search: input.query, page: input.page, page_size: input.limit })),
+    detail: publicProcedure.input(z.object({ id: z.number().int().positive() })).query(async ({ input }) => fetchRawgResource("/games/" + input.id)),
+    screenshots: publicProcedure.input(z.object({ id: z.number().int().positive(), page: z.number().int().min(1).max(20).default(1) })).query(async ({ input }) => fetchRawgResource("/games/" + input.id + "/screenshots", { page: input.page, page_size: 20 })),
   }),
   tmdb: router({
     get: publicProcedure
