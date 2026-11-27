@@ -166,6 +166,8 @@ export default function SearchScreen() {
   const hasAnySearchResults = media.length > 0 || people.length > 0 || reviews.length > 0 || books.length > 0 || comics.length > 0 || games.length > 0;
   const fatalSearchError = tab === 'all' ? allHasError && !hasAnySearchResults : Boolean(hasError) && (tab !== 'books' || books.length === 0) && (tab !== 'comics' || comics.length === 0);
   const retrySearch = () => {
+    if (gamesTrending) { void trendingGamesQuery.refetch(); return; }
+    if (tab === 'games') { void gamesQuery.refetch(); return; }
     if (booksTrending) { void trendingBooksQuery.refetch(); return; }
     if (comicsTrending) { void trendingComicsQuery.refetch(); return; }
     if (tab === 'people') { void peopleQuery.refetch(); return; }
