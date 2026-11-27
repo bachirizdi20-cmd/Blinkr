@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Image } from 'expo-image';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import BookCard from '../components/BookCard';
@@ -23,10 +24,10 @@ import { useAuth } from '../hooks/use-auth';
 
 type Nav = NativeStackNavigationProp<ContentStackParamList>;
 type SearchRoute = RouteProp<ContentStackParamList, 'Search'>;
-type Tab = 'all' | 'people' | 'movies' | 'tv' | 'books' | 'comics' | 'reviews';
+type Tab = 'all' | 'people' | 'movies' | 'tv' | 'books' | 'comics' | 'games' | 'reviews';
 const tabs: { key: Tab; label: string }[] = [
   { key: 'all', label: 'الكل' }, { key: 'people', label: 'الأشخاص' }, { key: 'movies', label: 'الأفلام' },
-  { key: 'tv', label: 'المسلسلات' }, { key: 'books', label: 'الكتب' }, { key: 'comics', label: 'الكوميك' }, { key: 'reviews', label: 'المراجعات' },
+  { key: 'tv', label: 'المسلسلات' }, { key: 'books', label: 'الكتب' }, { key: 'comics', label: 'الكوميك' }, { key: 'games', label: 'الألعاب' }, { key: 'reviews', label: 'المراجعات' },
 ];
 
 export default function SearchScreen() {
@@ -35,9 +36,10 @@ export default function SearchScreen() {
   const mediaOnly = Boolean(route.params?.mediaOnly);
   const booksTrending = Boolean(route.params?.booksTrending);
   const comicsTrending = Boolean(route.params?.comicsTrending);
+  const gamesTrending = Boolean(route.params?.gamesTrending);
   const { user: authUser } = useAuth();
   const [query, setQuery] = useState('');
-  const [tab, setTab] = useState<Tab>(booksTrending ? 'books' : comicsTrending ? 'comics' : mediaOnly ? 'movies' : 'all');
+  const [tab, setTab] = useState<Tab>(booksTrending ? 'books' : comicsTrending ? 'comics' : gamesTrending ? 'games' : mediaOnly ? 'movies' : 'all');
   const [mediaResults, setMediaResults] = useState<NormalizedItem[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
@@ -66,8 +68,10 @@ export default function SearchScreen() {
   const trendingBooksQuery = trpc.books.trending.useQuery({ limit: 100 }, { enabled: booksTrending, retry: 1 });
   const trendingComicsQuery = trpc.comics.trending.useQuery({ limit: 100 }, { enabled: comicsTrending, retry: 1 });
   const comicsQuery = trpc.comics.search.useQuery({ query: debouncedQuery, page: comicPage, limit: 20 }, { enabled: shouldSearch && !mediaOnly && !comicsTrending && (tab === 'all' || tab === 'comics'), retry: 1 });
+  const gamesQuery = trpc.games.search.useQuery({ query: debouncedQuery, page: 1, limit: 30 }, { enabled: shouldSearch && !gamesTrending && (tab === 'all' || tab === 'games'), retry: 1 });
+  const trendingGamesQuery = trpc.games.trending.useQuery({ page: 1, limit: 40 }, { enabled: gamesTrending, retry: 1 });
   const recentStorageKey = authUser ? `@blinkr/recent-searches/${authUser.id}` : null;
-  const visibleTabs = booksTrending ? tabs.filter((item) => item.key === 'books') : comicsTrending ? tabs.filter((item) => item.key === 'comics') : mediaOnly ? tabs.filter((item) => item.key === 'movies' || item.key === 'tv') : tabs;
+  const visibleTabs = booksTrending ? tabs.filter((item) => item.key === 'books') : comicsTrending ? tabs.filter((item) => item.key === 'comics') : gamesTrending ? tabs.filter((item) => item.key === 'games') : mediaOnly ? tabs.filter((item) => item.key === 'movies' || item.key === 'tv') : tabs;
 
   useEffect(() => {
     let active = true;
@@ -93,11 +97,11 @@ export default function SearchScreen() {
   const updateQuery = (value: string) => { setQuery(value); setBookPage(1); setComicPage(1); setBookResults([]); setComicResults([]); };
 
   useEffect(() => {
-    setTab(booksTrending ? 'books' : comicsTrending ? 'comics' : mediaOnly ? 'movies' : 'all');
+    setTab(booksTrending ? 'books' : comicsTrending ? 'comics' : gamesTrending ? 'games' : mediaOnly ? 'movies' : 'all');
     setQuery('');
     setDebouncedQuery('');
     setSearchFocused(false);
-  }, [mediaOnly, booksTrending, comicsTrending]);
+  }, [mediaOnly, booksTrending, comicsTrending, gamesTrending]);
 
   useEffect(() => {
     if (!shouldSearch) return;
@@ -118,7 +122,7 @@ export default function SearchScreen() {
 
   useEffect(() => {
     let active = true;
-    if (!shouldSearch || tab === 'people' || tab === 'reviews' || tab === 'books') {
+    if (!shouldSearch || tab === 'people' || tab === 'reviews' || tab === 'books' || tab === 'games') {
       setMediaResults([]);
       setMediaLoading(false);
       return () => { active = false; };
@@ -143,24 +147,27 @@ export default function SearchScreen() {
   const reviews = reviewsQuery.data ?? [];
   const books = booksTrending ? ((trendingBooksQuery.data ?? []) as BookSummary[]).filter((book) => Boolean(book.coverUrl)) : bookResults.filter((book) => Boolean(book.coverUrl));
   const comics = comicsTrending ? ((trendingComicsQuery.data ?? []) as ComicSummary[]).filter((comic) => Boolean(comic.coverUrl)) : comicResults;
-  const isRefreshing = booksTrending ? trendingBooksQuery.isRefetching : comicsTrending ? trendingComicsQuery.isRefetching : tab === 'people' ? peopleQuery.isRefetching : tab === 'reviews' ? reviewsQuery.isRefetching : tab === 'books' ? booksQuery.isRefetching : tab === 'comics' ? comicsQuery.isRefetching : false;
-  const isLoading = booksTrending ? trendingBooksQuery.isLoading : comicsTrending ? trendingComicsQuery.isLoading : tab === 'all'
-    ? mediaLoading || (booksQuery.isLoading && books.length === 0) || comicsQuery.isLoading || (Boolean(authUser) && (peopleQuery.isLoading || reviewsQuery.isLoading))
+  const games = (gamesTrending ? trendingGamesQuery.data?.results : gamesQuery.data?.results) ?? [];
+  const isRefreshing = gamesTrending ? trendingGamesQuery.isRefetching : tab === 'games' ? gamesQuery.isRefetching : booksTrending ? trendingBooksQuery.isRefetching : comicsTrending ? trendingComicsQuery.isRefetching : tab === 'people' ? peopleQuery.isRefetching : tab === 'reviews' ? reviewsQuery.isRefetching : tab === 'books' ? booksQuery.isRefetching : tab === 'comics' ? comicsQuery.isRefetching : false;
+  const isLoading = gamesTrending ? trendingGamesQuery.isLoading : tab === 'games' ? gamesQuery.isLoading : booksTrending ? trendingBooksQuery.isLoading : comicsTrending ? trendingComicsQuery.isLoading : tab === 'all'
+    ? mediaLoading || gamesQuery.isLoading || (booksQuery.isLoading && books.length === 0) || comicsQuery.isLoading || (Boolean(authUser) && (peopleQuery.isLoading || reviewsQuery.isLoading))
     : tab === 'people' ? peopleQuery.isLoading
       : tab === 'reviews' ? reviewsQuery.isLoading
         : tab === 'books' ? booksQuery.isLoading && books.length === 0
           : tab === 'comics' ? comicsQuery.isLoading
           : mediaLoading;
-  const hasError = booksTrending ? trendingBooksQuery.error : comicsTrending ? trendingComicsQuery.error : tab === 'people' ? peopleQuery.error
+  const hasError = gamesTrending ? trendingGamesQuery.error : tab === 'games' ? gamesQuery.error : booksTrending ? trendingBooksQuery.error : comicsTrending ? trendingComicsQuery.error : tab === 'people' ? peopleQuery.error
     : tab === 'reviews' ? reviewsQuery.error
       : tab === 'books' ? booksQuery.error
         : tab === 'comics' ? comicsQuery.error
         : tab === 'movies' || tab === 'tv' ? mediaError
           : null;
-  const allHasError = Boolean(mediaError || booksQuery.error || trendingBooksQuery.error || trendingComicsQuery.error || comicsQuery.error || (authUser && (peopleQuery.error || reviewsQuery.error)));
-  const hasAnySearchResults = media.length > 0 || people.length > 0 || reviews.length > 0 || books.length > 0 || comics.length > 0;
+  const allHasError = Boolean(mediaError || gamesQuery.error || booksQuery.error || trendingBooksQuery.error || trendingComicsQuery.error || comicsQuery.error || (authUser && (peopleQuery.error || reviewsQuery.error)));
+  const hasAnySearchResults = media.length > 0 || people.length > 0 || reviews.length > 0 || books.length > 0 || comics.length > 0 || games.length > 0;
   const fatalSearchError = tab === 'all' ? allHasError && !hasAnySearchResults : Boolean(hasError) && (tab !== 'books' || books.length === 0) && (tab !== 'comics' || comics.length === 0);
   const retrySearch = () => {
+    if (gamesTrending) { void trendingGamesQuery.refetch(); return; }
+    if (tab === 'games') { void gamesQuery.refetch(); return; }
     if (booksTrending) { void trendingBooksQuery.refetch(); return; }
     if (comicsTrending) { void trendingComicsQuery.refetch(); return; }
     if (tab === 'people') { void peopleQuery.refetch(); return; }
@@ -174,25 +181,27 @@ export default function SearchScreen() {
     setMediaRetry((attempt) => attempt + 1);
   };
   const showNoResults = !isLoading && !fatalSearchError && !(tab === 'all' && allHasError) && (tab === 'all'
-    ? people.length === 0 && media.length === 0 && books.length === 0 && comics.length === 0 && reviews.length === 0
+    ? people.length === 0 && media.length === 0 && books.length === 0 && comics.length === 0 && games.length === 0 && reviews.length === 0
     : tab === 'people' ? people.length === 0
       : tab === 'reviews' ? reviews.length === 0
         : tab === 'books' ? books.length === 0
           : tab === 'comics' ? comics.length === 0
+          : tab === 'games' ? games.length === 0
           : media.length === 0);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <Text style={styles.header}>{booksTrending ? 'الكتب الرائجة عالميًا' : comicsTrending ? 'الكوميك الرائجة' : mediaOnly ? 'الأفلام والمسلسلات' : 'بحث'}</Text>
-      {!booksTrending && !comicsTrending ? <View style={styles.searchBar}><Ionicons name="search" size={19} color={colors.textFaint} /><TextInput style={styles.input} placeholder={mediaOnly ? 'ابحث عن فيلم أو مسلسل…' : 'ابحث عن أشخاص أو مراجعات أو أفلام أو مسلسلات أو كتب…'} placeholderTextColor={colors.textFaint} value={query} onChangeText={updateQuery} onFocus={() => setSearchFocused(true)} onSubmitEditing={() => { commitSearch(query); setTab(mediaOnly ? 'movies' : 'all'); }} returnKeyType="search" autoCorrect={false} selectionColor={colors.accent} cursorColor={colors.accent} />{query ? <Pressable onPress={() => updateQuery('')} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textFaint} /></Pressable> : null}</View> : null}
+      <Text style={styles.header}>{booksTrending ? 'الكتب الرائجة عالميًا' : comicsTrending ? 'الكوميك الرائجة' : gamesTrending ? 'الألعاب الرائجة' : mediaOnly ? 'الأفلام والمسلسلات' : 'بحث'}</Text>
+      {!booksTrending && !comicsTrending && !gamesTrending ? <View style={styles.searchBar}><Ionicons name="search" size={19} color={colors.textFaint} /><TextInput style={styles.input} placeholder={mediaOnly ? 'ابحث عن فيلم أو مسلسل…' : 'ابحث عن أشخاص أو مراجعات أو أفلام أو مسلسلات أو كتب…'} placeholderTextColor={colors.textFaint} value={query} onChangeText={updateQuery} onFocus={() => setSearchFocused(true)} onSubmitEditing={() => { commitSearch(query); setTab(mediaOnly ? 'movies' : 'all'); }} returnKeyType="search" autoCorrect={false} selectionColor={colors.accent} cursorColor={colors.accent} />{query ? <Pressable onPress={() => updateQuery('')} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textFaint} /></Pressable> : null}</View> : null}
       {searchFocused && !trimmed && recentSearches.length > 0 ? <View style={styles.recentPanel}><View style={styles.recentHeader}><Text style={styles.recentTitle}>عمليات البحث الأخيرة</Text><Pressable onPress={clearRecentSearches}><Text style={styles.clearRecent}>مسح الكل</Text></Pressable></View>{recentSearches.map((item) => <View key={item} style={styles.recentRow}><Pressable style={styles.recentSelect} onPress={() => { updateQuery(item); setTab(mediaOnly ? 'movies' : 'all'); commitSearch(item); }}><Ionicons name="time-outline" size={16} color={colors.textFaint} /><Text style={styles.recentText} numberOfLines={1}>{item}</Text></Pressable><Pressable onPress={() => removeRecentSearch(item)} hitSlop={8} accessibilityLabel={`حذف ${item} من عمليات البحث الأخيرة`}><Ionicons name="close" size={16} color={colors.textFaint} /></Pressable></View>)}</View> : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
         {visibleTabs.map((item) => <Pressable key={item.key} onPress={() => setTab(item.key)} style={[styles.tab, tab === item.key && styles.tabActive]}><Text style={[styles.tabText, tab === item.key && styles.tabTextActive]}>{item.label}</Text></Pressable>)}
       </ScrollView>
-      {!shouldSearch && !booksTrending && !comicsTrending ? <EmptyState icon="search-outline" title={mediaOnly ? 'ابحث عن فيلم أو مسلسل' : 'ابحث في Blinkr'} message={mediaOnly ? 'اكتب اسم الفيلم أو المسلسل الذي تريد إضافته إلى مفضلاتك.' : 'اعثر على الأشخاص والمراجعات والأفلام والمسلسلات والكتب.'} /> : isLoading ? <View style={styles.center}><ActivityIndicator color={colors.accent} size="large" /><Text style={styles.loadingText}>{booksTrending ? 'جارٍ تحميل الكتب الرائجة…' : comicsTrending ? 'جارٍ تحميل الكوميك الرائجة…' : 'جارٍ البحث…'}</Text></View> : fatalSearchError ? <ApiErrorState message={comicsTrending ? 'تعذر تحميل الكوميكس الرائجة. تحقق من الاتصال ثم أعد المحاولة.' : 'تعذر إكمال تحميل الكتب الآن. تحقق من الاتصال ثم أعد المحاولة.'} onRetry={retrySearch} /> : (
+      {!shouldSearch && !booksTrending && !comicsTrending && !gamesTrending ? <EmptyState icon="search-outline" title={mediaOnly ? 'ابحث عن فيلم أو مسلسل' : 'ابحث في Blinkr'} message={mediaOnly ? 'اكتب اسم الفيلم أو المسلسل الذي تريد إضافته إلى مفضلاتك.' : 'اعثر على الأشخاص والمراجعات والأفلام والمسلسلات والكتب.'} /> : isLoading ? <View style={styles.center}><ActivityIndicator color={colors.accent} size="large" /><Text style={styles.loadingText}>{booksTrending ? 'جارٍ تحميل الكتب الرائجة…' : comicsTrending ? 'جارٍ تحميل الكوميك الرائجة…' : gamesTrending ? 'جارٍ تحميل الألعاب الرائجة…' : 'جارٍ البحث…'}</Text></View> : fatalSearchError ? <ApiErrorState message={comicsTrending ? 'تعذر تحميل الكوميكس الرائجة. تحقق من الاتصال ثم أعد المحاولة.' : 'تعذر إكمال تحميل الكتب الآن. تحقق من الاتصال ثم أعد المحاولة.'} onRetry={retrySearch} /> : (
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={retrySearch} tintColor={colors.accent} />} >
           {tab === 'all' && allHasError ? <View style={styles.partialError}><Text style={styles.partialErrorText}>تعذر تحميل بعض النتائج. يمكنك مراجعة النتائج المتاحة أو إعادة المحاولة.</Text><Pressable onPress={retrySearch} accessibilityRole="button"><Text style={styles.partialRetry}>إعادة المحاولة</Text></Pressable></View> : null}
           {(tab === 'all' || tab === 'people') && people.length > 0 ? <Section title="الأشخاص" action={() => setTab('people')}><View>{people.slice(0, tab === 'people' ? 50 : 5).map((person: any) => <Pressable key={person.id} style={styles.personRow} onPress={() => navigation.navigate('UserProfile', { userId: String(person.id) })}><UserAvatar name={person.name || person.username} color={colors.accent} size={42} /><View style={styles.resultCopy}><Text style={styles.resultTitle}>{person.name || person.username}</Text><Text style={styles.resultMeta}>@{person.username}</Text>{person.bio ? <Text style={styles.resultSub} numberOfLines={1}>{person.bio}</Text> : null}</View><Ionicons name="chevron-forward" size={18} color={colors.textFaint} /></Pressable>)}</View></Section> : null}
+          {(tab === 'games' || tab === 'all') && games.length > 0 ? <Section title="الألعاب" action={() => setTab('games')}><View style={styles.mediaGrid}>{games.map((game: any) => <Pressable key={game.id} style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }} onPress={() => navigation.navigate('GameDetail', { id: game.id, game })}><Image source={{ uri: game.background_image }} style={{ width: 66, height: 88, borderRadius: radius.md, backgroundColor: colors.surface }} contentFit="cover" /><View style={styles.resultCopy}><Text style={styles.resultTitle} numberOfLines={2}>{game.name}</Text><Text style={styles.resultMeta}>★ {Number(game.rating ?? 0).toFixed(1)} · {game.released ? String(game.released).slice(0,4) : 'تاريخ غير متاح'}</Text></View><Ionicons name="chevron-forward" size={18} color={colors.textFaint} /></Pressable>)}</View></Section> : null}
           {(tab === 'all' || tab === 'movies' || tab === 'tv') && media.length > 0 ? <Section title={tab === 'all' ? 'الأفلام والمسلسلات' : tab === 'movies' ? 'الأفلام' : 'المسلسلات'} action={() => setTab(tab === 'tv' ? 'tv' : 'movies')}><View style={styles.mediaGrid}>{media.slice(0, tab === 'all' ? 6 : 30).map((item) => <PosterCard key={`${item.mediaType}-${item.id}`} item={item} width={108} onPress={() => navigation.navigate('Detail', { mediaType: item.mediaType, id: item.id })} />)}</View></Section> : null}
           {(tab === 'all' || tab === 'books') && books.length > 0 ? <Section title={booksTrending ? 'الكتب الرائجة عالميًا' : 'الكتب'} action={() => setTab('books')}><View style={styles.mediaGrid}>{(tab === 'all' ? books.slice(0, 6) : books).map((book) => <BookCard key={book.workId} book={book} width={108} onPress={() => navigation.navigate('BookDetail', { workId: book.workId, book })} />)}</View></Section> : null}
           {(tab === 'all' || tab === 'comics') && comics.length > 0 ? <Section title={comicsTrending ? 'الكوميك الرائجة' : 'الكوميك'} action={() => setTab('comics')}><View style={styles.mediaGrid}>{(comicsTrending ? comics : comics.slice(0, tab === 'all' ? 6 : 20)).map((comic) => <ComicCard key={comic.id} comic={comic} width={108} onPress={() => navigation.navigate('ComicDetail', { id: comic.id, comic })} />)}</View></Section> : null}

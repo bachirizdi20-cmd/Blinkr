@@ -7,10 +7,11 @@ import { posterUrl } from "./tmdb";
 import { bookCoverUrl } from "./book-utils";
 
 export function normalizeReviewMediaType(value: unknown): ReviewMediaType {
-  return value === "book" ? "book" : value === "comic" ? "comic" : value === "tv" ? "tv" : "movie";
+  return value === "game" ? "game" : value === "book" ? "book" : value === "comic" ? "comic" : value === "tv" ? "tv" : "movie";
 }
 
 export function catalogPosterUrl(mediaType: ReviewMediaType, posterPath: string | null | undefined, size: "w200" | "w342" | "w500" = "w342"): string | null {
+  if (mediaType === "game") return posterPath ?? null;
   if (mediaType === "book") {
     return bookCoverUrl(posterPath);
   }
@@ -38,6 +39,7 @@ export function openCatalogItem(
   navigation: NativeStackNavigationProp<ContentStackParamList>,
   item: CatalogItemLink,
 ) {
+  if (item.mediaType === "game") { navigation.navigate("GameDetail", { id: item.mediaId, game: { id: item.mediaId, name: item.title ?? "لعبة", background_image: item.posterPath ?? undefined } }); return; }
   if (item.mediaType === "comic") {
     const comic: Partial<ComicSummary> | undefined = item.comic || item.title || item.posterPath || item.date ? {
       id: item.mediaId,

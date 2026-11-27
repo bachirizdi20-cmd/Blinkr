@@ -11,6 +11,7 @@ export type ContentStackParamList = {
   CreateMain: undefined;
   ProfileMain: undefined;
   Detail: { mediaType: MediaType; id: number; fallback?: Partial<NormalizedItem> };
+  GameDetail: { id: number; game?: any };
   BookDetail: { workId: number; book?: Partial<BookSummary> };
   AuthorBooks: { authorName: string; excludeWorkId: number };
   ComicDetail: { id: number; comic?: Partial<ComicSummary> };
@@ -18,7 +19,7 @@ export type ContentStackParamList = {
   Season: { tvId: number; seasonNumber: number; tvName: string };
   Person: { personId: number; name: string };
   CategoryList: { title: string; feed: FeedDescriptor };
-  Search: { mediaOnly?: boolean; booksTrending?: boolean; comicsTrending?: boolean } | undefined;
+  Search: { mediaOnly?: boolean; booksTrending?: boolean; comicsTrending?: boolean; gamesTrending?: boolean } | undefined;
   Lists: undefined;
   ListDetail: { listId: string };
   Diary: undefined;

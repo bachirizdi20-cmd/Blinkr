@@ -2,6 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ContentStackParamList } from './types';
 import DetailScreen from '../screens/DetailScreen';
+import GameDetailScreen from '../screens/GameDetailScreen';
 import BookDetailScreen from '../screens/BookDetailScreen';
 import AuthorBooksScreen from '../screens/AuthorBooksScreen';
 import ComicDetailScreen from '../screens/ComicDetailScreen';
@@ -52,6 +53,7 @@ export default function ContentStackNavigator({ initialRouteName, HomeComponent 
       <Stack.Screen name="WatchlistMain" component={HomeComponent} options={{ headerShown: false }} />
       <Stack.Screen name="ProfileMain" component={HomeComponent} options={{ headerShown: false }} />
       <Stack.Screen name="Detail" component={DetailScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="GameDetail" component={GameDetailScreen} options={{ headerShown: false }} />
       <Stack.Screen name="BookDetail" component={BookDetailScreen} options={{ headerShown: false }} />
       <Stack.Screen name="AuthorBooks" component={AuthorBooksScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ComicDetail" component={ComicDetailScreen} options={{ headerShown: false }} />
