@@ -158,6 +158,7 @@ export default function HomeScreen() {
     load();
     void comicTrendingQuery.refetch();
     void bookTrendingQuery.refetch();
+    void gameTrendingQuery.refetch();
     setFeedRefreshToken((value) => value + 1);
   };
 
@@ -295,7 +296,7 @@ export default function HomeScreen() {
           </View>
           {gameTrendingQuery.isLoading && gameItems.length === 0 ? <View style={styles.bookLoading}><ActivityIndicator color={colors.accent} size="large" /></View>
             : gameTrendingQuery.isError && gameItems.length === 0 ? <Pressable onPress={() => gameTrendingQuery.refetch()} style={styles.bookError}><Text style={styles.bookErrorText}>تعذر تحميل الألعاب — اضغط لإعادة المحاولة.</Text></Pressable>
-            : <FlatList data={gameItems} horizontal showsHorizontalScrollIndicator={false} keyExtractor={(game: any) => `game-${game.id}`} contentContainerStyle={styles.bookList} renderItem={({ item }: any) => <Pressable onPress={() => navigation.navigate('GameDetail', { id: item.id, game: item })} style={{ width: 112, marginRight: 12 }}><Image source={{ uri: item.background_image }} style={{ width: 112, height: 158, borderRadius: radius.md, backgroundColor: colors.surface }} contentFit="cover" /><Text style={{ color: colors.text, fontSize: 12, fontWeight: '700', marginTop: 7 }} numberOfLines={2}>{item.name}</Text><Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 3 }}>★ {Number(item.rating ?? 0).toFixed(1)}</Text></Pressable>} />}
+            : <FlatList data={gameItems} horizontal showsHorizontalScrollIndicator={false} keyExtractor={(game: any) => `game-${game.id}`} contentContainerStyle={styles.bookList} renderItem={({ item }: any) => <Pressable onPress={() => navigation.navigate('GameDetail', { id: item.id, game: item })} style={{ width: 112, marginRight: 12 }}><Image source={{ uri: item.background_image }} style={{ width: 112, height: 158, borderRadius: radius.md, backgroundColor: colors.surface }} contentFit="cover" /><Text style={{ color: colors.text, fontSize: 12, fontWeight: '700', marginTop: 7 }} numberOfLines={2}>{item.name}</Text><Text style={{ color: colors.textDim, fontSize: 11, marginTop: 3 }}>★ {Number(item.rating ?? 0).toFixed(1)}</Text></Pressable>} />}
         </View>
 
         {error ? <ApiErrorState message={error} onRetry={load} /> : null}
