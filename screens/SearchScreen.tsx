@@ -122,7 +122,7 @@ export default function SearchScreen() {
 
   useEffect(() => {
     let active = true;
-    if (!shouldSearch || tab === 'people' || tab === 'reviews' || tab === 'books') {
+    if (!shouldSearch || tab === 'people' || tab === 'reviews' || tab === 'books' || tab === 'games') {
       setMediaResults([]);
       setMediaLoading(false);
       return () => { active = false; };
