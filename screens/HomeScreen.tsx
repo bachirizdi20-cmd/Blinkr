@@ -289,15 +289,7 @@ export default function HomeScreen() {
             : <FlatList data={bookItems} horizontal showsHorizontalScrollIndicator={false} keyExtractor={(book) => `book-${book.workId}`} contentContainerStyle={styles.bookList} ListEmptyComponent={<View style={styles.bookLoading}><Text style={styles.bookLoadingText}>لا توجد كتب بأغلفة متاحة حاليًا.</Text></View>} renderItem={({ item }) => <BookCard book={item} width={112} onPress={() => navigation.navigate('BookDetail', { workId: item.workId, book: item })} />} />}
         </View>
 
-        <View style={styles.bookSection}>
-          <View style={styles.bookSectionHeader}>
-            <View><Text style={styles.bookSectionTitle}>الألعاب الرائجة</Text><Text style={styles.bookSectionSubtitle}>اكتشف ألعابًا جديدة</Text></View>
-            <Pressable onPress={() => navigation.navigate('Search', { gamesTrending: true })}><Text style={styles.bookSectionMore}>عرض الكل</Text></Pressable>
-          </View>
-          {gameTrendingQuery.isLoading && gameItems.length === 0 ? <View style={styles.bookLoading}><ActivityIndicator color={colors.accent} size="large" /></View>
-            : gameTrendingQuery.isError && gameItems.length === 0 ? <Pressable onPress={() => gameTrendingQuery.refetch()} style={styles.bookError}><Text style={styles.bookErrorText}>تعذر تحميل الألعاب — اضغط لإعادة المحاولة.</Text></Pressable>
-            : <FlatList data={gameItems} horizontal showsHorizontalScrollIndicator={false} keyExtractor={(game: any) => `game-${game.id}`} contentContainerStyle={styles.bookList} renderItem={({ item }: any) => <Pressable onPress={() => navigation.navigate('GameDetail', { id: item.id, game: item })} style={{ width: 112, marginRight: 12 }}><Image source={{ uri: item.background_image }} style={{ width: 112, height: 158, borderRadius: radius.md, backgroundColor: colors.surface }} contentFit="cover" /><Text style={{ color: colors.text, fontSize: 12, fontWeight: '700', marginTop: 7 }} numberOfLines={2}>{item.name}</Text><Text style={{ color: colors.textDim, fontSize: 11, marginTop: 3 }}>★ {Number(item.rating ?? 0).toFixed(1)}</Text></Pressable>} />}
-        </View>
+
 
         {error ? <ApiErrorState message={error} onRetry={load} /> : null}
         {visibleSections.filter((section) => section.key === 'movie_popular' || section.key === 'tv_popular').map((s) => (
@@ -314,6 +306,16 @@ export default function HomeScreen() {
         ))}
 
         <View style={{ height: spacing.xxl }} />
+        <View style={styles.bookSection}>
+          <View style={styles.bookSectionHeader}>
+            <View><Text style={styles.bookSectionTitle}>الألعاب الرائجة</Text><Text style={styles.bookSectionSubtitle}>اكتشف ألعابًا جديدة</Text></View>
+            <Pressable onPress={() => navigation.navigate('Search', { gamesTrending: true })}><Text style={styles.bookSectionMore}>عرض الكل</Text></Pressable>
+          </View>
+          {gameTrendingQuery.isLoading && gameItems.length === 0 ? <View style={styles.bookLoading}><ActivityIndicator color={colors.accent} size="large" /></View>
+            : gameTrendingQuery.isError && gameItems.length === 0 ? <Pressable onPress={() => gameTrendingQuery.refetch()} style={styles.bookError}><Text style={styles.bookErrorText}>تعذر تحميل الألعاب — اضغط لإعادة المحاولة.</Text></Pressable>
+            : <FlatList data={gameItems} horizontal showsHorizontalScrollIndicator={false} keyExtractor={(game: any) => `game-${game.id}`} contentContainerStyle={styles.bookList} renderItem={({ item }: any) => <Pressable onPress={() => navigation.navigate('GameDetail', { id: item.id, game: item })} style={{ width: 112, marginRight: 12 }}><Image source={{ uri: item.background_image }} style={{ width: 112, height: 158, borderRadius: radius.md, backgroundColor: colors.surface }} contentFit="cover" /><Text style={{ color: colors.text, fontSize: 12, fontWeight: '700', marginTop: 7 }} numberOfLines={2}>{item.name}</Text><Text style={{ color: colors.textDim, fontSize: 11, marginTop: 3 }}>★ {Number(item.rating ?? 0).toFixed(1)}</Text></Pressable>} />}
+        </View>
+
       </ScrollView>
     </SafeAreaView>
   );
