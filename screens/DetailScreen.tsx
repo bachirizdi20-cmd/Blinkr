@@ -249,7 +249,7 @@ export default function DetailScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView refreshControl={<AppRefreshControl />} showsVerticalScrollIndicator={false} bounces={false}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} refreshControl={<AppRefreshControl />} showsVerticalScrollIndicator={false} bounces={false}>
         <View style={{ height: BACKDROP_HEIGHT, backgroundColor: colors.surface }}>
           {backdrop && <Image source={{ uri: backdrop }} style={StyleSheet.absoluteFill} contentFit="cover" />}
           <LinearGradient colors={['rgba(6,8,11,0.3)', 'transparent', colors.bg]} style={StyleSheet.absoluteFill} />
@@ -488,7 +488,9 @@ export default function DetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+  container: { flex: 1, minHeight: 0, backgroundColor: colors.bg },
+  scroll: { flex: 1, minHeight: 0, width: '100%' },
+  scrollContent: { flexGrow: 1 },
   stateScreen: { flex: 1, backgroundColor: colors.bg },
   stateTopBar: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   topBar: { flexDirection: 'row-reverse', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
