@@ -7,7 +7,7 @@ import { posterUrl } from "./tmdb";
 import { bookCoverUrl } from "./book-utils";
 
 export function normalizeReviewMediaType(value: unknown): ReviewMediaType {
-  return value === "book" ? "book" : value === "comic" ? "comic" : value === "tv" ? "tv" : "movie";
+  return value === "game" ? "game" : value === "book" ? "book" : value === "comic" ? "comic" : value === "tv" ? "tv" : "movie";
 }
 
 export function catalogPosterUrl(mediaType: ReviewMediaType, posterPath: string | null | undefined, size: "w200" | "w342" | "w500" = "w342"): string | null {
