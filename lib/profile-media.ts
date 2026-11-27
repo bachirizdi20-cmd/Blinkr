@@ -54,7 +54,7 @@ export function mergeProfileMediaItems(
 
   for (const status of statuses) {
     if (!includedStatuses.includes(status.status)) continue;
-    if (status.mediaType !== 'movie' && status.mediaType !== 'tv' && status.mediaType !== 'book') continue;
+    if (status.mediaType !== 'movie' && status.mediaType !== 'tv' && status.mediaType !== 'book' && status.mediaType !== 'comic' && status.mediaType !== 'game') continue;
     const key = `${status.mediaType}:${status.mediaId}`;
     if (!merged.has(key)) {
       merged.set(key, {
