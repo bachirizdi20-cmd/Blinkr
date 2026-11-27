@@ -136,7 +136,7 @@ export default function BookDetailScreen() {
         <Text style={styles.topTitle}>تفاصيل الكتاب</Text>
         <Pressable onPress={() => navigation.navigate('People', { shareMedia: { mediaType: 'book', mediaId: workId, mediaSource, title: book.title, posterPath: book.coverUrl, rating, overview: book.description } })} style={styles.iconButton} accessibilityLabel="مشاركة الكتاب"><Ionicons name="share-social-outline" size={19} color={colors.text} /></Pressable>
       </View>
-      <ScrollView refreshControl={<AppRefreshControl />} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scroll} refreshControl={<AppRefreshControl />} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <ContentDetailHero
           title={book.title}
           imageUri={book.coverUrl}
@@ -185,7 +185,8 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
   topTitle: { flex: 1, textAlign: 'center', color: colors.text, fontSize: fontSizes.md, fontWeight: '800' },
   iconButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  content: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
+  scroll: { flex: 1, minHeight: 0, width: '100%' },
+  content: { flexGrow: 1, padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   hero: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: spacing.md },
   coverFrame: { width: 132, height: 194, borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.surface },
   cover: { width: '100%', height: '100%' },
