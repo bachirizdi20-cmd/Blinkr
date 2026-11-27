@@ -337,9 +337,13 @@ export default function ConversationScreen() {
   };
 
   const remoteMessages = (messagesQuery.data ?? []).map((item: any) => ({ ...item, id: String(item.id), sender: item.senderId === Number(authUser?.id) ? 'me' : 'them', createdAt: new Date(item.createdAt), text: item.text ?? '' }));
-  const data = messageSearch.trim()
+  const filteredMessages = messageSearch.trim()
     ? remoteMessages.filter((item: any) => item.text.toLowerCase().includes(messageSearch.trim().toLowerCase()))
     : remoteMessages;
+  // React Native Web does not consistently lay out inverted FlatLists. Keep
+  // the web list chronological and use a normal list; native keeps its
+  // bottom-anchored inverted list.
+  const data = Platform.OS === 'web' ? [...filteredMessages].reverse() : filteredMessages;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -365,7 +369,7 @@ export default function ConversationScreen() {
       </View>
       {messageSearchOpen ? <View style={styles.messageSearchBar}><Ionicons name="search-outline" size={17} color={colors.textFaint} /><TextInput autoFocus value={messageSearch} onChangeText={setMessageSearch} placeholder="ابحث في هذه المحادثة" placeholderTextColor={colors.textFaint} style={styles.messageSearchInput} returnKeyType="search" /><Pressable onPress={() => { setMessageSearch(''); setMessageSearchOpen(false); }} hitSlop={8}><Ionicons name="close" size={18} color={colors.textDim} /></Pressable></View> : null}
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={90}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, minHeight: 0, width: '100%' }} keyboardVerticalOffset={90}>
         {messagesQuery.isLoading ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm }}><ActivityIndicator color={colors.accent} /><Text style={{ color: colors.textDim, fontSize: fontSizes.sm }}>جارٍ تحميل الرسائل…</Text></View>
         ) : messagesQuery.isError && !messagesQuery.data ? (
@@ -384,7 +388,8 @@ export default function ConversationScreen() {
             refreshControl={<AppRefreshControl />}
             ref={listRef}
             data={data}
-            inverted
+            inverted={Platform.OS !== 'web'}
+            onContentSizeChange={() => { if (Platform.OS === 'web') listRef.current?.scrollToEnd({ animated: false }); }}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.messagesContent}
             renderItem={({ item }: { item: ChatMessage }) => {
@@ -502,7 +507,7 @@ const styles = StyleSheet.create({
   headerStatus: { color: colors.textFaint, fontSize: 11, marginTop: 1 },
   messageSearchBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginHorizontal: spacing.lg, marginTop: spacing.sm, paddingHorizontal: spacing.md, height: 42, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   messageSearchInput: { flex: 1, color: colors.text, fontSize: fontSizes.sm, paddingVertical: 0 },
-  messagesList: { flex: 1, minHeight: 0 },
+  messagesList: { flex: 1, flexGrow: 1, minHeight: 0, width: '100%' },
   messagesContent: { flexGrow: 1, padding: spacing.lg, gap: spacing.sm },
   emptyMessages: { flex: 1, minHeight: 180, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.lg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
@@ -533,6 +538,7 @@ const styles = StyleSheet.create({
   replyQuoteTitle: { color: colors.accent, fontSize: 10, fontWeight: '900', textAlign: 'right' },
   replyQuoteText: { color: colors.textDim, fontSize: 11, marginTop: 2, textAlign: 'right' },
   inputBar: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: spacing.sm,
