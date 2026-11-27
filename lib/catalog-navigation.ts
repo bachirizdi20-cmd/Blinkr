@@ -11,6 +11,7 @@ export function normalizeReviewMediaType(value: unknown): ReviewMediaType {
 }
 
 export function catalogPosterUrl(mediaType: ReviewMediaType, posterPath: string | null | undefined, size: "w200" | "w342" | "w500" = "w342"): string | null {
+  if (mediaType === "game") return posterPath ?? null;
   if (mediaType === "book") {
     return bookCoverUrl(posterPath);
   }
