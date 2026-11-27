@@ -39,7 +39,8 @@ export function openCatalogItem(
   navigation: NativeStackNavigationProp<ContentStackParamList>,
   item: CatalogItemLink,
 ) {
-  if (item.mediaType === "game") { navigation.navigate("GameDetail", { id: item.mediaId, game: { id: item.mediaId, name: item.title ?? "لعبة", background_image: item.posterPath ?? undefined } }); return; }\n  if (item.mediaType === "comic") {
+  if (item.mediaType === "game") { navigation.navigate("GameDetail", { id: item.mediaId, game: { id: item.mediaId, name: item.title ?? "لعبة", background_image: item.posterPath ?? undefined } }); return; }
+  if (item.mediaType === "comic") {
     const comic: Partial<ComicSummary> | undefined = item.comic || item.title || item.posterPath || item.date ? {
       id: item.mediaId,
       title: item.title ?? "كوميك",
