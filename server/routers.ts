@@ -265,7 +265,7 @@ export const appRouter = router({
   }),
   reviews: router({
     mine: protectedProcedure.query(({ ctx }) => db.listUserReviews(ctx.user.id)),
-    getMine: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book", "comic"]), mediaId: z.number().int().positive(), mediaSource: z.literal("hardcover").optional() })).query(({ ctx, input }) => db.getUserReview(ctx.user.id, input.mediaType, input.mediaId, input.mediaSource)),
+    getMine: protectedProcedure.input(z.object({ mediaType: z.enum(["movie", "tv", "book", "comic", "game"]), mediaId: z.number().int().positive(), mediaSource: z.literal("hardcover").optional() })).query(({ ctx, input }) => db.getUserReview(ctx.user.id, input.mediaType, input.mediaId, input.mediaSource)),
     save: protectedProcedure.input(z.object({
       mediaType: z.enum(["movie", "tv", "book", "comic"]),
       mediaId: z.number().int().positive(),
